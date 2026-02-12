@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import AdminProductForm from '@/components/AdminProductForm';
 import AdminProductTable from '@/components/AdminProductTable';
 import ProtectedAdmin from '@/components/ProtectedAdmin';
-import { signOut } from '@/supabase/auth';
+import { signOutUser } from '@/supabase/auth';
 import { deleteProduct, getProducts } from '@/supabase/db';
 import type { Product } from '@/types/product';
 
@@ -48,7 +48,7 @@ export default function AdminDashboardClient() {
           <h1 className="text-3xl font-bold text-slate-900">Panel administrativo</h1>
           <button
             onClick={async () => {
-              await signOut();
+              await signOutUser();
               window.location.href = '/admin/login';
             }}
             className="rounded border border-slate-300 px-3 py-1 text-sm"

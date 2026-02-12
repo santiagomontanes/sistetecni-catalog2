@@ -1,6 +1,8 @@
 import { supabase } from "@/supabase/client";
 
-type ProfileRow = { is_admin: boolean | null; active?: boolean | null };
+type ProfileRow = {
+  is_admin: boolean | null;
+};
 
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -8,15 +10,15 @@ export async function signIn(email: string, password: string) {
   return data;
 }
 
-export async function signOut() {
+export async function signOutUser() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
 
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  return data.session;
+  if (error) return null;
+  return data.session ?? null;
 }
 
 export async function isAdmin(): Promise<boolean> {
@@ -26,10 +28,10 @@ export async function isAdmin(): Promise<boolean> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("is_admin, active")
+    .select("is_admin")
     .eq("id", userId)
     .maybeSingle<ProfileRow>();
 
   if (error || !data) return false;
-  return Boolean(data.is_admin);
+  return data.is_admin === true;
 }

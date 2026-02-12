@@ -3,15 +3,9 @@ import type { BusinessProfile } from "@/types/business";
 import type { Product, ProductFilters } from "@/types/product";
 import type { Testimonial } from "@/types/testimonial";
 
-interface RoleData {
-  role: string;
-  active: boolean;
-}
-
 type ProductPayload = Omit<Product, "id" | "createdAt">;
 
 type DbRow = Record<string, unknown>;
-type ProfileRow = { is_admin: boolean | null; active?: boolean | null };
 
 function toDate(value: unknown): Date | null {
   if (!value) return null;
@@ -59,26 +53,23 @@ function asRowArray(data: unknown): DbRow[] {
 }
 
 /**
- * Reemplazo de roles/{uid}:
+ * Role check (admin):
  * - tabla: public.profiles
- * - campos: is_admin boolean, (opcional) active boolean
+ * - campo: is_admin boolean
+ *
+ * Nota: no usamos "active" porque tu tabla no lo tiene.
  */
-export async function getUserRole(uid: string): Promise<RoleData | null> {
+export async function getUserRole(uid: string): Promise<{ role: string; active: boolean } | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("is_admin, active")
+    .select("is_admin")
     .eq("id", uid)
-    .maybeSingle<ProfileRow>();
+    .maybeSingle<{ is_admin: boolean | null }>();
 
   if (error || !data) return null;
 
-  const isAdmin = Boolean(data.is_admin);
-  const active = data.active === undefined ? true : Boolean(data.active);
-
-  return {
-    role: isAdmin ? "admin" : "user",
-    active,
-  };
+  const isAdmin = data.is_admin === true;
+  return { role: isAdmin ? "admin" : "user", active: true };
 }
 
 export async function getBusinessProfile(): Promise<BusinessProfile | null> {
@@ -161,9 +152,7 @@ export async function createProduct(data: ProductPayload): Promise<string> {
     .select("id")
     .single<{ id: string }>();
 
-  if (error || !created) {
-    throw new Error(error?.message ?? "Failed to create product");
-  }
+  if (error || !created) throw new Error(error.message);
   return String(created.id);
 }
 
