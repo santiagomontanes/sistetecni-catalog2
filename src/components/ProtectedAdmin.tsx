@@ -1,45 +1,34 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { subscribeToAuth } from '@/firebase/auth';
-import { getUserRole } from '@/firebase/firestore';
+import { getSession, isAdmin } from '@/supabase/auth';
 
-interface ProtectedAdminProps {
-  children: ReactNode;
-}
-
-export default function ProtectedAdmin({ children }: ProtectedAdminProps) {
+export default function ProtectedAdmin({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [isChecking, setIsChecking] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = subscribeToAuth(async (user) => {
-      if (!user) {
-        setAccessDenied(false);
-        setIsChecking(false);
+    async function check() {
+      const session = await getSession();
+      if (!session) {
         router.replace('/admin/login');
         return;
       }
 
-      const roleData = await getUserRole(user.uid);
-      const isAdmin = roleData?.role === 'admin' && roleData.active === true;
+      const ok = await isAdmin();
+      if (!ok) {
+        router.replace('/');
+        return;
+      }
 
-      setAccessDenied(!isAdmin);
-      setIsChecking(false);
-    });
+      setLoading(false);
+    }
 
-    return unsubscribe;
+    check();
   }, [router]);
 
-  if (isChecking) {
-    return <p className="text-sm text-slate-500">Verificando acceso...</p>;
-  }
-
-  if (accessDenied) {
-    return <p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">Acceso denegado</p>;
-  }
+  if (loading) return <p className="p-6">Cargando...</p>;
 
   return <>{children}</>;
 }

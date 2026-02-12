@@ -2,7 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn } from '@/firebase/auth';
+import { signIn, isAdmin } from '@/supabase/auth';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+
 
 function toFriendlyError(code: string): string {
   if (code === 'auth/invalid-credential') return 'Correo o contraseña incorrectos.';
@@ -24,14 +28,33 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      await signIn(email, password);
-      router.replace('/admin/dashboard');
-    } catch (err: unknown) {
-      const code = typeof err === 'object' && err && 'code' in err ? String(err.code) : '';
-      setError(toFriendlyError(code));
-    } finally {
-      setLoading(false);
-    }
+  await signIn(email, password);
+
+  const ok = await isAdmin();
+  if (!ok) {
+    setError("Tu usuario no tiene permisos de administrador.");
+    return;
+  }
+
+  router.replace('/admin/dashboard');
+} catch (err: unknown) {
+  const msg =
+    typeof err === "object" && err && "message" in err ? String((err as any).message) : "";
+
+  // mensajes típicos de Supabase
+  if (msg.toLowerCase().includes("invalid login credentials")) {
+    setError("Correo o contraseña incorrectos.");
+  } else if (msg.toLowerCase().includes("too many requests")) {
+    setError("Demasiados intentos. Intenta más tarde.");
+  } else if (msg.toLowerCase().includes("network")) {
+    setError("No hay conexión a internet.");
+  } else {
+    setError("No fue posible iniciar sesión. Intenta nuevamente.");
+  }
+} finally {
+  setLoading(false);
+}
+
   };
 
   return (

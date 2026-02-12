@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getBusinessProfile } from '@/firebase/firestore';
+import { getBusinessProfile } from '@/supabase/db';
 import type { BusinessProfile } from '@/types/business';
 
 export default function ContactPage() {

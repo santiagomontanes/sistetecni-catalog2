@@ -6,7 +6,7 @@ import Gallery from '@/components/Gallery';
 import Hero from '@/components/Hero';
 import ProductCard from '@/components/ProductCard';
 import Testimonials from '@/components/Testimonials';
-import { getBusinessProfile, getProducts, getTestimonials } from '@/firebase/firestore';
+import { getBusinessProfile, getProducts, getTestimonials } from '@/supabase/db';
 import type { BusinessProfile } from '@/types/business';
 import type { Product } from '@/types/product';
 import type { Testimonial } from '@/types/testimonial';

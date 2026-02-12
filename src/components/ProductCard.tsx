@@ -6,20 +6,28 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const coverImage = product.images[0];
+  const imageUrl = product.images?.[0] || '/placeholder.jpg';
 
   return (
-    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      {coverImage ? <img src={coverImage} alt={product.title} className="h-44 w-full object-cover" /> : null}
-      <div className="p-4">
-        <h3 className="text-lg font-semibold text-slate-900">{product.title}</h3>
-        <p className="mt-1 text-sm text-slate-600">{product.brand} {product.model}</p>
-        <p className="mt-2 text-lg font-bold text-slate-900">${product.price.toLocaleString('es-CO')}</p>
-        <p className="text-xs text-slate-500">Stock: {product.stock} · {product.condition}</p>
-        <Link href={`/product?id=${product.id}`} className="mt-4 inline-block text-sm font-medium text-sky-700">
-          Ver detalle
-        </Link>
+    <Link
+      href={`/product?id=${product.id}`}
+      className="block overflow-hidden rounded-xl border border-slate-200 bg-white hover:shadow-sm"
+    >
+      <img
+        src={imageUrl}
+        alt={product.title}
+        className="h-48 w-full object-cover"
+      />
+
+      <div className="p-4 space-y-1">
+        <h3 className="text-base font-semibold text-slate-900">{product.title}</h3>
+        <p className="text-sm text-slate-600">
+          {product.brand} {product.model}
+        </p>
+        <p className="text-sm font-semibold text-slate-900">
+          ${Number(product.price || 0).toLocaleString('es-CO')}
+        </p>
       </div>
-    </article>
+    </Link>
   );
 }

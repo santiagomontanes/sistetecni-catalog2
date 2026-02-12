@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import AdminProductForm from '@/components/AdminProductForm';
 import AdminProductTable from '@/components/AdminProductTable';
 import ProtectedAdmin from '@/components/ProtectedAdmin';
-import { signOutUser } from '@/firebase/auth';
-import { deleteProduct, getProducts } from '@/firebase/firestore';
+import { signOutUser } from '@/supabase//auth';
+import { deleteProduct, getProducts } from '@/supabase/db';
 import type { Product } from '@/types/product';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 
 export default function AdminDashboardPage() {
   const [products, setProducts] = useState<Product[]>([]);

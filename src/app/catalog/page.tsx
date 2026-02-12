@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
 import ProductFilters from '@/components/ProductFilters';
-import { getProducts } from '@/firebase/firestore';
+import { getProducts } from '@/supabase/db';
 import type { Product, ProductFilters as ProductFilterValues } from '@/types/product';
 
 export default function CatalogPage() {

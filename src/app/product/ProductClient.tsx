@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import WhatsAppButton from '@/components/WhatsAppButton';
-import { getBusinessProfile, getProductById } from '@/firebase/firestore';
+import { getBusinessProfile, getProductById } from '@/supabase/db';
 import type { BusinessProfile } from '@/types/business';
 import type { Product } from '@/types/product';
 
