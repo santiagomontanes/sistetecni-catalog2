@@ -1,25 +1,66 @@
 import {
+  addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   limit,
   orderBy,
   query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
   where,
   type QueryConstraint,
-  Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import type { BusinessProfile } from '@/types/business';
 import type { Product, ProductFilters } from '@/types/product';
 import type { Testimonial } from '@/types/testimonial';
 
+interface RoleData {
+  role: string;
+  active: boolean;
+}
+
+type ProductPayload = Omit<Product, 'id' | 'createdAt'>;
+
 function toDate(value: unknown): Date | null {
   if (value instanceof Timestamp) {
     return value.toDate();
   }
   return null;
+}
+
+function cleanProductPayload(data: Partial<ProductPayload>): Record<string, unknown> {
+  return {
+    ...(data.title !== undefined ? { title: data.title } : {}),
+    ...(data.brand !== undefined ? { brand: data.brand } : {}),
+    ...(data.model !== undefined ? { model: data.model } : {}),
+    ...(data.cpu !== undefined ? { cpu: data.cpu } : {}),
+    ...(data.ram !== undefined ? { ram: data.ram } : {}),
+    ...(data.storage !== undefined ? { storage: data.storage } : {}),
+    ...(data.screen !== undefined ? { screen: data.screen } : {}),
+    ...(data.price !== undefined ? { price: data.price } : {}),
+    ...(data.condition !== undefined ? { condition: data.condition } : {}),
+    ...(data.stock !== undefined ? { stock: data.stock } : {}),
+    ...(data.images !== undefined ? { images: data.images } : {}),
+    ...(data.featured !== undefined ? { featured: data.featured } : {}),
+  };
+}
+
+export async function getUserRole(uid: string): Promise<RoleData | null> {
+  const roleSnapshot = await getDoc(doc(db, 'roles', uid));
+  if (!roleSnapshot.exists()) {
+    return null;
+  }
+
+  const data = roleSnapshot.data();
+  return {
+    role: String(data.role ?? ''),
+    active: Boolean(data.active),
+  };
 }
 
 export async function getBusinessProfile(): Promise<BusinessProfile | null> {
@@ -89,6 +130,26 @@ export async function getProductById(id: string): Promise<Product | null> {
   const productSnapshot = await getDoc(doc(db, 'products', id));
   if (!productSnapshot.exists()) return null;
   return mapProduct(productSnapshot.id, productSnapshot.data() as Record<string, unknown>);
+}
+
+export async function createProduct(data: ProductPayload): Promise<string> {
+  const created = await addDoc(collection(db, 'products'), {
+    ...cleanProductPayload(data),
+    createdAt: serverTimestamp(),
+  });
+  return created.id;
+}
+
+export async function updateProduct(id: string, partial: Partial<ProductPayload>): Promise<void> {
+  await updateDoc(doc(db, 'products', id), cleanProductPayload(partial));
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'products', id));
+}
+
+export async function setFeatured(id: string, featured: boolean): Promise<void> {
+  await updateProduct(id, { featured });
 }
 
 export async function getTestimonials(maxItems = 6): Promise<Testimonial[]> {

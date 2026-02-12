@@ -1,5 +1,6 @@
 import {
   browserLocalPersistence,
+  onAuthStateChanged,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
@@ -7,12 +8,16 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/firebase/config';
 
-export async function loginWithEmail(email: string, password: string): Promise<User> {
+export async function signIn(email: string, password: string): Promise<User> {
   await setPersistence(auth, browserLocalPersistence);
   const credentials = await signInWithEmailAndPassword(auth, email, password);
   return credentials.user;
 }
 
-export async function logout(): Promise<void> {
+export async function signOutUser(): Promise<void> {
   await signOut(auth);
+}
+
+export function subscribeToAuth(callback: (user: User | null) => void): () => void {
+  return onAuthStateChanged(auth, callback);
 }
