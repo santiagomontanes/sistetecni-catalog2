@@ -58,9 +58,13 @@ function fromProduct(product: Product): ProductFormState {
 function formatError(err: unknown): string {
   if (!err) return 'Error desconocido.';
   if (typeof err === 'string') return err;
-  if (typeof err === 'object' && 'message' in err) return String((err as any).message);
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err && 'message' in err) {
+    return String((err as { message: unknown }).message);
+  }
   return 'Ocurrió un error.';
 }
+
 
 export default function AdminProductForm({ selectedProduct, onSaved, onCancelEdit }: AdminProductFormProps) {
   const [form, setForm] = useState<ProductFormState>(initialState);
