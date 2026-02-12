@@ -1,13 +1,8 @@
-type PageProps = { params: { id: string } };
-
-export default function ProductPage({ params }: PageProps) {
+export default function Page({ params }: { params: { id: string } }) {
   return (
-    <section className="space-y-4">
-      <h1 className="text-3xl font-bold text-slate-900">Detalle del producto</h1>
-      <p className="text-sm text-slate-600">ID del producto: {params.id}</p>
-      <div className="rounded-xl border border-slate-200 p-6">
-        <p className="text-sm text-slate-700">Contenido de detalle (placeholder para V1).</p>
-      </div>
-    </section>
+    <main className="p-6">
+      <h1 className="text-2xl font-semibold">Producto</h1>
+      <p className="mt-2 text-sm text-gray-600">ID: {params.id}</p>
+    </main>
   );
 }
