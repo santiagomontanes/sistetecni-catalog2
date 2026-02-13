@@ -86,7 +86,7 @@ export async function getBusinessProfile(): Promise<BusinessProfile | null> {
     description: String(data.description ?? ""),
     address: String(data.address ?? ""),
     hours: String(data.hours ?? ""),
-    phoneWhatsApp: String(data.phone_whatsapp ?? "0000000000"),
+    phoneWhatsApp: String(data.phone_whatsapp ?? "+57 3202210698"),
     email: String(data.email ?? ""),
     socialLinks: {
       instagram: String(data.instagram ?? ""),
