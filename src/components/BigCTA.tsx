@@ -11,7 +11,7 @@ export default function BigCTA() {
           </h2>
 
           <p className="mt-3 max-w-2xl text-sm text-muted md:text-base">
-            Más de 100 equipos vendidos y 8 meses de garantía real.
+            Más de 1000 equipos vendidos y 8 meses de garantía real.
             Asesoría personalizada y envíos a toda Colombia.
           </p>
 
