@@ -1,4 +1,4 @@
-import type { Product } from '@/types/product';
+import type { Product } from "@/types/product";
 
 interface WhatsAppButtonProps {
   phone?: string;
@@ -6,24 +6,49 @@ interface WhatsAppButtonProps {
   fixed?: boolean;
 }
 
-export default function WhatsAppButton({ phone, product, fixed = true }: WhatsAppButtonProps) {
-  const phoneValue = (phone ?? '573000000000').replace(/\D/g, '');
+function formatCOP(value: number) {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export default function WhatsAppButton({
+  phone,
+  product,
+  fixed = true,
+}: WhatsAppButtonProps) {
+  const phoneValue = (phone ?? "573202210698").replace(/\D/g, "");
+
   const message = product
-    ? `Hola, estoy interesado en ${product.title} (${product.brand} ${product.model}) por ${product.price}. ¿Sigue disponible?`
-    : 'Hola, quiero más información de sus productos y servicios.';
+    ? `Hola 👋
+
+Estoy interesado en este equipo:
+
+• Producto: ${product.title}
+• Marca: ${product.brand} ${product.model}
+• Precio: ${formatCOP(product.price)}
+
+¿Sigue disponible?`
+    : "Hola 👋 quiero más información sobre sus productos disponibles.";
+
+  const url = `https://wa.me/${phoneValue}?text=${encodeURIComponent(
+    message
+  )}`;
 
   return (
     <a
-      href={`https://wa.me/${phoneValue}?text=${encodeURIComponent(message)}`}
+      href={url}
       target="_blank"
       rel="noopener noreferrer"
       className={
         fixed
-          ? 'fixed bottom-5 right-5 rounded-full bg-green-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-green-600'
-          : 'inline-flex rounded-md bg-green-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600'
+          ? "fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-green-500 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-green-500/30 transition hover:scale-105 hover:bg-green-600"
+          : "inline-flex items-center gap-2 rounded-xl bg-green-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-green-500/20 transition hover:scale-105 hover:bg-green-600"
       }
     >
-      WhatsApp
+      <span>WhatsApp</span>
     </a>
   );
 }

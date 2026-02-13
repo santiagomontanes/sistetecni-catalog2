@@ -3,14 +3,15 @@
 @tailwind utilities;
 
 :root{
-  --bg: #0B1220;        /* fondo oscuro */
-  --surface: #0F1B2D;   /* tarjetas / secciones */
-  --border: #1E2A3B;    /* bordes */
-  --text: #E6EEF8;      /* texto principal */
-  --muted: #A8B3C4;     /* texto secundario */
-  --primary: #123A6F;   /* azul principal */
-  --accent: #2DD4BF;    /* acento */
+  --bg: #0B1220;
+  --surface: #13243B;
+  --border: #233449;
+  --text: #F1F5FF;
+  --muted: #C5D1E3;
+  --primary: #1E4ED8;
+  --accent: #2DD4BF;
 }
+
 
 html, body {
   height: 100%;
