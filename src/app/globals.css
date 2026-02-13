@@ -2,10 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
+:root{
+  --bg: #0B1220;        /* fondo oscuro */
+  --surface: #0F1B2D;   /* tarjetas / secciones */
+  --border: #1E2A3B;    /* bordes */
+  --text: #E6EEF8;      /* texto principal */
+  --muted: #A8B3C4;     /* texto secundario */
+  --primary: #123A6F;   /* azul principal */
+  --accent: #2DD4BF;    /* acento */
+}
+
+html, body {
+  height: 100%;
 }
 
 body {
-  @apply bg-white text-slate-800 antialiased;
+  background: var(--bg);
+  color: var(--text);
+  @apply antialiased;
 }
