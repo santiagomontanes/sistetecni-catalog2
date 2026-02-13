@@ -1,5 +1,5 @@
 const stats = [
-  { value: "+100", label: "Equipos vendidos" },
+  { value: "+1000", label: "Equipos vendidos" },
   { value: "8 meses", label: "Garantía real" },
   { value: "24–48h", label: "Despacho en Bogotá" },
   { value: "Nacional", label: "Envíos a toda Colombia" },
