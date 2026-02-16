@@ -10,6 +10,8 @@ import { getBusinessProfile, getProductById } from "@/supabase/db";
 import type { BusinessProfile } from "@/types/business";
 import type { Product } from "@/types/product";
 
+
+
 function formatCOP(value: number) {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -17,6 +19,7 @@ function formatCOP(value: number) {
     maximumFractionDigits: 0,
   }).format(value);
 }
+
 
 export default function ProductClient() {
   const searchParams = useSearchParams();
