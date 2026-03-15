@@ -83,24 +83,33 @@ export default function SoftwarePage() {
             </div>
 
             <div className="mt-8 flex flex-wrap gap-4">
-              <a
-                href="https://drive.google.com/file/d/1-Z-y1D9mpW1pl1KxvPfoqATKYPx2XeOy/view?usp=drive_link"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
-              >
-                Descargar software
-              </a>
+  <a
+    href="https://drive.google.com/file/d/1-Z-y1D9mpW1pl1KxvPfoqATKYPx2XeOy/view?usp=drive_link"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
+  >
+    Descargar software
+  </a>
 
-              <a
-                href="https://wa.me/573043547758?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20Sistetecni%20POS"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-xl border border-white/15 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
-              >
-                Solicitar información
-              </a>
-            </div>
+  <a
+    href="https://drive.google.com/file/d/1G_QKRIWNGs9ZRU_S5f6WYgCBL85pfkMn/view?usp=drive_link"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
+  >
+    Descargar versión sin MySQL y Workbench
+  </a>
+
+  <a
+    href="https://wa.me/573043547758?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20Sistetecni%20POS"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="rounded-xl border border-white/15 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+  >
+    Solicitar información
+  </a>
+</div>
           </div>
 
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl">
@@ -182,6 +191,15 @@ export default function SoftwarePage() {
             >
               Solicitar información
             </a>
+
+            <a
+  href="https://drive.google.com/file/d/1G_QKRIWNGs9ZRU_S5f6WYgCBL85pfkMn/view?usp=drive_link"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
+>
+  Versión sin MySQL
+</a>
 
             <a
               href="https://drive.google.com/file/d/1-Z-y1D9mpW1pl1KxvPfoqATKYPx2XeOy/view?usp=drive_link"
