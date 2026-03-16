@@ -84,7 +84,7 @@ export default function SoftwarePage() {
 
             <div className="mt-8 flex flex-wrap gap-4">
   <a
-    href="https://drive.google.com/file/d/1-Z-y1D9mpW1pl1KxvPfoqATKYPx2XeOy/view?usp=drive_link"
+    href="https://drive.google.com/file/d/1lC1ZzvmndUvm5zUFgZs_Yp_MbvMRwPH8/view?usp=drive_link"
     target="_blank"
     rel="noopener noreferrer"
     className="rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
@@ -93,7 +93,7 @@ export default function SoftwarePage() {
   </a>
 
   <a
-    href="https://drive.google.com/file/d/1G_QKRIWNGs9ZRU_S5f6WYgCBL85pfkMn/view?usp=drive_link"
+    href="https://drive.google.com/file/d/1JMQA5tFzsUkXz3Z5mU1S1-tYYq52UX3I/view?usp=drive_link"
     target="_blank"
     rel="noopener noreferrer"
     className="rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
@@ -193,7 +193,7 @@ export default function SoftwarePage() {
             </a>
 
             <a
-  href="https://drive.google.com/file/d/1G_QKRIWNGs9ZRU_S5f6WYgCBL85pfkMn/view?usp=drive_link"
+  href="https://drive.google.com/file/d/1JMQA5tFzsUkXz3Z5mU1S1-tYYq52UX3I/view?usp=drive_link"
   target="_blank"
   rel="noopener noreferrer"
   className="rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
@@ -202,7 +202,7 @@ export default function SoftwarePage() {
 </a>
 
             <a
-              href="https://drive.google.com/file/d/1-Z-y1D9mpW1pl1KxvPfoqATKYPx2XeOy/view?usp=drive_link"
+              href="https://drive.google.com/file/d/1lC1ZzvmndUvm5zUFgZs_Yp_MbvMRwPH8/view?usp=drive_link"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-xl border border-white/15 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
