@@ -48,7 +48,7 @@ export default function SoftwarePreview() {
               </Link>
 
               <a
-                href="https://drive.google.com/file/d/1lC1ZzvmndUvm5zUFgZs_Yp_MbvMRwPH8/view?usp=drive_link"
+                href="https://www.mediafire.com/file/0fov546fc7jm6cw/SistetecniPOS-Setup-1.0.3.exe/file"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-xl border border-white/15 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
