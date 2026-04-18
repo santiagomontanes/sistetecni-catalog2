@@ -102,6 +102,7 @@ export async function getBusinessProfile(): Promise<BusinessProfile | null> {
 export async function getProducts(filters?: ProductFilters): Promise<Product[]> {
   let q = supabase.from("products").select("*").order("created_at", { ascending: false });
 
+  if (filters?.visibleOnly) q = q.eq("visible_web", true);
   if (filters?.brand) q = q.eq("brand", filters.brand);
   if (typeof filters?.ram === "number") q = q.eq("ram", filters.ram);
   if (typeof filters?.minPrice === "number") q = q.gte("price", filters.minPrice);
@@ -120,6 +121,7 @@ export async function getProductById(id: string): Promise<Product | null> {
     .from("products")
     .select("*")
     .eq("id", id)
+    .eq("visible_web", true)
     .maybeSingle<DbRow>();
 
   if (error || !data) return null;

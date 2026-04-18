@@ -1,51 +1,64 @@
-import { MessageCircle, Zap, ShieldCheck } from "lucide-react";
+import { ShieldCheck, Truck, Headphones, BadgeCheck } from "lucide-react";
 
-const benefits = [
+const trustItems = [
   {
-    title: "Asesoría personalizada",
-    description:
-      "Te ayudamos a elegir el equipo ideal según tu presupuesto y necesidad.",
-    icon: MessageCircle,
-  },
-  {
-    title: "Atención rápida",
-    description:
-      "Respuestas ágiles por WhatsApp y soporte post-venta garantizado.",
-    icon: Zap,
-  },
-  {
-    title: "Equipos confiables",
-    description:
-      "Portátiles corporativos reacondicionados, probados y listos para durar.",
     icon: ShieldCheck,
+    title: "Garantía Real",
+    description: "8 meses de garantía en todos nuestros equipos certificados.",
+    iconColor: "text-primary",
+    iconBg: "bg-primary/10",
+  },
+  {
+    icon: Truck,
+    title: "Envío Seguro",
+    description: "Despacho en 24–48h en Bogotá y envíos nacionales asegurados.",
+    iconColor: "text-blue-600",
+    iconBg: "bg-blue-50",
+  },
+  {
+    icon: Headphones,
+    title: "Soporte Técnico",
+    description: "Atención post-venta por WhatsApp. Te respondemos en minutos.",
+    iconColor: "text-purple-600",
+    iconBg: "bg-purple-50",
+  },
+  {
+    icon: BadgeCheck,
+    title: "Precio Justo",
+    description: "Sin letra pequeña. El precio que ves es el precio que pagas.",
+    iconColor: "text-success",
+    iconBg: "bg-green-50",
   },
 ];
 
 export default function Benefits() {
   return (
-    <section className="mt-14">
-      <h2 className="text-2xl font-semibold text-text">
-        ¿Por qué elegir Sistetecni?
-      </h2>
+    <section>
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-text md:text-3xl">
+          ¿Por qué comprarnos?
+        </h2>
+        <p className="mt-2 text-sm text-muted">
+          Más de 1000 empresas y profesionales confían en Sistetecni.
+        </p>
+      </div>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-3">
-        {benefits.map((benefit) => {
-          const Icon = benefit.icon;
-
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {trustItems.map((item) => {
+          const Icon = item.icon;
           return (
             <div
-              key={benefit.title}
-              className="rounded-2xl border border-border bg-surface p-6 transition hover:scale-[1.02] hover:shadow-lg"
+              key={item.title}
+              className="group rounded-2xl border border-border bg-white p-6 text-center transition hover:border-primary/30 hover:shadow-lg"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bg/40">
-                  <Icon className="h-5 w-5 text-accent" />
-                </div>
-                <h3 className="font-semibold">{benefit.title}</h3>
+              <div
+                className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${item.iconBg}`}
+              >
+                <Icon className={`h-7 w-7 ${item.iconColor}`} strokeWidth={1.5} />
               </div>
-
-              <p className="mt-4 text-sm text-muted">
-                {benefit.description}
+              <h3 className="font-semibold text-text">{item.title}</h3>
+              <p className="mt-2 text-xs leading-relaxed text-muted">
+                {item.description}
               </p>
             </div>
           );

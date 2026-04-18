@@ -36,7 +36,7 @@ export default function Testimonials({ testimonials }: TestimonialsProps) {
               className="rounded-2xl border border-border bg-surface p-6 transition hover:shadow-lg"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bg/40 text-sm font-semibold text-text">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                   {getInitials(t.clientName || "Cliente")}
                 </div>
 

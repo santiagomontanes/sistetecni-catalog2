@@ -64,7 +64,27 @@ export default function ProductClient() {
 
   const images = useMemo(() => product?.images ?? [], [product]);
 
-  if (loading) return <p className="text-sm text-muted">Cargando producto...</p>;
+  if (loading)
+    return (
+      <div className="animate-pulse space-y-8">
+        <div className="space-y-3">
+          <div className="h-4 w-1/4 rounded-md bg-border" />
+          <div className="h-8 w-2/3 rounded-md bg-border" />
+          <div className="h-7 w-1/4 rounded-md bg-border" />
+        </div>
+        <div className="grid gap-8 lg:grid-cols-2">
+          <div className="aspect-square rounded-2xl bg-surface" />
+          <div className="rounded-2xl border border-border bg-surface p-6">
+            <div className="h-5 w-1/3 rounded-md bg-border" />
+            <div className="mt-4 space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-12 rounded-xl bg-border" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   if (error) return <p className="text-sm text-red-400">{error}</p>;
   if (!product) return <p className="text-sm text-muted">Sin información de producto.</p>;
 
@@ -101,7 +121,7 @@ export default function ProductClient() {
 
               <a
                 href="/catalog"
-                className="rounded-xl border border-border bg-bg/20 px-6 py-3 text-sm font-medium text-muted transition hover:bg-bg/40"
+                className="rounded-xl border border-border bg-surface px-6 py-3 text-sm font-medium text-muted transition hover:border-primary hover:text-primary"
               >
                 Volver al catálogo
               </a>
@@ -123,7 +143,7 @@ export default function ProductClient() {
 
 function Spec({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-bg/20 px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-surface px-4 py-3">
       <span className="text-sm font-medium text-muted">{label}</span>
       <span className="text-sm text-text">{value}</span>
     </div>

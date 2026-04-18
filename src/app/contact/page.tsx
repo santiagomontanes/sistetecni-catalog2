@@ -25,8 +25,8 @@ export default function ContactPage() {
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {/* Dirección */}
-              <div className="flex items-start gap-3 rounded-xl border border-border bg-bg/20 p-4">
-                <MapPin className="mt-1 h-5 w-5 text-accent" />
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
+                <MapPin className="mt-1 h-5 w-5 text-primary" />
                 <div>
                   <div className="text-sm font-semibold text-text">Dirección</div>
                   <a
@@ -41,8 +41,8 @@ export default function ContactPage() {
               </div>
 
               {/* Horario */}
-              <div className="flex items-start gap-3 rounded-xl border border-border bg-bg/20 p-4">
-                <Clock className="mt-1 h-5 w-5 text-accent" />
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
+                <Clock className="mt-1 h-5 w-5 text-primary" />
                 <div>
                   <div className="text-sm font-semibold text-text">Horario</div>
                   <div className="text-sm text-muted">
@@ -52,8 +52,8 @@ export default function ContactPage() {
               </div>
 
               {/* Email */}
-              <div className="flex items-start gap-3 rounded-xl border border-border bg-bg/20 p-4">
-                <Mail className="mt-1 h-5 w-5 text-accent" />
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
+                <Mail className="mt-1 h-5 w-5 text-primary" />
                 <div>
                   <div className="text-sm font-semibold text-text">Email</div>
                   <a
@@ -66,8 +66,8 @@ export default function ContactPage() {
               </div>
 
               {/* Mapa */}
-              <div className="flex items-start gap-3 rounded-xl border border-border bg-bg/20 p-4">
-                <MapPin className="mt-1 h-5 w-5 text-accent" />
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4">
+                <MapPin className="mt-1 h-5 w-5 text-primary" />
                 <div>
                   <div className="text-sm font-semibold text-text">Ubicación</div>
                   <a
@@ -95,10 +95,10 @@ export default function ContactPage() {
                 href="https://www.instagram.com/sistetecni_oficial"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between rounded-xl border border-border bg-bg/20 p-4 text-sm transition hover:bg-bg/35"
+                className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 text-sm transition hover:border-primary hover:text-primary"
               >
                 <div className="flex items-center gap-3">
-                  <Instagram className="h-5 w-5 text-accent" />
+                  <Instagram className="h-5 w-5 text-primary" />
                   <span className="font-medium text-text">Instagram</span>
                 </div>
                 <span className="text-xs text-muted">Abrir</span>
@@ -108,10 +108,10 @@ export default function ContactPage() {
                 href="https://www.facebook.com/share/1CKGvFvska/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between rounded-xl border border-border bg-bg/20 p-4 text-sm transition hover:bg-bg/35"
+                className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 text-sm transition hover:border-primary hover:text-primary"
               >
                 <div className="flex items-center gap-3">
-                  <Facebook className="h-5 w-5 text-accent" />
+                  <Facebook className="h-5 w-5 text-primary" />
                   <span className="font-medium text-text">Facebook</span>
                 </div>
                 <span className="text-xs text-muted">Abrir</span>
@@ -121,10 +121,10 @@ export default function ContactPage() {
                 href="https://www.tiktok.com/@sistecnioficial?_r=1&_t=ZS-93sWMckVqVR"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between rounded-xl border border-border bg-bg/20 p-4 text-sm transition hover:bg-bg/35"
+                className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 text-sm transition hover:border-primary hover:text-primary"
               >
                 <div className="flex items-center gap-3">
-                  <Music2 className="h-5 w-5 text-accent" />
+                  <Music2 className="h-5 w-5 text-primary" />
                   <span className="font-medium text-text">TikTok</span>
                 </div>
                 <span className="text-xs text-muted">Abrir</span>

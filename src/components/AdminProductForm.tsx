@@ -210,11 +210,11 @@ export default function AdminProductForm({
   const h2 = "text-xl font-semibold text-text";
   const label = "block text-sm font-medium text-muted";
   const input =
-    "w-full rounded-xl border border-border bg-bg/20 px-4 py-3 text-sm text-text placeholder:text-muted outline-none focus:ring-2 focus:ring-accent/30";
+    "w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text placeholder:text-muted outline-none focus:ring-2 focus:ring-primary/20";
   const buttonPrimary =
     "rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60";
   const buttonGhost =
-    "rounded-xl border border-border bg-bg/20 px-5 py-3 text-sm font-semibold text-text transition hover:bg-bg/35";
+    "rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-text transition hover:border-primary hover:text-primary";
 
   return (
     <form onSubmit={handleSubmit} className={panel}>
@@ -304,12 +304,12 @@ export default function AdminProductForm({
           accept="image/*"
           multiple
           onChange={(e) => setNewImages(Array.from(e.target.files ?? []))}
-          className="block w-full text-sm text-muted file:mr-4 file:rounded-lg file:border-0 file:bg-bg/30 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-text hover:file:bg-bg/40"
+          className="block w-full text-sm text-muted file:mr-4 file:rounded-lg file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:font-semibold file:text-text hover:file:bg-border"
         />
 
         {/* Imágenes actuales */}
         {isEditing ? (
-          <div className="rounded-2xl border border-border bg-bg/20 p-4">
+          <div className="rounded-2xl border border-border bg-surface p-4">
             <p className="mb-3 text-sm font-semibold text-text">Imágenes actuales</p>
 
             {images.length === 0 ? (
@@ -319,7 +319,7 @@ export default function AdminProductForm({
                 {images.map((url) => (
                   <li
                     key={url}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg/10 px-4 py-3"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-white px-4 py-3"
                   >
                     <a
                       href={url}
@@ -343,7 +343,7 @@ export default function AdminProductForm({
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-      {imageWarning ? <p className="text-sm text-amber-300">{imageWarning}</p> : null}
+      {imageWarning ? <p className="text-sm text-blue-500">{imageWarning}</p> : null}
       {message ? <p className="text-sm text-emerald-300">{message}</p> : null}
 
       <div className="flex flex-wrap gap-2">

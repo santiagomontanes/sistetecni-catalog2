@@ -24,8 +24,8 @@ export default function IncludesSection() {
               className="rounded-2xl border border-border bg-surface p-5"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bg/40">
-                  <Icon className="h-5 w-5 text-accent" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                  <Icon className="h-5 w-5 text-primary" />
                 </div>
                 <div className="font-semibold text-text">{it.title}</div>
               </div>

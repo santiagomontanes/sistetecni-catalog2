@@ -39,7 +39,7 @@ export default function CommercialGallery() {
               />
 
               {/* Overlay elegante */}
-              <div className="absolute inset-0 bg-gradient-to-t from-bg/80 via-bg/20 to-transparent opacity-70 transition group-hover:opacity-90" />
+              <div className="absolute inset-0 bg-gradient-to-t from-text/80 via-text/20 to-transparent opacity-70 transition group-hover:opacity-90" />
             </div>
 
             <div className="absolute bottom-0 p-4">

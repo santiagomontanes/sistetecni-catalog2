@@ -22,4 +22,5 @@ export interface ProductFilters {
   maxPrice?: number;
   featured?: boolean;
   maxItems?: number;
+  visibleOnly?: boolean;
 }

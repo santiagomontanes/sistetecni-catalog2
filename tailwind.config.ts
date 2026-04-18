@@ -9,13 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: "#0B1220",
-        surface: "#0F1B2D",
-        border: "#1E2A3B",
-        text: "#E6EEF8",
-        muted: "#A8B3C4",
-        primary: "#123A6F",
-        accent: "#2DD4BF",
+        bg: "#FFFFFF",
+        surface: "#F7F7F7",
+        border: "#E5E5E5",
+        text: "#111111",
+        muted: "#666666",
+        primary: "#1A56DB",
+        accent: "#3B82F6",
+        success: "#22C55E",
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
       },
     },
   },

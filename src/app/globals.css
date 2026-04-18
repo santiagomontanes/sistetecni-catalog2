@@ -2,23 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-:root{
-  --bg: #0B1220;
-  --surface: #13243B;
-  --border: #233449;
-  --text: #F1F5FF;
-  --muted: #C5D1E3;
-  --primary: #1E4ED8;
-  --accent: #2DD4BF;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #F7F7F7;
+  --border: #E5E5E5;
+  --text: #111111;
+  --muted: #666666;
+  --primary: #1A56DB;
+  --accent: #3B82F6;
+  --success: #22C55E;
 }
 
-
-html, body {
+html,
+body {
   height: 100%;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   @apply antialiased;
+}
+
+/* Hide scrollbar for category strips */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

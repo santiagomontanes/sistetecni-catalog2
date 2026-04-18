@@ -54,7 +54,7 @@ export default function ProductGallery({
         />
 
         {/* Hint */}
-        <div className="absolute bottom-3 left-3 rounded-full border border-border bg-bg/40 px-3 py-1 text-xs text-text backdrop-blur">
+        <div className="absolute bottom-3 left-3 rounded-full border border-white/20 bg-text/60 px-3 py-1 text-xs text-white backdrop-blur">
           Pasa el mouse para zoom
         </div>
       </div>
@@ -68,8 +68,8 @@ export default function ProductGallery({
             onClick={() => setActive(idx)}
             className={`overflow-hidden rounded-xl border transition ${
               idx === active
-                ? "border-accent/70 ring-2 ring-accent/30"
-                : "border-border hover:border-accent/40"
+                ? "border-primary ring-2 ring-primary/20"
+                : "border-border hover:border-primary/40"
             }`}
           >
             <img src={src} alt={`${title} mini ${idx + 1}`} className="h-16 w-16 object-cover" />
