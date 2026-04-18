@@ -14,7 +14,8 @@ const RAM_OPTIONS = [
 interface ProductFiltersProps {
   filters: ProductFilterValues;
   onChange: (next: ProductFilterValues) => void;
-  onApply: () => void;
+  // Recibe los filtros directamente para evitar stale closure en el padre
+  onApply: (f: ProductFilterValues) => void;
   onClear: () => void;
 }
 
@@ -38,12 +39,13 @@ export default function ProductFilters({
             <button
               key={brand}
               onClick={() => {
-                const next = {
+                const next: ProductFilterValues = {
                   ...filters,
                   brand: brand === "Todos" ? undefined : brand,
                 };
                 onChange(next);
-                onApply();
+                // Pasamos `next` directamente — evita el stale closure
+                onApply(next);
               }}
               className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition ${
                 isActive
@@ -103,7 +105,7 @@ export default function ProductFilters({
         />
 
         <button
-          onClick={onApply}
+          onClick={() => onApply(filters)}
           className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary/90"
         >
           Aplicar

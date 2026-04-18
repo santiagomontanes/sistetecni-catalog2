@@ -138,8 +138,10 @@ export async function updateHeroVideo(url: string, type: "image" | "video"): Pro
 export async function getProducts(filters?: ProductFilters): Promise<Product[]> {
   let q = supabase.from("products").select("*").order("created_at", { ascending: false });
 
-  if (filters?.visibleOnly) q = q.eq("visible_web", true);
-  if (filters?.brand) q = q.eq("brand", filters.brand);
+  // NULL visible_web is treated as visible (default-on) — consistent with mapProduct
+  if (filters?.visibleOnly) q = q.or("visible_web.eq.true,visible_web.is.null");
+  // ilike = case-insensitive exact match (no wildcards)
+  if (filters?.brand) q = q.ilike("brand", filters.brand);
   if (typeof filters?.ram === "number") q = q.eq("ram", filters.ram);
   if (typeof filters?.minPrice === "number") q = q.gte("price", filters.minPrice);
   if (typeof filters?.maxPrice === "number") q = q.lte("price", filters.maxPrice);

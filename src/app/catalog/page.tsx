@@ -61,7 +61,7 @@ export default function CatalogPage() {
         <ProductFilters
           filters={filters}
           onChange={setFilters}
-          onApply={() => void loadProducts(filters)}
+          onApply={(f) => void loadProducts(f)}
           onClear={() => {
             setFilters({});
             void loadProducts({});
