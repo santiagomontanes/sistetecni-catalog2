@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import NavbarLogoClient from "@/components/NavbarLogoClient";
 
 const navLinks = [
   { href: "/", label: "Inicio" },
@@ -28,7 +29,8 @@ export default function Navbar() {
       {/* Main nav row */}
       <div className="mx-auto max-w-6xl px-4">
         <nav className="flex items-center justify-between py-4">
-          <Link href="/" className="text-xl font-bold text-text">
+          <Link href="/" className="flex items-center gap-2 text-xl font-bold text-text">
+            <NavbarLogoClient />
             Siste<span className="text-primary">tecni</span>
           </Link>
 

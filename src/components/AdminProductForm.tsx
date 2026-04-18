@@ -24,6 +24,7 @@ interface ProductFormState {
   condition: string;
   stock: number;
   featured: boolean;
+  visibleWeb: boolean;
 }
 
 const initialState: ProductFormState = {
@@ -38,6 +39,7 @@ const initialState: ProductFormState = {
   condition: "Usado",
   stock: 1,
   featured: false,
+  visibleWeb: true,
 };
 
 function fromProduct(product: Product): ProductFormState {
@@ -53,6 +55,7 @@ function fromProduct(product: Product): ProductFormState {
     condition: product.condition ?? "Usado",
     stock: Number(product.stock ?? 1),
     featured: Boolean(product.featured),
+    visibleWeb: product.visibleWeb !== false,
   };
 }
 
@@ -287,15 +290,26 @@ export default function AdminProductForm({
         />
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-text">
-        <input
-          type="checkbox"
-          checked={form.featured}
-          onChange={(e) => handleChange("featured", e.target.checked)}
-          className="h-4 w-4 accent-[var(--accent)]"
-        />
-        Producto destacado
-      </label>
+      <div className="flex flex-wrap gap-5">
+        <label className="flex items-center gap-2 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={form.featured}
+            onChange={(e) => handleChange("featured", e.target.checked)}
+            className="h-4 w-4 accent-[var(--accent)]"
+          />
+          Producto destacado
+        </label>
+        <label className="flex items-center gap-2 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={form.visibleWeb}
+            onChange={(e) => handleChange("visibleWeb", e.target.checked)}
+            className="h-4 w-4 accent-[var(--accent)]"
+          />
+          Visible en catálogo público
+        </label>
+      </div>
 
       <div className="space-y-2">
         <label className={label}>Imágenes (opcionales)</label>

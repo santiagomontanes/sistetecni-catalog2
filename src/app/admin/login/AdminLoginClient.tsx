@@ -43,7 +43,7 @@ export default function AdminLoginClient() {
         return;
       }
 
-      router.replace('/admin/dashboard');
+      router.replace('/admin');
     } catch (err: unknown) {
       const msg = getErrorMessage(err);
       setError(toFriendlyError(msg));

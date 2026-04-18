@@ -12,6 +12,7 @@ export interface Product {
   stock: number;
   images: string[];
   featured: boolean;
+  visibleWeb: boolean;
   createdAt: Date | null;
 }
 

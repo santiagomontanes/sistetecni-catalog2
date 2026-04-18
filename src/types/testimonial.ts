@@ -6,4 +6,5 @@ export interface Testimonial {
   date: Date | null;
   source: string;
   photoUrl?: string;
+  active?: boolean;
 }

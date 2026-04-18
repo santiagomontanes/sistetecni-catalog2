@@ -14,6 +14,12 @@ export const metadata: Metadata = {
     template: "%s | Sistetecni",
   },
 
+  icons: {
+    icon: "/logo.svg",
+    shortcut: "/logo.svg",
+    apple: "/logo.svg",
+  },
+
   description:
     "Venta de laptops y computadores corporativos reacondicionados en Bogotá. Equipos verificados, garantía real y soporte técnico. Envíos nacionales. Visítanos en San Diego (Centro).",
 

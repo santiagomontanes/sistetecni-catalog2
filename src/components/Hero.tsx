@@ -4,20 +4,89 @@ import Link from "next/link";
 interface HeroProps {
   companyName: string;
   description: string;
+  heroVideoUrl?: string;
+  heroMediaType?: "image" | "video";
 }
 
-export default function Hero({ companyName, description }: HeroProps) {
+function getYouTubeId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/);
+  return match ? match[1] : null;
+}
+
+function getVimeoId(url: string): string | null {
+  const match = url.match(/vimeo\.com\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+function HeroMedia({
+  heroVideoUrl,
+  heroMediaType,
+}: {
+  heroVideoUrl?: string;
+  heroMediaType?: "image" | "video";
+}) {
+  if (heroMediaType === "video" && heroVideoUrl) {
+    const ytId = getYouTubeId(heroVideoUrl);
+    if (ytId) {
+      return (
+        <iframe
+          className="absolute inset-0 h-full w-full object-cover opacity-50"
+          src={`https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&controls=0&showinfo=0&rel=0`}
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+          title="Video de fondo"
+          style={{ border: "none", pointerEvents: "none" }}
+        />
+      );
+    }
+
+    const vimeoId = getVimeoId(heroVideoUrl);
+    if (vimeoId) {
+      return (
+        <iframe
+          className="absolute inset-0 h-full w-full object-cover opacity-50"
+          src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1&muted=1&loop=1&background=1`}
+          allow="autoplay; fullscreen"
+          title="Video de fondo"
+          style={{ border: "none", pointerEvents: "none" }}
+        />
+      );
+    }
+
+    return (
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 h-full w-full object-cover opacity-50"
+        src={heroVideoUrl}
+      />
+    );
+  }
+
+  return (
+    <Image
+      src="/hero.jpg"
+      alt="Sistetecni equipos corporativos"
+      fill
+      priority
+      className="object-cover opacity-40"
+    />
+  );
+}
+
+export default function Hero({
+  companyName,
+  description,
+  heroVideoUrl,
+  heroMediaType,
+}: HeroProps) {
   return (
     <section className="relative overflow-hidden rounded-3xl bg-text">
-      {/* Background image */}
+      {/* Background media */}
       <div className="absolute inset-0">
-        <Image
-          src="/hero.jpg"
-          alt="Sistetecni equipos corporativos"
-          fill
-          priority
-          className="object-cover opacity-40"
-        />
+        <HeroMedia heroVideoUrl={heroVideoUrl} heroMediaType={heroMediaType} />
         <div className="absolute inset-0 bg-gradient-to-r from-text/95 via-text/80 to-text/30" />
       </div>
 
@@ -44,12 +113,14 @@ export default function Hero({ companyName, description }: HeroProps) {
           >
             Ver catálogo →
           </Link>
-          <Link
-            href="/contact"
+          <a
+            href="https://wa.me/573202210698?text=Hola%20%F0%9F%91%8B%20quiero%20m%C3%A1s%20informaci%C3%B3n%20sobre%20sus%20productos%20disponibles."
+            target="_blank"
+            rel="noopener noreferrer"
             className="rounded-full border border-white/30 bg-white/10 px-7 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"
           >
             Contactar
-          </Link>
+          </a>
         </div>
 
         {/* Mini trust bar */}

@@ -1,6 +1,7 @@
 import Image from "next/image";
+import type { GalleryImage } from "@/types/gallery";
 
-const images = [
+const STATIC_IMAGES = [
   { src: "/gallery/1.jpg", alt: "Laptop corporativa reacondicionada" },
   { src: "/gallery/2.jpg", alt: "Equipo empresarial listo para entrega" },
   { src: "/gallery/3.jpg", alt: "Portátil para estudio y trabajo" },
@@ -9,7 +10,16 @@ const images = [
   { src: "/gallery/6.jpg", alt: "Computadores corporativos en excelente estado" },
 ];
 
-export default function CommercialGallery() {
+interface CommercialGalleryProps {
+  images?: GalleryImage[];
+}
+
+export default function CommercialGallery({ images }: CommercialGalleryProps) {
+  const items =
+    images && images.length > 0
+      ? images.map((img) => ({ src: img.url, alt: img.caption ?? "Equipo Sistetecni" }))
+      : STATIC_IMAGES;
+
   return (
     <section className="mt-16">
       <div className="flex items-end justify-between">
@@ -24,9 +34,9 @@ export default function CommercialGallery() {
       </div>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2 md:grid-cols-3">
-        {images.map((img) => (
+        {items.map((img, idx) => (
           <div
-            key={img.src}
+            key={img.src + idx}
             className="group relative overflow-hidden rounded-2xl border border-border bg-surface"
           >
             <div className="relative h-60">
@@ -38,7 +48,6 @@ export default function CommercialGallery() {
                 className="object-cover transition duration-500 group-hover:scale-110"
               />
 
-              {/* Overlay elegante */}
               <div className="absolute inset-0 bg-gradient-to-t from-text/80 via-text/20 to-transparent opacity-70 transition group-hover:opacity-90" />
             </div>
 

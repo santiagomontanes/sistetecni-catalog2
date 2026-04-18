@@ -12,10 +12,11 @@ import BigCTA from "@/components/BigCTA";
 import FadeIn from "@/components/FadeIn";
 import SoftwarePreview from "@/components/SoftwarePreview";
 
-import { getBusinessProfile, getProducts, getTestimonials } from "@/supabase/db";
+import { getBusinessProfile, getProducts, getTestimonials, getGalleryImages } from "@/supabase/db";
 import type { BusinessProfile } from "@/types/business";
 import type { Product } from "@/types/product";
 import type { Testimonial } from "@/types/testimonial";
+import type { GalleryImage } from "@/types/gallery";
 
 function SkeletonCard() {
   return (
@@ -35,6 +36,7 @@ export default function HomePage() {
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -44,15 +46,17 @@ export default function HomePage() {
         setLoading(true);
         setError("");
 
-        const [businessData, productsData, testimonialsData] = await Promise.all([
+        const [businessData, productsData, testimonialsData, galleryData] = await Promise.all([
           getBusinessProfile(),
           getProducts({ featured: true, maxItems: 4, visibleOnly: true }),
           getTestimonials(4),
+          getGalleryImages(),
         ]);
 
         setProfile(businessData);
         setFeaturedProducts(productsData);
         setTestimonials(testimonialsData);
+        setGalleryImages(galleryData);
       } catch {
         setError("No se pudo cargar la información pública.");
       } finally {
@@ -72,6 +76,8 @@ export default function HomePage() {
             profile?.description ??
             "Tecnología corporativa y software para impulsar tu negocio, con equipos reacondicionados, garantía real y soporte postventa."
           }
+          heroVideoUrl={profile?.heroVideoUrl}
+          heroMediaType={profile?.heroMediaType}
         />
       </FadeIn>
 
@@ -137,7 +143,7 @@ export default function HomePage() {
       </FadeIn>
 
       <FadeIn delay={0.22}>
-        <CommercialGallery />
+        <CommercialGallery images={galleryImages} />
       </FadeIn>
 
       <FadeIn delay={0.26}>

@@ -15,4 +15,6 @@ export interface BusinessProfile {
   locationMapLink?: string;
   logoUrl?: string;
   localPhotos: string[];
+  heroVideoUrl?: string;
+  heroMediaType?: 'image' | 'video';
 }
