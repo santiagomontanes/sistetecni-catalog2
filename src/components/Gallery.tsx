@@ -17,6 +17,8 @@ export default function Gallery({ photos }: GalleryProps) {
               key={`${photo}-${index}`}
               src={photo}
               alt={`Foto local ${index + 1}`}
+              loading="lazy"
+              decoding="async"
               className="h-40 w-full rounded-xl object-cover"
             />
           ))}

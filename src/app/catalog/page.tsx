@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ProductCard from "@/components/ProductCard";
 import ProductFilters from "@/components/ProductFilters";
 import FadeIn from "@/components/FadeIn";
-import { getProducts } from "@/supabase/db";
+import { getProductsList } from "@/supabase/db";
 import type { Product, ProductFilters as ProductFilterValues } from "@/types/product";
+
+const PAGE_SIZE = 12;
 
 function SkeletonCard() {
   return (
@@ -23,26 +25,56 @@ function SkeletonCard() {
 
 export default function CatalogPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [filters, setFilters] = useState<ProductFilterValues>({});
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
 
-  const loadProducts = async (activeFilters?: ProductFilterValues) => {
+  const loadProducts = useCallback(async (activeFilters?: ProductFilterValues) => {
     try {
       setLoading(true);
       setError("");
-      const nextProducts = await getProducts({ ...activeFilters, visibleOnly: true });
-      setProducts(nextProducts);
+      const page = await getProductsList({
+        ...activeFilters,
+        visibleOnly: true,
+        offset: 0,
+        pageSize: PAGE_SIZE,
+      });
+      setProducts(page.items);
+      setTotal(page.total);
+      setHasMore(page.hasMore);
     } catch {
       setError("No se pudo cargar el catálogo.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const page = await getProductsList({
+        ...filters,
+        visibleOnly: true,
+        offset: products.length,
+        pageSize: PAGE_SIZE,
+      });
+      setProducts((prev) => [...prev, ...page.items]);
+      setTotal(page.total);
+      setHasMore(page.hasMore);
+    } catch {
+      setError("No se pudieron cargar más productos.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [filters, hasMore, loadingMore, products.length]);
 
   useEffect(() => {
     void loadProducts();
-  }, []);
+  }, [loadProducts]);
 
   return (
     <section className="space-y-6">
@@ -52,7 +84,7 @@ export default function CatalogPage() {
           <p className="mt-1 text-sm text-muted">
             {loading
               ? "Cargando equipos…"
-              : `${products.length} equipo${products.length !== 1 ? "s" : ""} disponible${products.length !== 1 ? "s" : ""}`}
+              : `Mostrando ${products.length} de ${total} equipo${total !== 1 ? "s" : ""}`}
           </p>
         </div>
       </FadeIn>
@@ -97,11 +129,31 @@ export default function CatalogPage() {
         ) : null}
 
         {!loading && products.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {products.map((product, idx) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  // Las 4 primeras tarjetas suelen estar above the fold
+                  priority={idx < 4}
+                />
+              ))}
+            </div>
+
+            {hasMore ? (
+              <div className="mt-8 text-center">
+                <button
+                  type="button"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="rounded-full border border-primary px-6 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white disabled:opacity-60"
+                >
+                  {loadingMore ? "Cargando..." : `Ver más (${total - products.length} restantes)`}
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </FadeIn>
     </section>

@@ -38,6 +38,36 @@ function mapProduct(row: DbRow): Product {
   };
 }
 
+// Para listados sólo necesitamos la primera imagen — no descargamos
+// los URLs adicionales (cada uno cuenta como tráfico de cliente la primera
+// vez que pasa por el CDN). El primer slot de `images` es la principal.
+function mapProductListItem(row: DbRow): Product {
+  const allImages = Array.isArray(row.images) ? (row.images as string[]) : [];
+  return {
+    id: String(row.id),
+    title: String(row.title ?? "Producto sin título"),
+    brand: String(row.brand ?? "Sin marca"),
+    model: String(row.model ?? "N/A"),
+    cpu: "",
+    ram: Number(row.ram ?? 0),
+    storage: String(row.storage ?? ""),
+    screen: "",
+    price: Number(row.price ?? 0),
+    condition: String(row.condition ?? ""),
+    stock: Number(row.stock ?? 0),
+    images: allImages.length > 0 ? [allImages[0]] : [],
+    featured: Boolean(row.featured),
+    visibleWeb: row.visible_web !== false,
+    createdAt: toDate(row.created_at),
+  };
+}
+
+// Columnas mínimas para tarjeta de catálogo: corta egress de metadata y
+// — más importante — evita arrastrar el array completo de URLs que el
+// navegador podría intentar precargar.
+const LIST_COLUMNS =
+  "id,title,brand,model,ram,storage,price,condition,stock,images,featured,visible_web,created_at";
+
 function mapTestimonial(row: DbRow): Testimonial {
   return {
     id: String(row.id),
@@ -79,7 +109,39 @@ export async function getUserRole(uid: string): Promise<{ role: string; active: 
   return { role: isAdmin ? "admin" : "user", active: true };
 }
 
+// Cache en memoria de proceso/cliente — el perfil del negocio cambia
+// muy rara vez. Esto evita que cada página (Navbar + Home + Product +
+// Configuración + Media) dispare una query independiente cada visita.
+// TTL corto (10 min) por si el admin actualiza datos.
+let businessProfileCache: { value: BusinessProfile | null; at: number } | null = null;
+const BUSINESS_PROFILE_TTL_MS = 10 * 60 * 1000;
+let businessProfileInflight: Promise<BusinessProfile | null> | null = null;
+
+export function invalidateBusinessProfile() {
+  businessProfileCache = null;
+}
+
 export async function getBusinessProfile(): Promise<BusinessProfile | null> {
+  const now = Date.now();
+  if (businessProfileCache && now - businessProfileCache.at < BUSINESS_PROFILE_TTL_MS) {
+    return businessProfileCache.value;
+  }
+  if (businessProfileInflight) return businessProfileInflight;
+
+  businessProfileInflight = (async () => {
+    try {
+      const value = await fetchBusinessProfileFresh();
+      businessProfileCache = { value, at: Date.now() };
+      return value;
+    } finally {
+      businessProfileInflight = null;
+    }
+  })();
+
+  return businessProfileInflight;
+}
+
+async function fetchBusinessProfileFresh(): Promise<BusinessProfile | null> {
   const { data, error } = await supabase
     .from("business_profile")
     .select("*")
@@ -125,6 +187,7 @@ export interface BusinessProfileUpdatePayload {
 export async function updateBusinessProfile(data: BusinessProfileUpdatePayload): Promise<void> {
   const { error } = await supabase.from("business_profile").update(data).eq("id", 1);
   if (error) throw new Error(error.message);
+  invalidateBusinessProfile();
 }
 
 export async function updateHeroVideo(url: string, type: "image" | "video"): Promise<void> {
@@ -133,25 +196,99 @@ export async function updateHeroVideo(url: string, type: "image" | "video"): Pro
     .update({ hero_video_url: url, hero_media_type: type })
     .eq("id", 1);
   if (error) throw new Error(error.message);
+  invalidateBusinessProfile();
 }
 
-export async function getProducts(filters?: ProductFilters): Promise<Product[]> {
-  let q = supabase.from("products").select("*").order("created_at", { ascending: false });
+export interface ProductPage {
+  items: Product[];
+  total: number;
+  hasMore: boolean;
+}
 
-  // NULL visible_web is treated as visible (default-on) — consistent with mapProduct
+interface ListOptions extends ProductFilters {
+  offset?: number;
+  pageSize?: number;
+}
+
+function applyProductFilters<
+  T extends {
+    or: (s: string) => T;
+    ilike: (col: string, v: string) => T;
+    eq: (col: string, v: unknown) => T;
+    gte: (col: string, v: unknown) => T;
+    lte: (col: string, v: unknown) => T;
+  }
+>(q: T, filters?: ProductFilters): T {
   if (filters?.visibleOnly) q = q.or("visible_web.eq.true,visible_web.is.null");
-  // ilike = case-insensitive exact match (no wildcards)
   if (filters?.brand) q = q.ilike("brand", filters.brand);
   if (typeof filters?.ram === "number") q = q.eq("ram", filters.ram);
   if (typeof filters?.minPrice === "number") q = q.gte("price", filters.minPrice);
   if (typeof filters?.maxPrice === "number") q = q.lte("price", filters.maxPrice);
   if (typeof filters?.featured === "boolean") q = q.eq("featured", filters.featured);
-  if (typeof filters?.maxItems === "number") q = q.limit(filters.maxItems);
+  return q;
+}
 
-  const { data, error } = await q;
-  if (error || !data) return [];
+// Lista paginada y con columnas mínimas. Reemplaza getProducts() para
+// usos masivos (catálogo público, admin) y reduce egress drásticamente:
+// no se traen registros sobrantes ni los URLs de imágenes secundarias.
+export async function getProductsList(options?: ListOptions): Promise<ProductPage> {
+  const pageSize = options?.pageSize ?? 12;
+  const offset = options?.offset ?? 0;
 
-  return asRowArray(data).map(mapProduct);
+  let q = supabase
+    .from("products")
+    .select(LIST_COLUMNS, { count: "exact" })
+    .order("created_at", { ascending: false });
+
+  q = applyProductFilters(q, options);
+
+  if (typeof options?.maxItems === "number") {
+    q = q.range(offset, offset + options.maxItems - 1);
+  } else {
+    q = q.range(offset, offset + pageSize - 1);
+  }
+
+  const { data, error, count } = await q;
+  if (error || !data) return { items: [], total: 0, hasMore: false };
+
+  const items = asRowArray(data).map(mapProductListItem);
+  const total = count ?? items.length;
+  return {
+    items,
+    total,
+    hasMore: offset + items.length < total,
+  };
+}
+
+// Compatibilidad con código existente. Si pasan `maxItems` se respeta;
+// si no, devolvemos la primera página (12) para evitar volcar toda la
+// tabla por accidente desde cualquier `useEffect`.
+export async function getProducts(filters?: ProductFilters): Promise<Product[]> {
+  const page = await getProductsList({
+    ...filters,
+    pageSize: filters?.maxItems ?? 12,
+  });
+  return page.items;
+}
+
+export async function countProducts(filters?: ProductFilters): Promise<{
+  total: number;
+  visible: number;
+}> {
+  let totalQ = supabase
+    .from("products")
+    .select("id", { count: "exact", head: true });
+  totalQ = applyProductFilters(totalQ, filters);
+  const { count: total } = await totalQ;
+
+  let visibleQ = supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .or("visible_web.eq.true,visible_web.is.null");
+  visibleQ = applyProductFilters(visibleQ, filters);
+  const { count: visible } = await visibleQ;
+
+  return { total: total ?? 0, visible: visible ?? 0 };
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
@@ -233,6 +370,21 @@ export async function getTestimonials(maxItems = 6): Promise<Testimonial[]> {
 
   if (error || !data) return [];
   return asRowArray(data).map(mapTestimonial);
+}
+
+export async function countActiveGallery(): Promise<number> {
+  const { count } = await supabase
+    .from("gallery_images")
+    .select("id", { count: "exact", head: true })
+    .eq("activa", true);
+  return count ?? 0;
+}
+
+export async function countTestimonials(): Promise<number> {
+  const { count } = await supabase
+    .from("testimonials")
+    .select("id", { count: "exact", head: true });
+  return count ?? 0;
 }
 
 export async function getAllTestimonials(): Promise<Testimonial[]> {

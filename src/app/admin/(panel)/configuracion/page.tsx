@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getBusinessProfile, updateBusinessProfile } from "@/supabase/db";
-import { uploadAssetFile } from "@/supabase/storage";
+import { checkImageFile, uploadAssetFile } from "@/supabase/storage";
 
 interface FormState {
   company_name: string;
@@ -68,12 +68,18 @@ export default function AdminConfiguracionPage() {
     setForm((p) => ({ ...p, [key]: value }));
 
   const handleUploadLogo = async (file: File) => {
+    const check = checkImageFile(file);
+    if (!check.ok) {
+      setError(check.error ?? "Imagen inválida");
+      return;
+    }
+    if (check.warning) setMsg(check.warning);
     try {
       setUploading(true);
       setError("");
       const url = await uploadAssetFile("logo", file);
       set("logo_url", url);
-      setMsg("Logo subido. Guarda los cambios para aplicar.");
+      setMsg(`Logo subido (${check.sizeKB} KB). Guarda los cambios para aplicar.`);
     } catch (e) {
       setError(`Error al subir logo: ${e instanceof Error ? e.message : "desconocido"}`);
     } finally {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/supabase/client";
 import { createProduct, updateProduct } from "@/supabase/db";
-import { uploadProductImage } from "@/supabase/storage";
+import { checkImageFile, IMAGE_MAX_BYTES, IMAGE_WARN_BYTES, uploadProductImage } from "@/supabase/storage";
 import type { Product } from "@/types/product";
 
 interface AdminProductFormProps {
@@ -312,14 +312,51 @@ export default function AdminProductForm({
       </div>
 
       <div className="space-y-2">
-        <label className={label}>Imágenes (opcionales)</label>
+        <label className={label}>
+          Imágenes (opcionales) — máx {Math.round(IMAGE_MAX_BYTES / 1024)} KB c/u, recomendado &lt;{Math.round(IMAGE_WARN_BYTES / 1024)} KB. Convierte a WebP en{" "}
+          <a
+            href="https://squoosh.app"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline"
+          >
+            squoosh.app
+          </a>{" "}
+          antes de subir.
+        </label>
         <input
           type="file"
           accept="image/*"
           multiple
-          onChange={(e) => setNewImages(Array.from(e.target.files ?? []))}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            const valid: File[] = [];
+            const problems: string[] = [];
+            files.forEach((f) => {
+              const c = checkImageFile(f);
+              if (!c.ok) {
+                problems.push(`✗ ${f.name}: ${c.error}`);
+              } else {
+                valid.push(f);
+                if (c.warning) problems.push(`⚠ ${f.name}: ${c.warning}`);
+              }
+            });
+            setNewImages(valid);
+            setImageWarning(problems.join("\n"));
+            if (problems.length > 0) {
+              // Limpiamos el input si TODO fue rechazado para no confundir
+              if (valid.length === 0) e.target.value = "";
+            }
+          }}
           className="block w-full text-sm text-muted file:mr-4 file:rounded-lg file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:font-semibold file:text-text hover:file:bg-border"
         />
+        {newImages.length > 0 ? (
+          <p className="text-xs text-muted">
+            {newImages.length} archivo{newImages.length !== 1 ? "s" : ""} listo
+            {newImages.length !== 1 ? "s" : ""} para subir ·{" "}
+            {Math.round(newImages.reduce((a, f) => a + f.size, 0) / 1024)} KB total
+          </p>
+        ) : null}
 
         {/* Imágenes actuales */}
         {isEditing ? (
@@ -357,7 +394,11 @@ export default function AdminProductForm({
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
-      {imageWarning ? <p className="text-sm text-blue-500">{imageWarning}</p> : null}
+      {imageWarning ? (
+        <pre className="whitespace-pre-wrap rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
+          {imageWarning}
+        </pre>
+      ) : null}
       {message ? <p className="text-sm text-emerald-300">{message}</p> : null}
 
       <div className="flex flex-wrap gap-2">

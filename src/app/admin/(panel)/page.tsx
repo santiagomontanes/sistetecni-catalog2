@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getProducts, getAllGalleryImages, getAllTestimonials } from "@/supabase/db";
+import { countActiveGallery, countProducts, countTestimonials } from "@/supabase/db";
 
 interface StatCard {
   label: string;
@@ -20,18 +20,14 @@ export default function AdminDashboard() {
   ]);
 
   useEffect(() => {
-    Promise.all([getProducts(), getAllGalleryImages(), getAllTestimonials()])
+    // Sólo COUNT(*) — no descargamos filas ni arrays de imágenes.
+    Promise.all([countProducts(), countActiveGallery(), countTestimonials()])
       .then(([products, gallery, testimonials]) => {
         setStats([
-          { label: "Total productos", value: products.length, icon: "📦", href: "/admin/productos" },
-          {
-            label: "Visibles en web",
-            value: products.filter((p) => p.visibleWeb).length,
-            icon: "👁",
-            href: "/admin/productos",
-          },
-          { label: "Fotos galería", value: gallery.filter((g) => g.activa).length, icon: "🖼️", href: "/admin/galeria" },
-          { label: "Testimonios", value: testimonials.length, icon: "✍️", href: "/admin/testimonios" },
+          { label: "Total productos", value: products.total, icon: "📦", href: "/admin/productos" },
+          { label: "Visibles en web", value: products.visible, icon: "👁", href: "/admin/productos" },
+          { label: "Fotos galería", value: gallery, icon: "🖼️", href: "/admin/galeria" },
+          { label: "Testimonios", value: testimonials, icon: "✍️", href: "/admin/testimonios" },
         ]);
       })
       .catch(() => {});

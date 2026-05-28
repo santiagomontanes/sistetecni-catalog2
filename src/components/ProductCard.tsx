@@ -3,6 +3,11 @@ import type { Product } from "@/types/product";
 
 interface ProductCardProps {
   product: Product;
+  // Cuando true, la imagen se carga de inmediato (above-the-fold).
+  // Por defecto se difiere con loading="lazy" para no descargar
+  // imágenes fuera del viewport (principal causa de egress al hacer
+  // scroll-grandes en el catálogo).
+  priority?: boolean;
 }
 
 function formatCOP(value: number) {
@@ -21,7 +26,7 @@ function getConditionBadge(condition: string) {
   return null;
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, priority = false }: ProductCardProps) {
   const imageUrl = product.images?.[0] || "/placeholder.jpg";
   const price = Number(product.price || 0);
   const badge = getConditionBadge(product.condition);
@@ -37,6 +42,9 @@ export default function ProductCard({ product }: ProductCardProps) {
         <img
           src={imageUrl}
           alt={product.title}
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priority ? "high" : "low"}
           className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
         />
 

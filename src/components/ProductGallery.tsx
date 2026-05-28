@@ -37,6 +37,9 @@ export default function ProductGallery({
         <img
           src={activeSrc}
           alt={title}
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
           className="h-[420px] w-full object-cover transition-transform duration-200"
         />
 
@@ -72,7 +75,13 @@ export default function ProductGallery({
                 : "border-border hover:border-primary/40"
             }`}
           >
-            <img src={src} alt={`${title} mini ${idx + 1}`} className="h-16 w-16 object-cover" />
+            <img
+              src={src}
+              alt={`${title} mini ${idx + 1}`}
+              loading="lazy"
+              decoding="async"
+              className="h-16 w-16 object-cover"
+            />
           </button>
         ))}
       </div>

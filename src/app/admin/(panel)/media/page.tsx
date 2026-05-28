@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getBusinessProfile, updateHeroVideo } from "@/supabase/db";
-import { uploadAssetFile } from "@/supabase/storage";
+import { checkVideoFile, uploadAssetFile, VIDEO_MAX_BYTES } from "@/supabase/storage";
 
 type MediaType = "image" | "video";
 
@@ -29,12 +29,17 @@ export default function AdminMediaPage() {
   }, []);
 
   const handleUploadVideo = async (file: File) => {
+    const check = checkVideoFile(file);
+    if (!check.ok) {
+      setError(check.error ?? "Video inválido");
+      return;
+    }
     try {
       setUploading(true);
       setError("");
       const url = await uploadAssetFile("hero-video", file);
       setVideoUrl(url);
-      setMsg("Video subido. Guarda los cambios para aplicar.");
+      setMsg(`Video subido (${(file.size / 1024 / 1024).toFixed(1)} MB). Guarda los cambios para aplicar.`);
     } catch (e) {
       setError(`Error al subir: ${e instanceof Error ? e.message : "desconocido"}`);
     } finally {
@@ -109,7 +114,7 @@ export default function AdminMediaPage() {
             {/* File upload */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-text">
-                Subir video MP4 (máx 50 MB)
+                Subir video MP4 (máx {VIDEO_MAX_BYTES / 1024 / 1024} MB) — recomendado: usa YouTube/Vimeo para no consumir egress
               </label>
               <div className="flex gap-3">
                 <input

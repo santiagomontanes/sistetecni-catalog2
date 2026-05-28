@@ -44,6 +44,11 @@ export default function CommercialGallery({ images }: CommercialGalleryProps) {
                 src={img.src}
                 alt={img.alt}
                 fill
+                // Las imágenes de esta sección están MUY por debajo del fold
+                // (después de hero, benefits, productos, stats, software).
+                // `loading="lazy"` ya es el default de Next/Image sin priority,
+                // lo dejamos explícito para que quede claro al lector.
+                loading="lazy"
                 sizes="(max-width: 768px) 100vw, 33vw"
                 className="object-cover transition duration-500 group-hover:scale-110"
               />

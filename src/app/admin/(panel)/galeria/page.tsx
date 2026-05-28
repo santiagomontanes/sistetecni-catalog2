@@ -9,7 +9,7 @@ import {
   deleteGalleryImage,
   reorderGalleryImages,
 } from "@/supabase/db";
-import { uploadGalleryImage } from "@/supabase/storage";
+import { checkImageFile, uploadGalleryImage } from "@/supabase/storage";
 import type { GalleryImage } from "@/types/gallery";
 
 const MAX_ACTIVE = 12;
@@ -48,12 +48,18 @@ export default function AdminGaleriaPage() {
       setError(`Máximo ${MAX_ACTIVE} fotos activas. Elimina alguna primero.`);
       return;
     }
+    const check = checkImageFile(file);
+    if (!check.ok) {
+      setError(check.error ?? "Imagen inválida");
+      return;
+    }
+    if (check.warning) setMsg(check.warning);
     try {
       setUploading(true);
       setError("");
       const url = await uploadGalleryImage(file);
       await createGalleryImage({ url, orden: activeCount });
-      setMsg("Foto subida correctamente.");
+      setMsg(`Foto subida correctamente (${check.sizeKB} KB).`);
       await load();
     } catch (e) {
       setError(`Error al subir: ${e instanceof Error ? e.message : "desconocido"}`);
@@ -206,7 +212,8 @@ export default function AdminGaleriaPage() {
                   src={img.url}
                   alt={img.caption ?? "Foto galería"}
                   fill
-                  sizes="(max-width: 768px) 100vw, 33vw"
+                  loading="lazy"
+                  sizes="(max-width: 768px) 50vw, 33vw"
                   className="object-cover"
                 />
               </div>
