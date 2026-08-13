@@ -8,6 +8,7 @@ import NavbarLogoClient from "@/components/NavbarLogoClient";
 const navLinks = [
   { href: "/", label: "Inicio" },
   { href: "/catalog", label: "Catálogo" },
+  { href: "/personalizar", label: "Personaliza tu portátil" },
   { href: "/software", label: "Software" },
   { href: "/contact", label: "Contacto" },
 ];

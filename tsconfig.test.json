@@ -16,6 +16,7 @@
     "src/lib/repositories/**/*.ts",
     "src/lib/personalizador/**/*.ts",
     "src/lib/personalizadorServer/**/*.ts",
+    "src/lib/personalizadorUi/**/*.ts",
     "src/types/**/*.ts"
   ]
 }

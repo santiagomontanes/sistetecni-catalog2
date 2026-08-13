@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import ProductCard from "@/components/ProductCard";
 import ProductFilters from "@/components/ProductFilters";
@@ -87,6 +88,21 @@ export default function CatalogPage() {
               : `Mostrando ${products.length} de ${total} equipo${total !== 1 ? "s" : ""}`}
           </p>
         </div>
+      </FadeIn>
+
+      <FadeIn delay={0.03}>
+        <Link
+          href="/personalizar"
+          className="flex items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4 transition hover:border-primary/40"
+        >
+          <div>
+            <p className="text-sm font-semibold text-text">¿No sabes cuál elegir?</p>
+            <p className="text-xs text-muted">Personaliza tu portátil y te ayudamos a encontrar el ideal.</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white">
+            Empezar
+          </span>
+        </Link>
       </FadeIn>
 
       <FadeIn delay={0.06}>
