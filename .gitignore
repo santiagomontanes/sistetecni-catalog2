@@ -1,17 +1,16 @@
 node_modules
 .next
 out
-.env.local
-.env
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .DS_Store
-node_modules
-.next
+
+# Variables de entorno — NUNCA versionar valores reales.
+# Los *.example sí se versionan (son plantillas sin secretos).
+.env
 .env.local
-node_modules
-.next
-.env.local
-out
+.env.staging.local
+.env.production.local
+.env*.local

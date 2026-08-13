@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "env:staging": "ln -sf .env.staging.local .env.local && echo 'apuntando a STAGING (.env.staging.local)'",
+    "env:production": "ln -sf .env.production.local .env.local && echo 'apuntando a PRODUCTION (.env.production.local) — ojo'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
