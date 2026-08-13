@@ -8,12 +8,13 @@
     "skipLibCheck": true,
     "noEmit": false,
     "isolatedModules": false,
-    "outDir": ".tmp-test-b2"
+    "outDir": ".tmp-test"
   },
   "include": [
     "src/supabase/admin.ts",
     "src/supabase/admin.test.ts",
     "src/lib/repositories/**/*.ts",
+    "src/lib/personalizador/**/*.ts",
     "src/types/**/*.ts"
   ]
 }
