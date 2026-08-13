@@ -7,6 +7,15 @@ export interface ProductsRepository {
   findById(id: string): Promise<Product | null>;
   /** Preserva el orden de entrada cuando es posible; omite los que no existan. */
   findManyByIds(ids: string[]): Promise<Product[]>;
+  /**
+   * Candidatos públicos elegibles para el personalizador (Fase 2B/B4): solo
+   * `visible_web = true` (o `null`, mismo criterio ya usado por el catálogo
+   * en src/supabase/db.ts — un producto sin ese campo fijado se sigue
+   * mostrando). NO filtra por stock — B3 (matchProducts) es quien separa
+   * disponibles de agotados; duplicar ese criterio aquí sería una segunda
+   * fuente de verdad para la misma decisión.
+   */
+  findPersonalizerCandidates(): Promise<Product[]>;
 }
 
 const SELECT_COLUMNS =
@@ -96,6 +105,19 @@ export function createProductsRepository(client: SupabaseClient): ProductsReposi
 
       const byId = new Map((data ?? []).map((row) => [row.id, mapRow(row)]));
       return ids.map((id) => byId.get(id)).filter((p): p is Product => p !== undefined);
+    },
+
+    async findPersonalizerCandidates() {
+      const { data, error } = await client
+        .from("products")
+        .select(SELECT_COLUMNS)
+        .or("visible_web.eq.true,visible_web.is.null")
+        .returns<ProductRow[]>();
+
+      if (error) {
+        throw new RepositoryError("ProductsRepository.findPersonalizerCandidates falló", error);
+      }
+      return (data ?? []).map(mapRow);
     },
   };
 }

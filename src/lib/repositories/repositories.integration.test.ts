@@ -85,6 +85,14 @@ test("ProductsRepository.findManyByIds: lee los 7 productos [SEED]", async () =>
   assert.ok(products.every((p) => p.title.startsWith("[SEED]")));
 });
 
+test("ProductsRepository.findPersonalizerCandidates: incluye los 7 productos [SEED] (visible_web=true)", async () => {
+  const repo = createProductsRepository(client);
+  const candidates = await repo.findPersonalizerCandidates();
+  const seedOnly = candidates.filter((p) => SEED_PRODUCT_IDS.includes(p.id));
+  assert.equal(seedOnly.length, 7);
+  assert.ok(seedOnly.every((p) => p.visibleWeb === true));
+});
+
 test("ProductsRepository.findById: producto inexistente devuelve null, no lanza", async () => {
   const repo = createProductsRepository(client);
   const result = await repo.findById("00000000-0000-0000-0000-000000000000");
@@ -138,6 +146,24 @@ test("Escenario: producto agotado (P6) sigue siendo legible (stock=0 no bloquea 
   const p6 = await repo.findById("10000000-0000-0000-0000-000000000006");
   assert.ok(p6);
   assert.equal(p6.stock, 0);
+});
+
+test("findCompatibleUpgradesForProducts: la versión en lote coincide exactamente con N llamadas individuales (8 compatibilidades del seed)", async () => {
+  const repo = createProductUpgradeOptionsRepository(client);
+  const bulk = await repo.findCompatibleUpgradesForProducts(SEED_PRODUCT_IDS);
+
+  let bulkTotal = 0;
+  for (const [, list] of bulk) bulkTotal += list.length;
+  assert.equal(bulkTotal, 8);
+
+  for (const productId of SEED_PRODUCT_IDS) {
+    const individual = await repo.findCompatibleUpgradesForProduct(productId);
+    const fromBulk = bulk.get(productId) ?? [];
+    assert.equal(fromBulk.length, individual.length);
+    const idsIndividual = individual.map((c) => c.compatibilityId).sort();
+    const idsBulk = fromBulk.map((c) => c.compatibilityId).sort();
+    assert.deepEqual(idsBulk, idsIndividual);
+  }
 });
 
 test("isCompatible: coincide con lo que devuelve findCompatibleUpgradesForProduct", async () => {

@@ -9,12 +9,21 @@ export interface ProductUpgradeOptionsRepository {
    * ofrecidos (caso válido, no un error — ver docs/fase2a-personalizador-diseno.md §10).
    */
   findCompatibleUpgradesForProduct(productId: string): Promise<CompatibleUpgrade[]>;
+  /**
+   * Misma consulta que findCompatibleUpgradesForProduct pero para varios
+   * productos en una sola query (Fase 2B/B4 — el buscador del personalizador
+   * evalúa N candidatos a la vez; sin esto haría 1 query por candidato).
+   * Un id sin compatibilidades simplemente no aparece como key — no se
+   * fabrica una entrada vacía para cada id de entrada.
+   */
+  findCompatibleUpgradesForProducts(productIds: string[]): Promise<Map<string, CompatibleUpgrade[]>>;
   /** Para validar server-side una selección del cliente antes de calcular precio. */
   isCompatible(productId: string, upgradeOptionId: string): Promise<boolean>;
 }
 
 interface CompatibilityRow {
   id: string;
+  product_id: string;
   note: string | null;
   upgrade_options: {
     id: string;
@@ -59,7 +68,7 @@ export function createProductUpgradeOptionsRepository(
       const { data, error } = await client
         .from("product_upgrade_options")
         .select(
-          "id,note,upgrade_options!inner(id,category,label,value,interface,extra_cost,component_cost,install_cost,active,created_at)"
+          "id,product_id,note,upgrade_options!inner(id,category,label,value,interface,extra_cost,component_cost,install_cost,active,created_at)"
         )
         .eq("product_id", productId)
         .eq("active", true)
@@ -76,6 +85,40 @@ export function createProductUpgradeOptionsRepository(
       return (data ?? [])
         .map(mapRow)
         .filter((u): u is CompatibleUpgrade => u !== null);
+    },
+
+    async findCompatibleUpgradesForProducts(productIds) {
+      if (productIds.length === 0) return new Map();
+
+      const { data, error } = await client
+        .from("product_upgrade_options")
+        .select(
+          "id,product_id,note,upgrade_options!inner(id,category,label,value,interface,extra_cost,component_cost,install_cost,active,created_at)"
+        )
+        .in("product_id", productIds)
+        .eq("active", true)
+        .eq("upgrade_options.active", true)
+        .returns<CompatibilityRow[]>();
+
+      if (error) {
+        throw new RepositoryError(
+          `ProductUpgradeOptionsRepository.findCompatibleUpgradesForProducts falló para ${productIds.length} id(s)`,
+          error
+        );
+      }
+
+      const byProduct = new Map<string, CompatibleUpgrade[]>();
+      for (const row of data ?? []) {
+        const mapped = mapRow(row);
+        if (!mapped) continue;
+        const existing = byProduct.get(row.product_id);
+        if (existing) {
+          existing.push(mapped);
+        } else {
+          byProduct.set(row.product_id, [mapped]);
+        }
+      }
+      return byProduct;
     },
 
     async isCompatible(productId, upgradeOptionId) {

@@ -21,6 +21,9 @@ class FakeQueryBuilder<T> implements PromiseLike<{ data: T | null; error: unknow
   in() {
     return this;
   }
+  or() {
+    return this;
+  }
   order() {
     return this;
   }
