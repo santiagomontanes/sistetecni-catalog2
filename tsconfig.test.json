@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2020",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "isolatedModules": false,
+    "outDir": ".tmp-test-b2"
+  },
+  "include": [
+    "src/supabase/admin.ts",
+    "src/supabase/admin.test.ts",
+    "src/lib/repositories/**/*.ts",
+    "src/types/**/*.ts"
+  ]
+}

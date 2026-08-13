@@ -10,7 +10,9 @@
     "env:staging": "node scripts/switch-env.mjs staging",
     "env:production": "node scripts/switch-env.mjs production",
     "seed:staging": "node scripts/seed-staging.mjs",
-    "test:env": "node --test src/lib/env/*.test.mjs"
+    "test:env": "node --test src/lib/env/*.test.mjs",
+    "test:b2": "tsc -p tsconfig.test.json && node --test .tmp-test-b2 ; rm -rf .tmp-test-b2",
+    "test:b2:unit": "tsc -p tsconfig.test.json && node --test .tmp-test-b2/src/supabase/admin.test.js .tmp-test-b2/src/lib/repositories/repositories.unit.test.js ; rm -rf .tmp-test-b2"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
