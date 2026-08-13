@@ -32,6 +32,10 @@ export function toSearchOptionDTO(result: MatchResult): SearchOptionDTO {
     budgetStatus: result.budgetStatus,
     stockStatus: result.stockStatus,
     selectedUpgrades: mapUpgrades(result.selectedUpgrades),
+    baseRamGb: result.product.ram,
+    baseStorage: result.product.storage,
+    gpuType: result.product.gpuType ?? null,
+    touchScreen: result.product.touchScreen ?? null,
     finalConfiguration: result.finalConfiguration,
     reasons: result.reasons,
   };

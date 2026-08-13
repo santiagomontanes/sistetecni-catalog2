@@ -13,6 +13,7 @@ import type {
   UpgradeClassification,
 } from "../personalizador";
 import type { QuoteRequestedConfig, QuoteStatus } from "../../types/quote";
+import type { GpuType } from "../../types/product";
 
 // ─── Búsqueda (buscarOpcionesPersonalizadas) ────────────────────────────
 
@@ -23,7 +24,15 @@ export interface SearchOptionUpgradeDTO {
   extraCost: number;
 }
 
-/** Vista serializable de un MatchResult — solo primitivos, para el futuro wizard (B5). */
+/**
+ * Vista serializable de un MatchResult — solo primitivos, para el wizard
+ * (B5). `baseRamGb`/`baseStorage`/`gpuType`/`touchScreen` son la
+ * configuración ORIGINAL del equipo (antes de cualquier upgrade) —
+ * necesarios para que la UI pueda mostrar "qué traía" vs "tu
+ * configuración final" (finalConfiguration) sin volver a consultar
+ * Supabase ni adivinar un valor: B5 no tiene otra fuente para esto.
+ * Agregado en B5 sobre el DTO de B4 (aditivo, no rompe nada existente).
+ */
 export interface SearchOptionDTO {
   productId: string;
   title: string;
@@ -38,6 +47,10 @@ export interface SearchOptionDTO {
   budgetStatus: BudgetStatus;
   stockStatus: StockStatus;
   selectedUpgrades: SearchOptionUpgradeDTO[];
+  baseRamGb: number;
+  baseStorage: string;
+  gpuType: GpuType | null;
+  touchScreen: boolean | null;
   finalConfiguration: { ramGb: number; storageGb: number };
   reasons: MatchReasonCode[];
 }

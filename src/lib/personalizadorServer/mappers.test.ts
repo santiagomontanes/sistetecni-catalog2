@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toPublicQuoteDTO } from "./mappers";
+import { toPublicQuoteDTO, toSearchOptionDTO } from "./mappers";
+import { evaluateCandidate } from "../personalizador";
+import { PRODUCT_4_NEEDS_BOTH, PRODUCT_4_UPGRADES, TYPICAL_REQUIREMENTS, candidate } from "../personalizador/fixtures";
 import type { QuoteRequest } from "../../types/quote";
 
 const FULL_QUOTE: QuoteRequest = {
@@ -58,6 +60,26 @@ test("toPublicQuoteDTO expone exactamente los campos públicos esperados, con fe
   assert.equal(dto.selectedUpgrades.length, 1);
   assert.equal(dto.createdAt, "2026-08-13T00:00:00.000Z");
   assert.equal(dto.expiresAt, "2026-08-20T00:00:00.000Z");
+});
+
+// B5: SearchOptionDTO necesita la config ORIGINAL del equipo (baseRamGb/
+// baseStorage/gpuType/touchScreen) para mostrar "qué traía" vs "tu
+// configuración final" sin volver a consultar Supabase — extensión
+// aditiva sobre el DTO de B4, agregada al construir B5.
+test("toSearchOptionDTO: incluye la configuración base original (antes del upgrade), distinta de finalConfiguration", () => {
+  const result = evaluateCandidate(
+    candidate(PRODUCT_4_NEEDS_BOTH, PRODUCT_4_UPGRADES),
+    { ...TYPICAL_REQUIREMENTS, ramMinGb: 16, storageMinGb: 500 }
+  );
+  assert.ok(result);
+  if (!result) return;
+
+  const dto = toSearchOptionDTO(result);
+  assert.equal(dto.baseRamGb, PRODUCT_4_NEEDS_BOTH.ram); // 8, no 16
+  assert.equal(dto.baseStorage, PRODUCT_4_NEEDS_BOTH.storage); // "128 GB SSD", no 500
+  assert.equal(dto.gpuType, PRODUCT_4_NEEDS_BOTH.gpuType);
+  assert.equal(dto.touchScreen, PRODUCT_4_NEEDS_BOTH.touchScreen);
+  assert.notEqual(dto.baseRamGb, dto.finalConfiguration.ramGb);
 });
 
 test("toPublicQuoteDTO: cotización especial -> product null, precios null", () => {
