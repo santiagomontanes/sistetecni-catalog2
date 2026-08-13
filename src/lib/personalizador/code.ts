@@ -3,12 +3,20 @@
  * implementado aquí de forma testeable: la aleatoriedad se INYECTA, nunca
  * se llama a crypto.randomBytes directamente dentro de la función pura.
  *
- * Formato: "COT-" + 6 caracteres de un alfabeto de 32 símbolos sin los
+ * Formato: "COT-" + 9 caracteres de un alfabeto de 32 símbolos sin los
  * caracteres más ambiguos (sin 0/O/1/I — se conserva "L", que no se
  * confunde tan fácilmente como el resto en la mayoría de tipografías, y
  * es lo que permite llegar a exactamente 32 = 36 alfanuméricos - 4
- * excluidos; excluir también "L" da 31, no 32). 32^6 ≈ 1.07 mil millones
- * de combinaciones.
+ * excluidos; excluir también "L" da 31, no 32).
+ *
+ * Longitud revisada en B4 (Fase 2B): con 6 caracteres, 32^6 ≈ 1.07 mil
+ * millones de combinaciones (~30 bits) resultaba insuficiente para un
+ * código expuesto vía GET público sin rate limiting (B4 no lo implementa
+ * — ver docs de B4). Se amplió a 9 caracteres: 32^9 ≈ 3.5×10^13
+ * combinaciones (~45 bits), consistente con esquemas de URL/código no
+ * enumerable de uso común. Decisión y cálculo documentados en el
+ * entregable de B4, punto 9.
+ *
  * No incluye ningún dato personal — es opaco, no codifica nada del
  * cliente ni del producto.
  *
@@ -19,7 +27,7 @@
 import { randomBytes as nodeRandomBytes } from "node:crypto";
 
 export const QUOTE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 caracteres exactos — sin 0/O/1/I
-const QUOTE_CODE_LENGTH = 6;
+const QUOTE_CODE_LENGTH = 9;
 const QUOTE_CODE_PREFIX = "COT-";
 
 /** Debe devolver `length` bytes aleatorios. Inyectable para tests deterministas. */

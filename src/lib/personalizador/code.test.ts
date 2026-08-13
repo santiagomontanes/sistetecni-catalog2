@@ -4,19 +4,19 @@ import { generateQuoteCode, isValidQuoteCodeFormat, QUOTE_CODE_ALPHABET } from "
 
 // Escenario 25: generación determinista mediante RNG inyectado
 test("25. con un RNG inyectado fijo, el código generado es 100% predecible y reproducible", () => {
-  const fixedBytes = new Uint8Array([0, 1, 2, 3, 4, 5]);
+  const fixedBytes = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
   const fakeRandom = () => fixedBytes;
 
   const code1 = generateQuoteCode(fakeRandom);
   const code2 = generateQuoteCode(fakeRandom);
 
   assert.equal(code1, code2);
-  assert.equal(code1, `COT-${QUOTE_CODE_ALPHABET.slice(0, 6)}`);
+  assert.equal(code1, `COT-${QUOTE_CODE_ALPHABET.slice(0, 9)}`);
 });
 
 test("25b. bytes distintos producen códigos distintos, siempre con el mismo formato", () => {
-  const codeA = generateQuoteCode(() => new Uint8Array([0, 0, 0, 0, 0, 0]));
-  const codeB = generateQuoteCode(() => new Uint8Array([31, 31, 31, 31, 31, 31]));
+  const codeA = generateQuoteCode(() => new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0]));
+  const codeB = generateQuoteCode(() => new Uint8Array([31, 31, 31, 31, 31, 31, 31, 31, 31]));
   assert.notEqual(codeA, codeB);
   assert.ok(isValidQuoteCodeFormat(codeA));
   assert.ok(isValidQuoteCodeFormat(codeB));
