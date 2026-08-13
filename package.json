@@ -7,8 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "env:staging": "ln -sf .env.staging.local .env.local && echo 'apuntando a STAGING (.env.staging.local)'",
-    "env:production": "ln -sf .env.production.local .env.local && echo 'apuntando a PRODUCTION (.env.production.local) — ojo'"
+    "env:staging": "node scripts/switch-env.mjs staging",
+    "env:production": "node scripts/switch-env.mjs production",
+    "seed:staging": "node scripts/seed-staging.mjs",
+    "test:env": "node --test src/lib/env/*.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

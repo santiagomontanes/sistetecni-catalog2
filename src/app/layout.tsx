@@ -3,6 +3,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
+import EnvironmentBanner from "@/components/EnvironmentBanner";
 
 const siteUrl = "https://sistetecni.com";
 
@@ -73,6 +74,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="min-h-screen bg-bg text-text antialiased">
+        <EnvironmentBanner />
         <div className="flex min-h-screen flex-col">
           <Navbar />
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
