@@ -17,6 +17,7 @@
     "src/lib/personalizador/**/*.ts",
     "src/lib/personalizadorServer/**/*.ts",
     "src/lib/personalizadorUi/**/*.ts",
+    "src/lib/personalizadorAdmin/**/*.ts",
     "src/types/**/*.ts"
   ]
 }

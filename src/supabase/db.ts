@@ -35,6 +35,15 @@ function mapProduct(row: DbRow): Product {
     featured: Boolean(row.featured),
     visibleWeb: row.visible_web !== false,
     createdAt: toDate(row.created_at),
+    // Columnas del personalizador (Fase 2B) — B6: el panel admin ahora
+    // también las lee/escribe desde AdminProductForm.
+    cpuGeneration: row.cpu_generation === null || row.cpu_generation === undefined ? null : Number(row.cpu_generation),
+    gpuType: (row.gpu_type as Product["gpuType"]) ?? null,
+    gpuModel: typeof row.gpu_model === "string" ? row.gpu_model : null,
+    touchScreen: typeof row.touch_screen === "boolean" ? row.touch_screen : null,
+    screenSizeInches:
+      row.screen_size_inches === null || row.screen_size_inches === undefined ? null : Number(row.screen_size_inches),
+    storageGb: row.storage_gb === null || row.storage_gb === undefined ? null : Number(row.storage_gb),
   };
 }
 
@@ -303,6 +312,20 @@ export async function getProductById(id: string): Promise<Product | null> {
   return mapProduct(data);
 }
 
+/**
+ * Fase 2B/B6 — a diferencia de getProductById (página pública, solo
+ * visible_web=true), esta NO filtra por visibilidad: un admin debe poder
+ * editar un producto oculto. La policy "products public read" ya permite
+ * leer cualquier fila con la sesión autenticada del panel (using(true)) —
+ * esto no abre nada que RLS no permitiera ya.
+ */
+export async function getProductByIdAdmin(id: string): Promise<Product | null> {
+  const { data, error } = await supabase.from("products").select("*").eq("id", id).maybeSingle<DbRow>();
+
+  if (error || !data) return null;
+  return mapProduct(data);
+}
+
 function cleanProductPayload(data: Partial<ProductPayload>): Record<string, unknown> {
   return {
     ...(data.title !== undefined ? { title: data.title } : {}),
@@ -318,6 +341,13 @@ function cleanProductPayload(data: Partial<ProductPayload>): Record<string, unkn
     ...(data.images !== undefined ? { images: data.images } : {}),
     ...(data.featured !== undefined ? { featured: data.featured } : {}),
     ...(data.visibleWeb !== undefined ? { visible_web: data.visibleWeb } : {}),
+    // Columnas del personalizador (Fase 2B/B6).
+    ...(data.cpuGeneration !== undefined ? { cpu_generation: data.cpuGeneration } : {}),
+    ...(data.gpuType !== undefined ? { gpu_type: data.gpuType } : {}),
+    ...(data.gpuModel !== undefined ? { gpu_model: data.gpuModel } : {}),
+    ...(data.touchScreen !== undefined ? { touch_screen: data.touchScreen } : {}),
+    ...(data.screenSizeInches !== undefined ? { screen_size_inches: data.screenSizeInches } : {}),
+    ...(data.storageGb !== undefined ? { storage_gb: data.storageGb } : {}),
   };
 }
 

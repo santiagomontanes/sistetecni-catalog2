@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AdminProductForm from "@/components/AdminProductForm";
 import AdminProductTable from "@/components/AdminProductTable";
+import AdminProductCompatibility from "@/components/AdminProductCompatibility";
 import { deleteProduct, getProductsList, setProductVisibility } from "@/supabase/db";
 import type { Product } from "@/types/product";
 
@@ -92,6 +93,8 @@ export default function AdminProductosPage() {
         onSaved={loadProducts}
         onCancelEdit={() => setSelectedProduct(null)}
       />
+
+      {selectedProduct ? <AdminProductCompatibility productId={selectedProduct.id} /> : null}
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-text">

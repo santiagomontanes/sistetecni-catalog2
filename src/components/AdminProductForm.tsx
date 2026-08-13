@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/supabase/client";
-import { createProduct, updateProduct } from "@/supabase/db";
+import { createProduct, updateProduct, getProductByIdAdmin } from "@/supabase/db";
 import { checkImageFile, IMAGE_MAX_BYTES, IMAGE_WARN_BYTES, uploadProductImage } from "@/supabase/storage";
-import type { Product } from "@/types/product";
+import type { GpuType, Product } from "@/types/product";
 
 interface AdminProductFormProps {
   selectedProduct: Product | null;
@@ -25,6 +25,16 @@ interface ProductFormState {
   stock: number;
   featured: boolean;
   visibleWeb: boolean;
+  // Columnas del personalizador (Fase 2B/B6) — características BASE del
+  // equipo, nunca "upgradeables" desde aquí (eso lo define la sección de
+  // Compatibilidad, sobre RAM/almacenamiento). null = no confirmado, nunca
+  // se asume un valor por defecto silenciosamente.
+  cpuGeneration: number | null;
+  gpuType: GpuType | null;
+  gpuModel: string;
+  touchScreen: boolean | null;
+  screenSizeInches: number | null;
+  storageGb: number | null;
 }
 
 const initialState: ProductFormState = {
@@ -40,6 +50,12 @@ const initialState: ProductFormState = {
   stock: 1,
   featured: false,
   visibleWeb: true,
+  cpuGeneration: null,
+  gpuType: null,
+  gpuModel: "",
+  touchScreen: null,
+  screenSizeInches: null,
+  storageGb: null,
 };
 
 function fromProduct(product: Product): ProductFormState {
@@ -56,6 +72,12 @@ function fromProduct(product: Product): ProductFormState {
     stock: Number(product.stock ?? 1),
     featured: Boolean(product.featured),
     visibleWeb: product.visibleWeb !== false,
+    cpuGeneration: product.cpuGeneration ?? null,
+    gpuType: product.gpuType ?? null,
+    gpuModel: product.gpuModel ?? "",
+    touchScreen: product.touchScreen ?? null,
+    screenSizeInches: product.screenSizeInches ?? null,
+    storageGb: product.storageGb ?? null,
   };
 }
 
@@ -104,15 +126,26 @@ export default function AdminProductForm({
     setNewImages([]);
 
     if (selectedProduct) {
+      // `selectedProduct` viene del listado (getProductsList), que omite
+      // las columnas del personalizador para no aumentar el egress de la
+      // página pública de catálogo (mismo query que usa /catalog). Se
+      // relee el producto completo aquí — solo al entrar a editar, no en
+      // cada render del listado.
       setForm(fromProduct(selectedProduct));
       setImages(selectedProduct.images ?? []);
+      void getProductByIdAdmin(selectedProduct.id).then((full) => {
+        if (full) {
+          setForm(fromProduct(full));
+          setImages(full.images ?? []);
+        }
+      });
     } else {
       setForm(initialState);
       setImages([]);
     }
   }, [selectedProduct]);
 
-  const handleChange = (field: keyof ProductFormState, value: string | number | boolean) => {
+  const handleChange = (field: keyof ProductFormState, value: string | number | boolean | null) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -288,6 +321,96 @@ export default function AdminProductForm({
           placeholder="Stock"
           className={input}
         />
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-border bg-white p-4">
+        <div>
+          <p className="text-sm font-semibold text-text">Características del personalizador</p>
+          <p className="text-xs text-muted">
+            Especificaciones BASE del equipo — nunca se ofrecen como &quot;upgrade&quot;. Solo RAM y
+            almacenamiento se amplían, y eso se configura aparte en Compatibilidad. Deja un campo vacío si no
+            está confirmado — nunca se asume un valor por defecto.
+          </p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <label className={label}>Generación de CPU</label>
+            <input
+              type="number"
+              min={1}
+              value={form.cpuGeneration ?? ""}
+              onChange={(e) => handleChange("cpuGeneration", e.target.value === "" ? null : Number(e.target.value))}
+              placeholder="Ej. 8 (no confirmado si vacío)"
+              className={input}
+            />
+          </div>
+
+          <div>
+            <label className={label}>Tarjeta gráfica</label>
+            <select
+              value={form.gpuType ?? ""}
+              onChange={(e) => handleChange("gpuType", e.target.value === "" ? null : (e.target.value as GpuType))}
+              className={input}
+            >
+              <option value="">No confirmado</option>
+              <option value="integrada">Integrada</option>
+              <option value="dedicada">Dedicada</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={label}>Modelo de GPU (opcional)</label>
+            <input
+              value={form.gpuModel}
+              onChange={(e) => handleChange("gpuModel", e.target.value)}
+              placeholder="Ej. NVIDIA GeForce MX450"
+              className={input}
+            />
+          </div>
+
+          <div>
+            <label className={label}>Pantalla táctil</label>
+            <select
+              value={form.touchScreen === null ? "" : form.touchScreen ? "si" : "no"}
+              onChange={(e) =>
+                handleChange("touchScreen", e.target.value === "" ? null : e.target.value === "si")
+              }
+              className={input}
+            >
+              <option value="">No confirmado</option>
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={label}>Tamaño de pantalla (pulgadas)</label>
+            <input
+              type="number"
+              min={1}
+              step={0.1}
+              value={form.screenSizeInches ?? ""}
+              onChange={(e) =>
+                handleChange("screenSizeInches", e.target.value === "" ? null : Number(e.target.value))
+              }
+              placeholder="Ej. 14"
+              className={input}
+            />
+          </div>
+
+          <div>
+            <label className={label}>Almacenamiento actual (GB)</label>
+            <input
+              type="number"
+              min={1}
+              value={form.storageGb ?? ""}
+              onChange={(e) => handleChange("storageGb", e.target.value === "" ? null : Number(e.target.value))}
+              placeholder="Ej. 256"
+              className={input}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-5">
