@@ -14,3 +14,17 @@ pnpm-debug.log*
 .env.staging.local
 .env.production.local
 .env*.local
+
+# Estado local del Supabase CLI (project ref vinculado, URLs de pooler,
+# versiones de servicios) — nunca se versiona, es específico de esta
+# máquina/sesión y puede variar entre STAGING y PRODUCTION según a qué
+# se haya hecho `supabase link` por última vez.
+supabase/.temp/
+supabase/.branches/
+
+# Cadenas de conexión directa a Postgres (con contraseña), usadas solo de
+# forma puntual vía --db-url — nunca --linked. Un único uso cada una, se
+# borran después — ver docs/fase2b-baseline-plan.md.
+.supabase-cli-prod.local
+.supabase-cli-staging.local
+.supabase-cli-*.local

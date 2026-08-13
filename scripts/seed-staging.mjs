@@ -18,9 +18,15 @@
  *
  * Requiere: SUPABASE_SERVICE_ROLE_KEY (bypassa RLS para poder insertar en
  * tablas cuya escritura está restringida a admins). Requiere también que
- * las migraciones de supabase/migrations/ ya estén aplicadas en STAGING.
+ * las migraciones de supabase/migrations/ ya estén aplicadas en STAGING
+ * (confirmado: las 5 ya están aplicadas).
  *
- * No ejecutado todavía — no existe proyecto de STAGING contra el cual correr esto.
+ * También asegura que exista el bucket de Storage "products" (público,
+ * igual que en producción) antes de insertar — se crea solo si falta,
+ * nunca lo recrea si ya existe.
+ *
+ * Migraciones ya aplicadas a STAGING. Este script en sí TODAVÍA NO se ha
+ * ejecutado — pendiente de autorización explícita.
  */
 import { loadEnv } from "./lib/loadEnv.mjs";
 loadEnv(); // cachea .env.local — en desarrollo normal es una copia de .env.staging.local (ver npm run env:staging)
@@ -268,7 +274,23 @@ const PRODUCT_UPGRADE_OPTIONS = [
   // P1, P5, P6, P7: sin filas — sin upgrades ofrecidos
 ];
 
+async function ensureProductsBucket() {
+  const { data: existing, error: listError } = await supabase.storage.listBuckets();
+  if (listError) throw new Error(`storage.listBuckets: ${listError.message}`);
+
+  if (existing?.some((b) => b.id === "products")) {
+    console.log(`[seed-staging] Bucket "products" ya existe — no se recrea.`);
+    return;
+  }
+
+  console.log(`[seed-staging] Creando bucket "products" (público, igual que en producción)...`);
+  const { error: createError } = await supabase.storage.createBucket("products", { public: true });
+  if (createError) throw new Error(`storage.createBucket: ${createError.message}`);
+}
+
 async function main() {
+  await ensureProductsBucket();
+
   console.log(`[seed-staging] Insertando ${PRODUCTS.length} productos ficticios...`);
   const { error: productsError } = await supabase
     .from("products")

@@ -1,0 +1,312 @@
+{
+    "vistas": [],
+    "indices": [
+        {
+            "tabla": "business_profile",
+            "indice": "business_profile_pkey",
+            "definicion": "CREATE UNIQUE INDEX business_profile_pkey ON public.business_profile USING btree (id)"
+        },
+        {
+            "tabla": "gallery_images",
+            "indice": "gallery_images_pkey",
+            "definicion": "CREATE UNIQUE INDEX gallery_images_pkey ON public.gallery_images USING btree (id)"
+        },
+        {
+            "tabla": "products",
+            "indice": "idx_products_erp_id",
+            "definicion": "CREATE INDEX idx_products_erp_id ON public.products USING btree (erp_id)"
+        },
+        {
+            "tabla": "products",
+            "indice": "products_erp_id_key",
+            "definicion": "CREATE UNIQUE INDEX products_erp_id_key ON public.products USING btree (erp_id)"
+        },
+        {
+            "tabla": "products",
+            "indice": "products_pkey",
+            "definicion": "CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)"
+        },
+        {
+            "tabla": "profiles",
+            "indice": "profiles_pkey",
+            "definicion": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
+        },
+        {
+            "tabla": "testimonials",
+            "indice": "testimonials_pkey",
+            "definicion": "CREATE UNIQUE INDEX testimonials_pkey ON public.testimonials USING btree (id)"
+        }
+    ],
+    "triggers": [],
+    "funciones": [],
+    "rls_tablas": [
+        {
+            "tabla": "business_profile",
+            "rls_forzado": false,
+            "rls_activado": true
+        },
+        {
+            "tabla": "gallery_images",
+            "rls_forzado": false,
+            "rls_activado": false
+        },
+        {
+            "tabla": "products",
+            "rls_forzado": false,
+            "rls_activado": true
+        },
+        {
+            "tabla": "profiles",
+            "rls_forzado": false,
+            "rls_activado": true
+        },
+        {
+            "tabla": "testimonials",
+            "rls_forzado": false,
+            "rls_activado": true
+        }
+    ],
+    "generado_en": "2026-08-13T00:56:17.109557+00:00",
+    "foreign_keys": [],
+    "primary_keys": [
+        {
+            "tabla": "business_profile",
+            "columna": "id",
+            "constraint": "business_profile_pkey"
+        },
+        {
+            "tabla": "gallery_images",
+            "columna": "id",
+            "constraint": "gallery_images_pkey"
+        },
+        {
+            "tabla": "products",
+            "columna": "id",
+            "constraint": "products_pkey"
+        },
+        {
+            "tabla": "profiles",
+            "columna": "id",
+            "constraint": "profiles_pkey"
+        },
+        {
+            "tabla": "testimonials",
+            "columna": "id",
+            "constraint": "testimonials_pkey"
+        }
+    ],
+    "policies_public": [
+        {
+            "roles": ["authenticated"],
+            "tabla": "business_profile",
+            "using": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.is_admin = true))))",
+            "policy": "business_profile admin write",
+            "comando": "ALL",
+            "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.is_admin = true))))"
+        },
+        {
+            "roles": ["public"],
+            "tabla": "business_profile",
+            "using": "true",
+            "policy": "business_profile public read",
+            "comando": "SELECT",
+            "with_check": null
+        },
+        {
+            "roles": ["authenticated"],
+            "tabla": "products",
+            "using": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.is_admin = true))))",
+            "policy": "products admin write",
+            "comando": "ALL",
+            "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.is_admin = true))))"
+        },
+        {
+            "roles": ["public"],
+            "tabla": "products",
+            "using": "true",
+            "policy": "products public read",
+            "comando": "SELECT",
+            "with_check": null
+        },
+        {
+            "roles": ["public"],
+            "tabla": "products",
+            "using": "true",
+            "policy": "service_role full access",
+            "comando": "ALL",
+            "with_check": "true"
+        },
+        {
+            "roles": ["authenticated"],
+            "tabla": "profiles",
+            "using": "(id = auth.uid())",
+            "policy": "profiles read own",
+            "comando": "SELECT",
+            "with_check": null
+        },
+        {
+            "roles": ["authenticated"],
+            "tabla": "profiles",
+            "using": "(auth.uid() = id)",
+            "policy": "read own profile",
+            "comando": "SELECT",
+            "with_check": null
+        },
+        {
+            "roles": ["authenticated"],
+            "tabla": "testimonials",
+            "using": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.is_admin = true))))",
+            "policy": "testimonials admin write",
+            "comando": "ALL",
+            "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.is_admin = true))))"
+        },
+        {
+            "roles": ["public"],
+            "tabla": "testimonials",
+            "using": "true",
+            "policy": "testimonials public read",
+            "comando": "SELECT",
+            "with_check": null
+        }
+    ],
+    "storage_buckets": [
+        {
+            "bucket": "assets",
+            "creado": "2026-04-18T09:48:56.08613+00:00",
+            "nombre": "assets",
+            "publico": true,
+            "limite_bytes": null,
+            "mime_permitidos": null
+        },
+        {
+            "bucket": "gallery",
+            "creado": "2026-04-18T09:48:42.908223+00:00",
+            "nombre": "gallery",
+            "publico": true,
+            "limite_bytes": null,
+            "mime_permitidos": null
+        },
+        {
+            "bucket": "product-images",
+            "creado": "2026-04-18T08:10:48.364142+00:00",
+            "nombre": "product-images",
+            "publico": true,
+            "limite_bytes": null,
+            "mime_permitidos": null
+        },
+        {
+            "bucket": "products",
+            "creado": "2026-02-12T19:22:15.149562+00:00",
+            "nombre": "products",
+            "publico": true,
+            "limite_bytes": null,
+            "mime_permitidos": null
+        }
+    ],
+    "tablas_columnas": [
+        {"tabla": "business_profile", "columna": "id", "default": null, "nullable": "NO", "posicion": 1, "tipo_dato": "integer"},
+        {"tabla": "business_profile", "columna": "company_name", "default": null, "nullable": "YES", "posicion": 2, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "description", "default": null, "nullable": "YES", "posicion": 3, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "address", "default": null, "nullable": "YES", "posicion": 4, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "hours", "default": null, "nullable": "YES", "posicion": 5, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "phone_whatsapp", "default": null, "nullable": "YES", "posicion": 6, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "email", "default": null, "nullable": "YES", "posicion": 7, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "instagram", "default": null, "nullable": "YES", "posicion": 8, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "facebook", "default": null, "nullable": "YES", "posicion": 9, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "tiktok", "default": null, "nullable": "YES", "posicion": 10, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "map_link", "default": null, "nullable": "YES", "posicion": 11, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "logo_url", "default": null, "nullable": "YES", "posicion": 12, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "local_photos", "default": "'{}'::text[]", "nullable": "YES", "posicion": 13, "tipo_dato": "ARRAY"},
+        {"tabla": "business_profile", "columna": "hero_video_url", "default": null, "nullable": "YES", "posicion": 14, "tipo_dato": "text"},
+        {"tabla": "business_profile", "columna": "hero_media_type", "default": "'image'::character varying", "nullable": "YES", "posicion": 15, "tipo_dato": "character varying"},
+        {"tabla": "gallery_images", "columna": "id", "default": "nextval('gallery_images_id_seq'::regclass)", "nullable": "NO", "posicion": 1, "tipo_dato": "integer"},
+        {"tabla": "gallery_images", "columna": "url", "default": null, "nullable": "NO", "posicion": 2, "tipo_dato": "text"},
+        {"tabla": "gallery_images", "columna": "caption", "default": null, "nullable": "YES", "posicion": 3, "tipo_dato": "character varying"},
+        {"tabla": "gallery_images", "columna": "orden", "default": "0", "nullable": "YES", "posicion": 4, "tipo_dato": "integer"},
+        {"tabla": "gallery_images", "columna": "activa", "default": "true", "nullable": "YES", "posicion": 5, "tipo_dato": "boolean"},
+        {"tabla": "gallery_images", "columna": "created_at", "default": "now()", "nullable": "YES", "posicion": 6, "tipo_dato": "timestamp with time zone"},
+        {"tabla": "products", "columna": "id", "default": "gen_random_uuid()", "nullable": "NO", "posicion": 1, "tipo_dato": "uuid"},
+        {"tabla": "products", "columna": "title", "default": null, "nullable": "NO", "posicion": 2, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "brand", "default": null, "nullable": "YES", "posicion": 3, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "model", "default": null, "nullable": "YES", "posicion": 4, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "cpu", "default": null, "nullable": "YES", "posicion": 5, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "ram", "default": null, "nullable": "YES", "posicion": 6, "tipo_dato": "integer"},
+        {"tabla": "products", "columna": "storage", "default": null, "nullable": "YES", "posicion": 7, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "screen", "default": null, "nullable": "YES", "posicion": 8, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "price", "default": null, "nullable": "YES", "posicion": 9, "tipo_dato": "numeric"},
+        {"tabla": "products", "columna": "condition", "default": null, "nullable": "YES", "posicion": 10, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "stock", "default": "0", "nullable": "YES", "posicion": 11, "tipo_dato": "integer"},
+        {"tabla": "products", "columna": "images", "default": "'{}'::text[]", "nullable": "YES", "posicion": 12, "tipo_dato": "ARRAY"},
+        {"tabla": "products", "columna": "featured", "default": "false", "nullable": "YES", "posicion": 13, "tipo_dato": "boolean"},
+        {"tabla": "products", "columna": "created_at", "default": "now()", "nullable": "YES", "posicion": 14, "tipo_dato": "timestamp with time zone"},
+        {"tabla": "products", "columna": "erp_id", "default": null, "nullable": "YES", "posicion": 15, "tipo_dato": "integer"},
+        {"tabla": "products", "columna": "visible_web", "default": "false", "nullable": "YES", "posicion": 16, "tipo_dato": "boolean"},
+        {"tabla": "products", "columna": "almacenamiento", "default": null, "nullable": "YES", "posicion": 17, "tipo_dato": "character varying"},
+        {"tabla": "products", "columna": "procesador", "default": null, "nullable": "YES", "posicion": 18, "tipo_dato": "character varying"},
+        {"tabla": "products", "columna": "marca", "default": null, "nullable": "YES", "posicion": 19, "tipo_dato": "character varying"},
+        {"tabla": "products", "columna": "categoria", "default": null, "nullable": "YES", "posicion": 20, "tipo_dato": "character varying"},
+        {"tabla": "products", "columna": "descripcion", "default": null, "nullable": "YES", "posicion": 21, "tipo_dato": "text"},
+        {"tabla": "products", "columna": "estado", "default": null, "nullable": "YES", "posicion": 22, "tipo_dato": "character varying"},
+        {"tabla": "products", "columna": "updated_at", "default": "now()", "nullable": "YES", "posicion": 23, "tipo_dato": "timestamp with time zone"},
+        {"tabla": "profiles", "columna": "id", "default": null, "nullable": "NO", "posicion": 1, "tipo_dato": "uuid"},
+        {"tabla": "profiles", "columna": "email", "default": null, "nullable": "YES", "posicion": 2, "tipo_dato": "text"},
+        {"tabla": "profiles", "columna": "is_admin", "default": "false", "nullable": "YES", "posicion": 3, "tipo_dato": "boolean"},
+        {"tabla": "profiles", "columna": "created_at", "default": "now()", "nullable": "YES", "posicion": 4, "tipo_dato": "timestamp with time zone"},
+        {"tabla": "testimonials", "columna": "id", "default": "gen_random_uuid()", "nullable": "NO", "posicion": 1, "tipo_dato": "uuid"},
+        {"tabla": "testimonials", "columna": "client_name", "default": null, "nullable": "YES", "posicion": 2, "tipo_dato": "text"},
+        {"tabla": "testimonials", "columna": "text", "default": null, "nullable": "YES", "posicion": 3, "tipo_dato": "text"},
+        {"tabla": "testimonials", "columna": "rating", "default": null, "nullable": "YES", "posicion": 4, "tipo_dato": "integer"},
+        {"tabla": "testimonials", "columna": "source", "default": null, "nullable": "YES", "posicion": 5, "tipo_dato": "text"},
+        {"tabla": "testimonials", "columna": "photo_url", "default": null, "nullable": "YES", "posicion": 6, "tipo_dato": "text"},
+        {"tabla": "testimonials", "columna": "created_at", "default": "now()", "nullable": "YES", "posicion": 7, "tipo_dato": "timestamp with time zone"},
+        {"tabla": "testimonials", "columna": "active", "default": "true", "nullable": "YES", "posicion": 8, "tipo_dato": "boolean"}
+    ],
+    "storage_policies": [
+        {
+            "roles": ["authenticated"],
+            "tabla": "objects",
+            "using": null,
+            "policy": "Allow uploads to products bucket 1ifhysk_0",
+            "comando": "INSERT",
+            "with_check": "(bucket_id = 'products'::text)"
+        },
+        {
+            "roles": ["authenticated"],
+            "tabla": "objects",
+            "using": "(bucket_id = 'products'::text)",
+            "policy": "Allow uploads to products bucket 1ifhysk_1",
+            "comando": "SELECT",
+            "with_check": null
+        },
+        {
+            "roles": ["authenticated"],
+            "tabla": "objects",
+            "using": "(bucket_id = 'products'::text)",
+            "policy": "Allow uploads to products bucket 1ifhysk_2",
+            "comando": "UPDATE",
+            "with_check": null
+        },
+        {
+            "roles": ["authenticated"],
+            "tabla": "objects",
+            "using": "(bucket_id = 'products'::text)",
+            "policy": "Allow uploads to products bucket 1ifhysk_3",
+            "comando": "DELETE",
+            "with_check": null
+        }
+    ],
+    "storage_rls_objects": {
+        "tabla": "objects",
+        "rls_activado": true
+    },
+    "constraints_check_unique": [
+        {"tipo": "CHECK", "tabla": "business_profile", "constraint": "2200_17471_1_not_null", "check_clause": "id IS NOT NULL"},
+        {"tipo": "CHECK", "tabla": "gallery_images", "constraint": "2200_74109_2_not_null", "check_clause": "url IS NOT NULL"},
+        {"tipo": "CHECK", "tabla": "gallery_images", "constraint": "2200_74109_1_not_null", "check_clause": "id IS NOT NULL"},
+        {"tipo": "CHECK", "tabla": "products", "constraint": "2200_17459_2_not_null", "check_clause": "title IS NOT NULL"},
+        {"tipo": "CHECK", "tabla": "products", "constraint": "2200_17459_1_not_null", "check_clause": "id IS NOT NULL"},
+        {"tipo": "UNIQUE", "tabla": "products", "constraint": "products_erp_id_key", "check_clause": null},
+        {"tipo": "CHECK", "tabla": "profiles", "constraint": "2200_17488_1_not_null", "check_clause": "id IS NOT NULL"},
+        {"tipo": "CHECK", "tabla": "testimonials", "constraint": "2200_17479_1_not_null", "check_clause": "id IS NOT NULL"}
+    ]
+}
