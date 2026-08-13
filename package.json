@@ -14,6 +14,8 @@
     "test:b2": "tsc -p tsconfig.test.json && node --test .tmp-test/supabase .tmp-test/lib/repositories ; rm -rf .tmp-test",
     "test:b2:unit": "tsc -p tsconfig.test.json && node --test .tmp-test/supabase/admin.test.js .tmp-test/lib/repositories/repositories.unit.test.js ; rm -rf .tmp-test",
     "test:b3": "tsc -p tsconfig.test.json && node --test .tmp-test/lib/personalizador ; rm -rf .tmp-test",
+    "test:b4": "tsc -p tsconfig.test.json && node --test .tmp-test/lib/personalizadorServer ; rm -rf .tmp-test",
+    "test:b4:unit": "tsc -p tsconfig.test.json && node --test .tmp-test/lib/personalizadorServer/searchOptions.test.js .tmp-test/lib/personalizadorServer/createQuote.test.js .tmp-test/lib/personalizadorServer/mappers.test.js .tmp-test/lib/personalizadorServer/quoteLookup.test.js ; rm -rf .tmp-test",
     "test:all": "tsc -p tsconfig.test.json && node --test .tmp-test ; rm -rf .tmp-test"
   },
   "dependencies": {

@@ -15,6 +15,7 @@
     "src/supabase/admin.test.ts",
     "src/lib/repositories/**/*.ts",
     "src/lib/personalizador/**/*.ts",
+    "src/lib/personalizadorServer/**/*.ts",
     "src/types/**/*.ts"
   ]
 }
