@@ -164,7 +164,7 @@ export default function AdminConfiguracionPage() {
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <label className={labelCls}>WhatsApp (con código de país)</label>
-            <input value={form.phone_whatsapp} onChange={(e) => set("phone_whatsapp", e.target.value)} className={inputCls} placeholder="+57 3202210698" />
+            <input value={form.phone_whatsapp} onChange={(e) => set("phone_whatsapp", e.target.value)} className={inputCls} placeholder="+57 3115996339" />
           </div>
           <div>
             <label className={labelCls}>Email de contacto</label>
