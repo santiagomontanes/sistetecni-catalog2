@@ -10,17 +10,34 @@ import type {
 import { RepositoryError } from "./errors";
 
 /**
- * A diferencia de las otras 3, esta SIEMPRE requiere el cliente admin
- * (service_role) — quote_requests no tiene ninguna policy de lectura
- * pública (ver supabase/migrations/20260812223300_quote_requests.sql):
- * con la anon key, cualquier operación aquí sería denegada por RLS.
+ * A diferencia de las otras 3, esta requiere un cliente AUTENTICADO con
+ * privilegios — quote_requests no tiene ninguna policy de lectura pública
+ * (ver supabase/migrations/20260812223300_quote_requests.sql): con la
+ * anon key sin sesión, cualquier operación aquí es denegada por RLS.
+ * Dos clientes válidos, según quién llama:
+ *   - el cliente admin (service_role) — B4, creación pública de
+ *     cotizaciones, donde no hay sesión de usuario.
+ *   - un cliente scoped con el access_token de un usuario verificado
+ *     is_admin=true — B6 (panel admin), donde la policy "quote_requests
+ *     admin manage" (for all, to authenticated, is_admin) ya cubre
+ *     list/updateStatus sin necesitar service_role.
  *
- * Preparada para B4 (Server Actions) — B2 no decide CUÁNDO se llama
- * create(), solo provee el mecanismo.
+ * Preparada para B4/B6 (Server Actions) — B2 no decide CUÁNDO se llama
+ * cada método, solo provee el mecanismo.
  */
+export interface ListQuoteRequestsFilter {
+  status?: QuoteStatus;
+  /** Búsqueda parcial, insensible a mayúsculas (punto 15 de B6 — opcional). */
+  codeSearch?: string;
+}
+
 export interface QuoteRequestsRepository {
   findByCode(code: string): Promise<QuoteRequest | null>;
   create(input: CreateQuoteRequestInput): Promise<QuoteRequest>;
+  /** Más recientes primero (B6, panel admin). */
+  list(filter?: ListQuoteRequestsFilter): Promise<QuoteRequest[]>;
+  /** Server-side siempre valida contra los 7 estados aprobados — ver personalizadorAdmin/validation.ts. */
+  updateStatus(id: string, status: QuoteStatus): Promise<QuoteRequest>;
 }
 
 const SELECT_COLUMNS =
@@ -112,6 +129,33 @@ export function createQuoteRequestsRepository(
           `QuoteRequestsRepository.create falló (code=${input.code})`,
           error
         );
+      }
+      return mapRow(data);
+    },
+
+    async list(filter) {
+      let query = adminClient.from("quote_requests").select(SELECT_COLUMNS).order("created_at", { ascending: false });
+      if (filter?.status) query = query.eq("status", filter.status);
+      if (filter?.codeSearch) query = query.ilike("code", `%${filter.codeSearch}%`);
+
+      const { data, error } = await query.returns<QuoteRequestRow[]>();
+
+      if (error) {
+        throw new RepositoryError("QuoteRequestsRepository.list falló", error);
+      }
+      return (data ?? []).map(mapRow);
+    },
+
+    async updateStatus(id, status) {
+      const { data, error } = await adminClient
+        .from("quote_requests")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select(SELECT_COLUMNS)
+        .single<QuoteRequestRow>();
+
+      if (error) {
+        throw new RepositoryError(`QuoteRequestsRepository.updateStatus(${id}) falló`, error);
       }
       return mapRow(data);
     },

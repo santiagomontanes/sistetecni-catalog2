@@ -47,6 +47,11 @@ export function makeFakeProductUpgradeOptionsRepository(
     async isCompatible(productId, upgradeOptionId) {
       return (byProductId.get(productId) ?? []).some((c) => c.option.id === upgradeOptionId);
     },
+    async setCompatibility(productId, upgradeOptionIds) {
+      const current = byProductId.get(productId) ?? [];
+      const kept = current.filter((c) => upgradeOptionIds.includes(c.option.id));
+      byProductId.set(productId, kept);
+    },
   };
 }
 
@@ -112,6 +117,25 @@ export function makeFakeQuoteRequestsRepository(
       };
       store.set(input.code, quote);
       return quote;
+    },
+    async list(filter) {
+      let rows = [...store.values()];
+      if (filter?.status) rows = rows.filter((q) => q.status === filter.status);
+      if (filter?.codeSearch) {
+        const needle = filter.codeSearch.toLowerCase();
+        rows = rows.filter((q) => q.code.toLowerCase().includes(needle));
+      }
+      return rows.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+    },
+    async updateStatus(id, status) {
+      const entry = [...store.entries()].find(([, q]) => q.id === id);
+      if (!entry) {
+        throw new RepositoryError(`updateStatus(${id}) falló: no encontrado`, null);
+      }
+      const [code, quote] = entry;
+      const updated: QuoteRequest = { ...quote, status, updatedAt: new Date() };
+      store.set(code, updated);
+      return updated;
     },
   };
 }

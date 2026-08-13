@@ -19,6 +19,14 @@ export interface ProductUpgradeOptionsRepository {
   findCompatibleUpgradesForProducts(productIds: string[]): Promise<Map<string, CompatibleUpgrade[]>>;
   /** Para validar server-side una selección del cliente antes de calcular precio. */
   isCompatible(productId: string, upgradeOptionId: string): Promise<boolean>;
+  /**
+   * Fase 2B/B6 — reemplaza el conjunto COMPLETO de upgrades compatibles
+   * activos de un producto por `upgradeOptionIds`. Nunca inserta una fila
+   * duplicada (UNIQUE product_id+upgrade_option_id): reactiva filas
+   * inactivas existentes, crea las que faltan, y desactiva (active=false,
+   * NUNCA DELETE) las que ya no están en el conjunto deseado.
+   */
+  setCompatibility(productId: string, upgradeOptionIds: string[]): Promise<void>;
 }
 
 interface CompatibilityRow {
@@ -137,6 +145,72 @@ export function createProductUpgradeOptionsRepository(
         );
       }
       return data !== null;
+    },
+
+    async setCompatibility(productId, upgradeOptionIds) {
+      const { data: existing, error: fetchError } = await client
+        .from("product_upgrade_options")
+        .select("id,upgrade_option_id,active")
+        .eq("product_id", productId)
+        .returns<{ id: string; upgrade_option_id: string; active: boolean }[]>();
+
+      if (fetchError) {
+        throw new RepositoryError(
+          `ProductUpgradeOptionsRepository.setCompatibility(${productId}) falló leyendo el estado actual`,
+          fetchError
+        );
+      }
+
+      const existingByOptionId = new Map((existing ?? []).map((row) => [row.upgrade_option_id, row]));
+      const desired = new Set(upgradeOptionIds);
+
+      const toInsert = upgradeOptionIds
+        .filter((optionId) => !existingByOptionId.has(optionId))
+        .map((optionId) => ({ product_id: productId, upgrade_option_id: optionId, active: true }));
+
+      const toReactivate = (existing ?? [])
+        .filter((row) => desired.has(row.upgrade_option_id) && !row.active)
+        .map((row) => row.id);
+
+      const toDeactivate = (existing ?? [])
+        .filter((row) => !desired.has(row.upgrade_option_id) && row.active)
+        .map((row) => row.id);
+
+      if (toInsert.length > 0) {
+        const { error } = await client.from("product_upgrade_options").insert(toInsert);
+        if (error) {
+          throw new RepositoryError(
+            `ProductUpgradeOptionsRepository.setCompatibility(${productId}) falló insertando`,
+            error
+          );
+        }
+      }
+
+      if (toReactivate.length > 0) {
+        const { error } = await client
+          .from("product_upgrade_options")
+          .update({ active: true })
+          .in("id", toReactivate);
+        if (error) {
+          throw new RepositoryError(
+            `ProductUpgradeOptionsRepository.setCompatibility(${productId}) falló reactivando`,
+            error
+          );
+        }
+      }
+
+      if (toDeactivate.length > 0) {
+        const { error } = await client
+          .from("product_upgrade_options")
+          .update({ active: false })
+          .in("id", toDeactivate);
+        if (error) {
+          throw new RepositoryError(
+            `ProductUpgradeOptionsRepository.setCompatibility(${productId}) falló desactivando`,
+            error
+          );
+        }
+      }
     },
   };
 }
