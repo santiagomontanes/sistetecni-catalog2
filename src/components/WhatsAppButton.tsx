@@ -19,7 +19,7 @@ export default function WhatsAppButton({
   product,
   fixed = true,
 }: WhatsAppButtonProps) {
-  const phoneValue = (phone ?? "573202210698").replace(/\D/g, "");
+  const phoneValue = (phone ?? "573115996339").replace(/\D/g, "");
 
   const message = product
     ? `Hola 👋

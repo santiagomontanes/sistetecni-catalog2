@@ -6,8 +6,7 @@ import FadeIn from "@/components/FadeIn";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import ProductGallery from "@/components/ProductGallery";
 import IncludesSection from "@/components/IncludesSection";
-import { getBusinessProfile, getProductById } from "@/supabase/db";
-import type { BusinessProfile } from "@/types/business";
+import { getProductById } from "@/supabase/db";
 import type { Product } from "@/types/product";
 
 
@@ -26,7 +25,6 @@ export default function ProductClient() {
   const id = searchParams.get("id");
 
   const [product, setProduct] = useState<Product | null>(null);
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -40,10 +38,7 @@ export default function ProductClient() {
 
       try {
         setLoading(true);
-        const [productData, profileData] = await Promise.all([
-          getProductById(id),
-          getBusinessProfile(),
-        ]);
+        const productData = await getProductById(id);
 
         if (!productData) {
           setError("Producto no encontrado.");
@@ -51,7 +46,6 @@ export default function ProductClient() {
           setProduct(productData);
         }
 
-        setProfile(profileData);
       } catch {
         setError("No se pudo cargar el producto.");
       } finally {
@@ -117,7 +111,7 @@ export default function ProductClient() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <WhatsAppButton phone={profile?.phoneWhatsApp} product={product} fixed={false} />
+              <WhatsAppButton phone="+57 3115996339" product={product} fixed={false} />
 
               <a
                 href="/catalog"

@@ -44,7 +44,7 @@ export default function Footer() {
             <h4 className="text-sm font-semibold text-text">Contacto</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted">
               <li>📍 San Diego, Bogotá</li>
-              <li>📱 +57 320 221 0698</li>
+              <li>📱 +57 311 599 6339</li>
               <li>✉️ sistetecnioficial1@gmail.com</li>
             </ul>
           </div>

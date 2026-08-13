@@ -114,7 +114,7 @@ export default function Hero({
             Ver catálogo →
           </Link>
           <a
-            href="https://wa.me/573202210698?text=Hola%20%F0%9F%91%8B%20quiero%20m%C3%A1s%20informaci%C3%B3n%20sobre%20sus%20productos%20disponibles."
+            href="https://wa.me/573115996339?text=Hola%20%F0%9F%91%8B%20quiero%20m%C3%A1s%20informaci%C3%B3n%20sobre%20sus%20productos%20disponibles."
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-full border border-white/30 bg-white/10 px-7 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"

@@ -102,7 +102,7 @@ export default function SoftwarePage() {
   </a>
 
   <a
-    href="https://wa.me/573043547758?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20Sistetecni%20POS"
+    href="https://wa.me/573115996339?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20Sistetecni%20POS"
     target="_blank"
     rel="noopener noreferrer"
     className="rounded-xl border border-white/15 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
@@ -184,7 +184,7 @@ export default function SoftwarePage() {
 
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <a
-              href="https://wa.me/573043547758?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20Sistetecni%20POS"
+              href="https://wa.me/573115996339?text=Hola,%20quiero%20informaci%C3%B3n%20sobre%20Sistetecni%20POS"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
