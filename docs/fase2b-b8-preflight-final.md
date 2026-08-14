@@ -351,3 +351,42 @@ Aplicado con éxito (adopción se saltó automáticamente por ya estar aplicada)
 | `git status` limpio salvo `.claude/settings.local.json` | ✅ |
 
 **Estado: DETENIDO tras Push 2, tal como se acordó.** El usuario va a probar manualmente la web ACTUAL de producción (inicio, catálogo, producto, WhatsApp, admin login, editar/guardar producto, galería/logo) antes de autorizar el Push 3 (las 5 migraciones del personalizador). Sin merge a `main`, sin deploy.
+
+---
+
+## Registro de ejecución — Push 3 (2026-08-15)
+
+**Checkpoint manual previo aprobado por el usuario**: web actual de producción probada manualmente tras Push 2 — inicio ✅, catálogo ✅, productos ✅, WhatsApp ✅, login admin ✅, edición/guardado admin ✅, producción estable ✅.
+
+### PUSH 3 — 5 migraciones del personalizador
+
+Aplicadas con éxito, en orden, contra producción (`--db-url` explícito, project ref `fxbtubhhevbigflsyvqz` confirmado antes de ejecutar, credencial recreada solo para esta operación):
+
+1. `20260812223000_products_personalizador_columns.sql`
+2. `20260812223100_upgrade_options.sql`
+3. `20260812223200_product_upgrade_options.sql`
+4. `20260812223300_quote_requests.sql`
+5. `20260813010000_fix_quote_requests_code_comment.sql`
+
+Mecanismo: solo la baseline (`20260812220000_baseline_esquema_actual.sql`) retirada temporalmente de `supabase/migrations/`; adopción y seguridad ya aplicadas se saltaron automáticamente; `db push` aplicó exactamente las 5 pendientes; restauración inmediata de la baseline, confirmada byte-idéntica (`git diff --quiet` sin diferencias). No se ejecutó baseline, no se repitió seguridad, no hubo `migration repair`, no hubo `db reset`, no hubo `seed`, no se copió ningún dato `[SEED]`, no se insertaron upgrades/compatibilidades/quotes reales.
+
+**Verificación post-Push 3 (solo lectura, vía `docs/fase0-descubrimiento-export.sql` + consulta de conteos dedicada):**
+
+| # | Verificación | Resultado |
+|---|---|---|
+| 1 | `migration list`: adopción y seguridad siguen `local=remote` (sin cambio); baseline sigue `remote:""` (nunca aplicada, correcto); las 5 del personalizador ahora `local=remote` | ✅ |
+| 2 | Tablas: `business_profile`, `gallery_images`, `product_upgrade_options`, `products`, `profiles`, `quote_requests`, `testimonials`, `upgrade_options` — las 8 existen | ✅ |
+| 3 | Columnas nuevas en `products`: `cpu_generation`, `gpu_type`, `gpu_model`, `touch_screen`, `screen_size_inches`, `storage_gb` — las 6 existen | ✅ |
+| 4 | Datos: `products=16` (idéntico a la línea base de Push 2, ningún producto real alterado), `upgrade_options=0`, `product_upgrade_options=0`, `quote_requests=0` — ningún dato `[SEED]` copiado | ✅ |
+| 5 | RLS `upgrade_options`: activo, `upgrade_options public read` (SELECT) + `upgrade_options admin write` (ALL) | ✅ |
+| 5 | RLS `product_upgrade_options`: activo, `product_upgrade_options public read` (SELECT) + `product_upgrade_options admin write` (ALL) | ✅ |
+| 5 | RLS `quote_requests`: activo, ÚNICAMENTE `quote_requests admin manage` (ALL, `authenticated`) — sin policy de lectura pública, confirmado por su ausencia | ✅ |
+| 6 | Foreign keys: `product_upgrade_options_product_id_fkey`→products, `product_upgrade_options_upgrade_option_id_fkey`→upgrade_options, `quote_requests_product_id_fkey`→products | ✅ |
+| 6 | Primary keys: `product_upgrade_options_pkey`, `quote_requests_pkey`, `upgrade_options_pkey` (todas sobre `id`) | ✅ |
+| 6 | Constraints adicionales: `product_upgrade_options_product_id_upgrade_option_id_key` (UNIQUE), `quote_requests_code_key` (UNIQUE), `quote_requests_product_or_special` (CHECK), `quote_requests_status_check` (CHECK, 7 estados válidos), `upgrade_options_category_check` (CHECK, `ram`/`storage`), `upgrade_options_extra_cost_check` (CHECK, `>= 0`) — todas presentes y coinciden exactamente con la definición de las migraciones | ✅ |
+| 7 | Home/catálogo no dependen de que los campos nuevos estén completos: las 6 columnas nuevas de `products` son nullable/con default, ninguna vista ni componente público del catálogo actual las lee (son exclusivas del código del personalizador, aún no desplegado); los 16 productos reales existentes conservan sus valores originales en todas las columnas preexistentes, sin ninguna fila afectada por las migraciones | ✅ |
+| 8 | Archivo temporal (baseline) restaurado byte-idéntico | ✅ |
+| 9 | Credencial `.supabase-cli-prod.local` eliminada y borrado verificado (no se imprimió su contenido) | ✅ |
+| 10 | `git status` limpio salvo `.claude/settings.local.json` | ✅ |
+
+**Estado: DETENIDO tras Push 3, tal como se acordó.** Las 8 migraciones necesarias (adopción + seguridad + 5 del personalizador) están aplicadas en producción, verificadas de extremo a extremo sin sorpresas. Sin merge a `main`, sin push a `main`, sin deploy de producción — pendiente de que el usuario revise este informe antes de publicar el código.
