@@ -21,17 +21,25 @@
 
 ---
 
-## 2. Estado de producción — SOLO LECTURA
+## 2. Estado de producción — SOLO LECTURA (verificado en vivo, 2026-08-14T01:08:48Z)
 
-*(Esta sección se completa en cuanto tengas lista la conexión de solo lectura — mismo protocolo endurecido de siempre: nunca se imprime password/connection string, toda salida se sanitiza antes de mostrarse, el archivo de credenciales se elimina y su borrado se verifica al terminar.)*
+Ejecutado vía `supabase migration list --db-url` y `supabase db query -f docs/fase0-descubrimiento-export.sql --db-url` (el mismo script de solo lectura ya usado en la Fase 0 original) contra producción real. Ninguna escritura — ni `ALTER`/`CREATE`/`DROP`/`INSERT`/`UPDATE`/`DELETE`, ni `migration repair`, ni `db push`. Credencial usada y eliminada al terminar, borrado verificado.
 
-Verificaciones previstas (todas de solo lectura — SELECT sobre catálogos del sistema, nunca ALTER/CREATE/DROP/INSERT/UPDATE/DELETE, nunca `db push`, nunca `migration repair`):
-- Tablas existentes en `public`
-- Columnas exactas de `products` (confirmar que las 6 columnas del personalizador AÚN NO existen)
-- Policies exactas de `products`, `gallery_images`, `storage.objects`
-- Estado de RLS por tabla
-- Historial de migraciones (`supabase_migrations.schema_migrations`) — confirmar que está vacío o no relacionado con este repo
-- Confirmar ausencia de `upgrade_options`, `product_upgrade_options`, `quote_requests`
+**Historial de migraciones**: los 8 archivos locales (baseline + adopción + seguridad + 5 del personalizador) aparecen con `"remote": ""` — **producción no tiene ninguna migración de este repo aplicada todavía**, exactamente como se esperaba. Confirma que el plan de la sección 3 parte de una base limpia, sin sorpresas.
+
+**Tablas existentes**: exactamente `products`, `profiles`, `business_profile`, `testimonials`, `gallery_images` — las mismas 5 de la auditoría original, ninguna más.
+
+**Tablas del personalizador**: `upgrade_options`, `product_upgrade_options`, `quote_requests` — **confirmado: ninguna existe todavía**, como se esperaba.
+
+**Columnas de `products`**: 23 columnas, idénticas una por una a las de la auditoría original (incluidas las 7 huérfanas en español). **Ninguna de las 6 columnas del personalizador existe todavía** (`cpu_generation`, `gpu_type`, `gpu_model`, `touch_screen`, `screen_size_inches`, `storage_gb`) — confirmado, no supuesto.
+
+**RLS por tabla**: `products`/`profiles`/`business_profile`/`testimonials` con RLS activo; **`gallery_images` con RLS DESACTIVADO** — confirmado en vivo, la vulnerabilidad CRÍTICA #2 sigue exactamente igual que en la auditoría original. (El propio CLI de Supabase generó además una advertencia automática de seguridad — `rls_disabled`, nivel `critical` — sobre esta misma tabla, coincidiendo de forma independiente con la auditoría manual.)
+
+**Policies de `products`**: confirmado que **`service_role full access` (roles `public`, `ALL`) SIGUE EXISTIENDO** — la vulnerabilidad CRÍTICA #1 sigue exactamente igual, sin cambios desde la auditoría original. `products admin write` y `products public read` también presentes y sin cambios.
+
+**Storage**: 4 buckets (`products`, `gallery`, `assets`, `product-images`), los 4 públicos, sin límite de tamaño/mime — igual que la auditoría original. **Policies de `storage.objects`**: solo el bucket `products` tiene las 4 policies conocidas (INSERT/SELECT/UPDATE/DELETE, rol `authenticated`, sin chequeo `is_admin` — vulnerabilidad ALTA #1 confirmada sin cambios). **`gallery`/`assets`/`product-images` siguen con CERO policies** — confirma en vivo, no por deducción, que el Bloque D es necesario: con `storage.objects` en RLS activo y cero policies para esos buckets, la subida de galería/logo/video debería seguir fallando en producción hoy mismo.
+
+**Conclusión de esta verificación: el estado real de producción coincide EXACTAMENTE con lo asumido en todo este documento y en `docs/fase2b-b8-plan-produccion.md` — cero sorpresas, cero ajustes necesarios al plan.**
 
 ---
 
@@ -272,9 +280,9 @@ Ninguno de estos bloques se ejecutó en esta sesión.
 
 | CHECK | ESTADO ESPERADO | SI FALLA |
 |---|---|---|
-| Backup/verificación de producción disponible | Confirmado por lectura real (sección 2) | NO-GO — no se procede sin saber el estado real |
+| Backup/verificación de producción disponible | ✅ Confirmado por lectura real en vivo (sección 2, 2026-08-14T01:08:48Z) — coincide exactamente con lo asumido | — |
 | Migraciones revisadas | ✅ Hecho en este documento (secciones 3-5) | — |
-| Producción accesible (solo lectura) | Pendiente de tu conexión | NO-GO hasta confirmarlo |
+| Producción accesible (solo lectura) | ✅ Confirmado — conexión usada y credencial eliminada | — |
 | Variables de Vercel listas | Pendiente de que las configures (sección 7) | NO-GO — el código nuevo fallaría en su primer uso |
 | Preview aprobado | ✅ Confirmado por ti manualmente | — |
 | Build verde | ✅ Confirmado (309/309 tests, typecheck, lint, build) | — |
@@ -283,7 +291,7 @@ Ninguno de estos bloques se ejecutó en esta sesión.
 | Rollback preparado | ✅ Documentado por caso (sección 11) | — |
 | `main` sin cambios no deseados | ✅ Confirmado — `origin/main` intacto en `e57d645` | — |
 
-**GO/NO-GO general en este momento: NO-GO** — pendiente únicamente de: (1) verificación de solo lectura de producción, (2) que configures las variables de Vercel, (3) tu autorización explícita final para cada fase de ejecución.
+**GO/NO-GO general en este momento: NO-GO** — pendiente únicamente de: (1) que configures las variables de Vercel, (2) tu autorización explícita final para cada fase de ejecución. La verificación de solo lectura de producción ya se completó y no arrojó ninguna sorpresa.
 
 ---
 
