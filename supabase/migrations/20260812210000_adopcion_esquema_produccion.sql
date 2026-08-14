@@ -1,0 +1,47 @@
+-- Migración de ADOPCIÓN — Fase 2B/B8, EXCLUSIVA para producción.
+--
+-- Declara honestamente que el esquema base (products, profiles,
+-- business_profile, testimonials, gallery_images — solo columnas y
+-- tablas, NO RLS/policies, eso lo cubre la migración de seguridad
+-- siguiente) ya existía en producción ANTES de que este repositorio
+-- tuviera historial de migraciones — confirmado por auditoría real
+-- (docs/00-auditoria-supabase.md, ejecutada 2026-08-13T00:56:17Z), no
+-- reconstruido de memoria.
+--
+-- NO ejecuta ningún DDL real — es un ancla de historial honesta para que
+-- `supabase migration list` tenga un punto de partida reproducible en
+-- producción, sin necesitar `migration repair` (que marcaría como
+-- aplicada una migración que en los hechos nunca se ejecutó — la
+-- diferencia aquí es que ESTA migración sí se ejecuta de verdad, solo
+-- que su contenido es intencionalmente un no-op).
+--
+-- También es segura de aplicar en STAGING si el CLI llega a intentarlo
+-- (queda en la carpeta compartida de migraciones): no tiene ningún efecto
+-- sobre un esquema que ya existe de cualquier forma.
+--
+-- Timestamp elegido deliberadamente ANTERIOR a
+-- 20260812223000_products_personalizador_columns.sql (el primer cambio
+-- real del personalizador) para que el orden cronológico de aplicación
+-- sea correcto: primero se "adopta" lo heredado, después se corrige
+-- seguridad, después se agrega el personalizador.
+--
+-- Orden de aplicación en PRODUCCIÓN: 1 de 7.
+--   20260812210000_adopcion_esquema_produccion.sql            ← este archivo
+--   20260812215000_fase01_seguridad_produccion.sql
+--   20260812223000_products_personalizador_columns.sql
+--   20260812223100_upgrade_options.sql
+--   20260812223200_product_upgrade_options.sql
+--   20260812223300_quote_requests.sql
+--   20260813010000_fix_quote_requests_code_comment.sql
+--
+-- La baseline (20260812220000_baseline_esquema_actual.sql) NO se incluye
+-- en este orden — fue escrita para reconstruir un STAGING vacío desde
+-- cero y NUNCA debe aplicarse a producción (sus CREATE POLICY sin
+-- IF NOT EXISTS fallarían contra policies que producción ya tiene con el
+-- mismo nombre). Ver docs/fase2b-b8-plan-produccion.md §2 y
+-- docs/fase2b-b8-decisiones-cerradas.md, decisión A.
+
+select 1; -- no-op intencional — deja constancia real en el historial del CLI, sin tocar el esquema
+
+-- ---- ROLLBACK ----
+-- No aplica — este archivo no modifica ningún objeto de la base de datos.

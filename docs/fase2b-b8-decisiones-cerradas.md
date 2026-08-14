@@ -220,3 +220,26 @@ Ninguno ejecutado en esta sesión.
 **Pregunta genuinamente abierta (la única que no puedo resolver desde el código):** ¿tu proyecto de Vercel hace auto-deploy a producción en cada push a `main`, o el deploy a producción es un paso manual separado? Determina el orden seguro entre "push" y "aplicar migraciones".
 
 Me detengo aquí. No se ejecutó SQL, `migration repair`, `db push`, cambios de RLS, push, deploy, cambios en Vercel ni nada contra producción.
+
+---
+
+## Cierre de Preview — release/personalizador → STAGING
+
+**Estado: APROBADO.** Confirmado por prueba manual directa del usuario contra el Preview Deployment de la rama `release/personalizador` (commit `7641b35` en el momento de la prueba), con las variables de entorno de ese Preview apuntando a STAGING.
+
+**Casos probados y confirmados funcionando:**
+- `/personalizar` — landing
+- Ayúdame a elegir (flujo completo)
+- Personalizar características (flujo completo)
+- Creación de cotización normal
+- Creación de cotización especial
+- Consulta de cotización por código
+- Botón/link de WhatsApp
+- Login admin contra STAGING
+- `/admin/upgrades`
+- Compatibilidades (`/admin/productos` → sección de compatibilidad)
+- `/admin/cotizaciones`
+
+**Confirmado también:** el banner de STAGING aparece correctamente (ámbar, "⚠ STAGING — datos de prueba"), y el Preview está aislado de producción — validación directa de que el fix del bug de `EnvironmentBanner.tsx` (commit `7641b35`) funciona en el entorno real de Vercel, no solo en la inspección local del bundle.
+
+**Siguiente paso:** preparar producción (SQL + variables de Vercel), sin aplicar nada todavía — ver el resto de este documento y `docs/fase2b-b8-preflight-final.md` para el preflight final antes de cualquier autorización de ejecución contra producción.
