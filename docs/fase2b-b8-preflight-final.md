@@ -313,3 +313,41 @@ Ninguno de estos bloques se ejecutó en esta sesión.
 ---
 
 Me detengo aquí. No se ejecutó SQL contra producción (salvo, cuando confirmes la conexión, las consultas de solo lectura de la sección 2), no hubo merge a `main`, no hubo push a `main`, no hubo cambios de variables en Vercel, no hubo deploy de producción.
+
+---
+
+## Registro de ejecución — Push 1 y Push 2 (2026-08-14)
+
+**Variables de Vercel Production**: confirmadas por el usuario — `NEXT_PUBLIC_APP_ENV=production`, `SUPABASE_SERVICE_ROLE_KEY` y `SUPABASE_PROJECT_REF_PRODUCTION` de producción configuradas; las variables `NEXT_PUBLIC_SUPABASE_*` existentes siguen apuntando al proyecto de producción correcto.
+
+### PUSH 1 — `20260812210000_adopcion_esquema_produccion.sql`
+
+Aplicado con éxito contra producción (`--db-url` explícito, project ref `fxbtubhhevbigflsyvqz` confirmado antes de ejecutar). Mecanismo: baseline + seguridad + 5 migraciones del personalizador retiradas temporalmente de `supabase/migrations/`, solo la adopción disponible; `db push`; restauración inmediata de los 7 archivos, confirmada byte-idéntica (`git diff --quiet` sin diferencias). `migration list` posterior: `20260812210000` con `local=remote`, las 7 restantes con `remote:""`. Credencial eliminada, borrado verificado.
+
+### PUSH 2 — `20260812215000_fase01_seguridad_produccion.sql`
+
+Aplicado con éxito (adopción se saltó automáticamente por ya estar aplicada). Mecanismo: baseline + 5 migraciones del personalizador retiradas temporalmente, adopción + seguridad disponibles; `db push`; restauración inmediata de los 6 archivos, confirmada byte-idéntica. `migration list` posterior: adopción y seguridad con `local=remote`, las 6 restantes (baseline + 5 del personalizador) con `remote:""`.
+
+**Verificación de seguridad post-Push 2 (solo lectura, vía `docs/fase0-descubrimiento-export.sql`):**
+
+| Verificación | Resultado |
+|---|---|
+| `products` RLS activo | ✅ `rls_activado: true` |
+| `products public read` existe | ✅ |
+| `products admin write` existe | ✅ |
+| `service_role full access` ya NO existe | ✅ confirmado — ausente de la lista de policies |
+| `gallery_images` RLS activo | ✅ (antes: `false`, ahora: `true`) |
+| `gallery_images` SELECT público | ✅ `gallery_images public read` |
+| `gallery_images` escritura admin | ✅ `gallery_images admin write` |
+| Bucket `products`: SELECT intacta | ✅ policy `1ifhysk_1` sin cambios |
+| Bucket `products`: INSERT/UPDATE/DELETE ahora requieren `is_admin` | ✅ `products bucket admin insert/update/delete`, las 3 con `exists(...is_admin=true...)`; las 3 policies originales sin ese chequeo (`1ifhysk_0/2/3`) ya no existen |
+| Bucket `gallery`: policy admin presente | ✅ `gallery bucket admin write`, con chequeo `is_admin` |
+| Bucket `assets`: policy admin presente | ✅ `assets bucket admin write`, con chequeo `is_admin` |
+| Buckets sin recrear/sin archivos tocados | ✅ los 4 buckets muestran el mismo `creado` (timestamp de creación) que en la auditoría original — nunca se recrearon; ninguna operación de esta migración toca archivos, solo policies |
+| Sin modificación de datos | ✅ estructural (la migración no contiene una sola sentencia DML, verificado por grep antes de aplicar) + recuento de filas capturado como línea base: `products=16, profiles=1, business_profile=1, testimonials=4, gallery_images=0` |
+| `migration list`: adopción y seguridad `local=remote`, las 6 restantes `remote:""` | ✅ |
+| Archivos temporales restaurados byte-idénticos | ✅ |
+| Credencial eliminada | ✅ verificado |
+| `git status` limpio salvo `.claude/settings.local.json` | ✅ |
+
+**Estado: DETENIDO tras Push 2, tal como se acordó.** El usuario va a probar manualmente la web ACTUAL de producción (inicio, catálogo, producto, WhatsApp, admin login, editar/guardar producto, galería/logo) antes de autorizar el Push 3 (las 5 migraciones del personalizador). Sin merge a `main`, sin deploy.
