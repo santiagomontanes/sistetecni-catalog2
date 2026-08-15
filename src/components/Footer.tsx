@@ -51,7 +51,23 @@ export default function Footer() {
         </div>
 
         <div className="mt-8 border-t border-border pt-6 text-center text-xs text-muted">
-          © {new Date().getFullYear()} Sistetecni. Todos los derechos reservados.
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+            <Link
+              href="/politica-de-privacidad"
+              className="transition hover:text-primary"
+            >
+              Política de privacidad
+            </Link>
+            <Link
+              href="/eliminacion-de-datos"
+              className="transition hover:text-primary"
+            >
+              Eliminación de datos
+            </Link>
+          </div>
+          <div className="mt-4">
+            © {new Date().getFullYear()} Sistetecni. Todos los derechos reservados.
+          </div>
         </div>
       </div>
     </footer>
