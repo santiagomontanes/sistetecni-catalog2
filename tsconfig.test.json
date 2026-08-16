@@ -19,6 +19,7 @@
     "src/lib/personalizadorUi/**/*.ts",
     "src/lib/personalizadorAdmin/**/*.ts",
     "src/lib/b7/**/*.ts",
+    "src/lib/meta/**/*.ts",
     "src/components/EnvironmentBanner.test.ts",
     "src/types/**/*.ts"
   ]
