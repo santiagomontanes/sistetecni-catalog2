@@ -10,6 +10,7 @@ const navItems = [
   { href: "/admin/productos", label: "Productos", icon: "📦", exact: false },
   { href: "/admin/upgrades", label: "Upgrades", icon: "🔧", exact: false },
   { href: "/admin/cotizaciones", label: "Cotizaciones", icon: "🧾", exact: false },
+  { href: "/admin/ventas", label: "Ventas", icon: "💵", exact: false },
   { href: "/admin/galeria", label: "Galería", icon: "🖼️", exact: false },
   { href: "/admin/media", label: "Media inicio", icon: "🎬", exact: false },
   { href: "/admin/testimonios", label: "Testimonios", icon: "✍️", exact: false },

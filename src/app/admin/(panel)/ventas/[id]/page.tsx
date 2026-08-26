@@ -1,0 +1,189 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { callAdminAction } from "@/lib/callAdminAction";
+import { getSaleDetail } from "@/app/admin/ventas/actions";
+import { downloadAdminSalePdf } from "@/lib/downloadAdminSalePdf";
+import { formatCOP } from "@/lib/personalizadorUi";
+import { COMPANY } from "@/config/company";
+import type { AdminSaleDetailDTO } from "@/lib/salesAdmin/types";
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  nequi: "Nequi",
+  daviplata: "Daviplata",
+  tarjeta: "Tarjeta",
+  otro: "Otro",
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pagado: "Pagado",
+  pendiente: "Pendiente",
+  parcial: "Parcial",
+};
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("es-CO", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(iso));
+}
+
+export default function VentaDetallePage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+
+  const [sale, setSale] = useState<AdminSaleDetailDTO | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const result = await callAdminAction(getSaleDetail, { id });
+        if (cancelled) return;
+        if (!result.ok) {
+          setError(result.error === "NOT_FOUND" ? "Venta no encontrada." : "No fue posible cargar la venta.");
+          return;
+        }
+        setSale(result.data);
+      } catch {
+        if (!cancelled) setError("No fue posible cargar la venta.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const handleDownload = async () => {
+    if (!sale) return;
+    try {
+      setDownloading(true);
+      await downloadAdminSalePdf(sale.id, sale.saleNumber);
+    } catch {
+      setError("No fue posible descargar el PDF.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  if (loading) return <p className="text-sm text-muted">Cargando...</p>;
+  if (error || !sale) {
+    return (
+      <div className="space-y-4">
+        <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error || "Venta no encontrada."}
+        </p>
+        <Link href="/admin/ventas" className="text-sm font-semibold text-primary hover:underline">
+          ← Volver a ventas
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 print:max-w-2xl print:mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <div>
+          <h1 className="text-2xl font-bold text-text">{sale.saleNumber}</h1>
+          <p className="mt-1 text-sm text-muted">{formatDate(sale.createdAt)}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/ventas"
+            className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text transition hover:border-primary hover:text-primary"
+          >
+            Volver
+          </Link>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-text transition hover:border-primary hover:text-primary"
+          >
+            Imprimir
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            disabled={downloading}
+            className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+          >
+            {downloading ? "Descargando..." : "Descargar PDF"}
+          </button>
+        </div>
+      </div>
+
+      <section className="space-y-1 rounded-2xl border border-border bg-white p-5">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted">{COMPANY.name}</p>
+        <p className="text-lg font-bold text-text">{COMPANY.documentTitle}</p>
+        <p className="text-xs text-muted">{COMPANY.documentSubtitle}</p>
+        <p className="text-xs text-muted">NIT {COMPANY.nit} · {COMPANY.website}</p>
+      </section>
+
+      <section className="space-y-2 rounded-2xl border border-border bg-white p-5">
+        <h2 className="text-base font-semibold text-text">Datos del cliente</h2>
+        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+          <p><span className="text-muted">Nombre:</span> {sale.customerName}</p>
+          <p><span className="text-muted">Documento:</span> {sale.customerDocument}</p>
+          <p><span className="text-muted">Celular:</span> {sale.customerPhone}</p>
+          <p><span className="text-muted">Correo:</span> {sale.customerEmail ?? "—"}</p>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-border bg-white p-5">
+        <h2 className="text-base font-semibold text-text">Productos</h2>
+        <div className="space-y-2">
+          {sale.items.map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-text">{item.productName}</p>
+                <p className="text-xs text-muted">
+                  {item.quantity} × {formatCOP(item.unitPriceCop)}
+                  {item.itemType === "manual" ? " · Manual" : ""}
+                </p>
+              </div>
+              <p className="shrink-0 text-sm font-bold text-text">{formatCOP(item.subtotalCop)}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-1 rounded-xl bg-surface p-3">
+          <div className="flex justify-between text-sm text-muted">
+            <span>Subtotal</span>
+            <span>{formatCOP(sale.subtotalCop)}</span>
+          </div>
+          <div className="flex justify-between text-sm text-muted">
+            <span>Descuento</span>
+            <span>{formatCOP(sale.discountCop)}</span>
+          </div>
+          <div className="flex justify-between text-base font-bold text-text">
+            <span>Total</span>
+            <span>{formatCOP(sale.totalCop)}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-2 rounded-2xl border border-border bg-white p-5">
+        <h2 className="text-base font-semibold text-text">Otros datos</h2>
+        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+          <p><span className="text-muted">Método de pago:</span> {PAYMENT_METHOD_LABELS[sale.paymentMethod] ?? sale.paymentMethod}</p>
+          <p><span className="text-muted">Estado:</span> {PAYMENT_STATUS_LABELS[sale.paymentStatus] ?? sale.paymentStatus}</p>
+          <p><span className="text-muted">Garantía:</span> {sale.warrantyMonths} meses</p>
+        </div>
+        {sale.notes ? (
+          <p className="text-sm"><span className="text-muted">Observaciones:</span> {sale.notes}</p>
+        ) : null}
+      </section>
+
+      <p className="text-xs text-muted">{COMPANY.legalNotice}</p>
+    </div>
+  );
+}

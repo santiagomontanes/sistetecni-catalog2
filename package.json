@@ -20,6 +20,7 @@
     "test:b6": "tsc -p tsconfig.test.json && node --test .tmp-test/lib/personalizadorAdmin ; rm -rf .tmp-test",
     "test:b7": "tsc -p tsconfig.test.json && node --test .tmp-test/lib/b7 ; rm -rf .tmp-test",
     "test:meta": "tsc -p tsconfig.test.json && node --test .tmp-test/lib/meta ; rm -rf .tmp-test",
+    "test:ventas": "tsc -p tsconfig.test.json && node --test .tmp-test/lib/salesAdmin .tmp-test/lib/salesPdf .tmp-test/lib/repositories/sales.repository.test.js ; rm -rf .tmp-test",
     "test:all": "tsc -p tsconfig.test.json && node --test .tmp-test ; rm -rf .tmp-test"
   },
   "dependencies": {

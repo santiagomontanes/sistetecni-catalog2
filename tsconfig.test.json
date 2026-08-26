@@ -20,6 +20,9 @@
     "src/lib/personalizadorAdmin/**/*.ts",
     "src/lib/b7/**/*.ts",
     "src/lib/meta/**/*.ts",
+    "src/lib/salesAdmin/**/*.ts",
+    "src/lib/salesPdf/**/*.ts",
+    "src/config/**/*.ts",
     "src/components/EnvironmentBanner.test.ts",
     "src/types/**/*.ts"
   ]
