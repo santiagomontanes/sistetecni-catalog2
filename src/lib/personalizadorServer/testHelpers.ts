@@ -26,6 +26,17 @@ export function makeFakeProductsRepository(products: Product[]): ProductsReposit
     async findPersonalizerCandidates() {
       return products.filter((p) => p.visibleWeb !== false);
     },
+    async search(query, limit = 20) {
+      const needle = query.toLowerCase();
+      return products
+        .filter(
+          (p) =>
+            p.title.toLowerCase().includes(needle) ||
+            p.brand.toLowerCase().includes(needle) ||
+            p.model.toLowerCase().includes(needle)
+        )
+        .slice(0, limit);
+    },
   };
 }
 

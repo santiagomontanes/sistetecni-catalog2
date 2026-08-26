@@ -16,6 +16,13 @@ export interface ProductsRepository {
    * fuente de verdad para la misma decisión.
    */
   findPersonalizerCandidates(): Promise<Product[]>;
+  /**
+   * Búsqueda por título/marca/modelo para el selector de productos del
+   * módulo de ventas (admin). A diferencia de findPersonalizerCandidates,
+   * NO filtra por visible_web — una venta interna puede incluir productos
+   * que todavía no están publicados en el catálogo público.
+   */
+  search(query: string, limit?: number): Promise<Product[]>;
 }
 
 const SELECT_COLUMNS =
@@ -116,6 +123,22 @@ export function createProductsRepository(client: SupabaseClient): ProductsReposi
 
       if (error) {
         throw new RepositoryError("ProductsRepository.findPersonalizerCandidates falló", error);
+      }
+      return (data ?? []).map(mapRow);
+    },
+
+    async search(query, limit = 20) {
+      const escaped = query.replace(/[%,()]/g, "");
+      const { data, error } = await client
+        .from("products")
+        .select(SELECT_COLUMNS)
+        .or(`title.ilike.%${escaped}%,brand.ilike.%${escaped}%,model.ilike.%${escaped}%`)
+        .order("created_at", { ascending: false })
+        .limit(limit)
+        .returns<ProductRow[]>();
+
+      if (error) {
+        throw new RepositoryError(`ProductsRepository.search(${query}) falló`, error);
       }
       return (data ?? []).map(mapRow);
     },
