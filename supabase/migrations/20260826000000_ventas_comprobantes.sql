@@ -57,13 +57,25 @@ comment on table public.sale_number_counters is
 -- número) son aceptables y normales en numeración de comprobantes
 -- internos; lo único que nunca puede pasar es una COLISIÓN, y eso este
 -- mecanismo lo garantiza.
+--
+-- El año se calcula en hora de Colombia (America/Bogota), no en UTC: sin
+-- esto, una venta creada la noche del 31 de diciembre (hora Colombia)
+-- podría numerarse como del año siguiente, porque `now()` en Supabase
+-- corre en UTC y esas horas ya caen en el 1 de enero UTC.
+--
+-- `set search_path` fijo (defensa en profundidad, recomendado por el
+-- linter de Supabase para toda función nueva): aunque esta función es
+-- SECURITY INVOKER y ya califica sus referencias con "public." — así que
+-- el riesgo real de secuestro de search_path es bajo — fijarlo explícito
+-- cuesta una línea y elimina la duda por completo.
 
 create or replace function public.set_sale_number()
 returns trigger
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
-  v_year int := extract(year from now())::int;
+  v_year int := extract(year from (now() at time zone 'America/Bogota'))::int;
   v_seq  int;
 begin
   if new.sale_number is not null then
@@ -90,7 +102,12 @@ comment on function public.set_sale_number() is
 
 create table if not exists public.sales (
   id                 uuid        not null default gen_random_uuid(),
-  sale_number        text,                                 -- lo rellena el trigger; la app NUNCA lo envía
+  -- NOT NULL es seguro aquí: el trigger BEFORE INSERT (más abajo) rellena
+  -- esta columna ANTES de que Postgres evalúe la constraint — si por
+  -- cualquier motivo el trigger no llegara a fijarla, el insert falla
+  -- fuerte en vez de dejar pasar en silencio un comprobante sin número.
+  -- La app NUNCA envía este valor.
+  sale_number        text        not null,
   customer_name      text        not null,
   customer_document  text        not null,
   customer_phone     text        not null,
@@ -109,8 +126,15 @@ create table if not exists public.sales (
 
   constraint sales_pkey primary key (id),
   constraint sales_sale_number_key unique (sale_number),
+  -- Formato exacto SV-YYYY-NNNNNN — defensa en profundidad: aunque hoy solo
+  -- lo escribe el trigger, esto impide que una escritura manual futura
+  -- (Studio, script, cambio de código) guarde un número con forma inválida.
+  constraint sales_sale_number_format check (sale_number ~ '^SV-\d{4}-\d{6}$'),
   constraint sales_idempotency_key_key unique (idempotency_key),
-  constraint sales_created_by_fkey foreign key (created_by) references public.profiles(id),
+  -- on delete set null (no bloquear/restringir): si se borra la cuenta de
+  -- un admin, sus ventas históricas deben seguir existiendo intactas —
+  -- created_by es solo metadato de auditoría, no parte del comprobante.
+  constraint sales_created_by_fkey foreign key (created_by) references public.profiles(id) on delete set null,
   constraint sales_payment_method_check check (payment_method in ('efectivo','transferencia','nequi','daviplata','tarjeta','otro')),
   constraint sales_payment_status_check check (payment_status in ('pagado','pendiente','parcial')),
   constraint sales_dian_status_check check (dian_status in ('no_aplica','pendiente_integracion')),
