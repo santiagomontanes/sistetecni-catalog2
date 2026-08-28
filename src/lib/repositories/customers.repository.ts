@@ -3,6 +3,12 @@ import type { CreateCustomerInput, Customer } from "../../types/erp";
 import { RepositoryError } from "./errors";
 
 export interface CustomersRepository {
+  /**
+   * Operación de dominio para el panel ERP. Usa RPC para que customer +
+   * audit_event se confirmen o reviertan en una sola transacción.
+   */
+  createAudited(input: CreateCustomerInput): Promise<Customer>;
+  /** Insert de bajo nivel conservado para migraciones/tests; la UI no debe usarlo. */
   create(input: CreateCustomerInput): Promise<Customer>;
   findById(id: string): Promise<Customer | null>;
   findByDocument(documentNumber: string): Promise<Customer | null>;
@@ -54,6 +60,32 @@ function mapRow(row: CustomerRow): Customer {
 
 export function createCustomersRepository(client: SupabaseClient): CustomersRepository {
   return {
+    async createAudited(input) {
+      const fullName = input.fullName.trim();
+      if (!fullName) throw new RepositoryError("CustomersRepository.createAudited: nombre vacío");
+
+      const { data, error } = await client.rpc("erp_create_customer", {
+        p_full_name: fullName,
+        p_document_type: cleanOptional(input.documentType),
+        p_document_number: cleanOptional(input.documentNumber),
+        p_phone: cleanOptional(input.phone),
+        p_email: cleanOptional(input.email),
+        p_address: cleanOptional(input.address),
+        p_city: cleanOptional(input.city),
+        p_notes: cleanOptional(input.notes),
+      });
+
+      if (error || typeof data !== "string") {
+        throw new RepositoryError("CustomersRepository.createAudited: RPC erp_create_customer falló", error);
+      }
+
+      const created = await this.findById(data);
+      if (!created) {
+        throw new RepositoryError("CustomersRepository.createAudited: cliente creado no pudo releerse");
+      }
+      return created;
+    },
+
     async create(input) {
       const fullName = input.fullName.trim();
       if (!fullName) throw new RepositoryError("CustomersRepository.create: nombre vacío");
