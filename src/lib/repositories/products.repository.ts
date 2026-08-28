@@ -27,6 +27,7 @@ export interface ProductsRepository {
 
 const SELECT_COLUMNS =
   "id,title,brand,model,cpu,ram,storage,screen,price,condition,stock,images,featured,visible_web,created_at," +
+  "erp_stock_enabled,erp_stock_synced_at," +
   "cpu_generation,gpu_type,gpu_model,touch_screen,screen_size_inches,storage_gb";
 
 interface ProductRow {
@@ -45,6 +46,8 @@ interface ProductRow {
   featured: boolean | null;
   visible_web: boolean | null;
   created_at: string | null;
+  erp_stock_enabled?: boolean | null;
+  erp_stock_synced_at?: string | null;
   cpu_generation: number | null;
   gpu_type: string | null;
   gpu_model: string | null;
@@ -70,6 +73,8 @@ function mapRow(row: ProductRow): Product {
     featured: row.featured ?? false,
     visibleWeb: row.visible_web !== false,
     createdAt: row.created_at ? new Date(row.created_at) : null,
+    erpStockEnabled: row.erp_stock_enabled === true,
+    erpStockSyncedAt: row.erp_stock_synced_at ? new Date(row.erp_stock_synced_at) : null,
     cpuGeneration: row.cpu_generation,
     gpuType: (row.gpu_type as GpuType | null) ?? null,
     gpuModel: row.gpu_model,
