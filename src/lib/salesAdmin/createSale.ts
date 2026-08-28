@@ -1,8 +1,9 @@
 /**
- * Fase 1C: creación de venta por computador físico.
+ * Fase 1C/1E: creación de venta por computador físico.
  * El servidor valida producto + unidad y PostgreSQL vuelve a validar/lockear
  * dentro de erp_create_sale_with_units; la base es la autoridad final ante
- * concurrencia.
+ * concurrencia. Desde 1E una unidad reservada también puede consumirse en la
+ * venta real sin liberarla en una transacción previa.
  */
 import type { ProductsRepository } from "../repositories/products.repository";
 import type { ProductUnitsRepository } from "../repositories/productUnits.repository";
@@ -92,8 +93,8 @@ async function resolveItemRows(
         issues.push(`items.${index}: la unidad seleccionada no pertenece a ese producto.`);
         continue;
       }
-      if (unit.status !== "available") {
-        issues.push(`items.${index}: ${unit.unitCode} ya no está disponible para venta.`);
+      if (unit.status !== "available" && unit.status !== "reserved") {
+        issues.push(`items.${index}: ${unit.unitCode} ya no está disponible ni reservada para venta.`);
         continue;
       }
 
@@ -156,9 +157,6 @@ export async function createSaleAdmin(
     input.discountCop
   );
 
-  // Solo enlazar a customers cuando la fila canónica tiene los datos mínimos
-  // que sales exige. Si está incompleta, conservar exclusivamente el snapshot
-  // ingresado en la venta en vez de hacer fallar la transacción.
   const existingCustomer = await deps.customersRepo.findByDocument(input.customerDocument);
   const linkableCustomerId = existingCustomer?.documentNumber && existingCustomer.phone ? existingCustomer.id : null;
 
@@ -187,7 +185,7 @@ export async function createSaleAdmin(
       return {
         ok: false,
         error: "VALIDATION_ERROR",
-        issues: ["Una de las unidades seleccionadas ya no está disponible. Actualiza la selección antes de confirmar."],
+        issues: ["Una de las unidades seleccionadas ya no está disponible o reservada para esta venta. Actualiza la selección antes de confirmar."],
       };
     }
     if (isUniqueViolation(err)) {
