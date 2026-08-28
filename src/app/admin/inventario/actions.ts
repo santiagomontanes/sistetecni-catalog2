@@ -19,6 +19,19 @@ import type { AdminInventoryUnitDTO, AdminProductOptionDTO } from "@/lib/erpAdmi
 import type { ProductUnit } from "@/types/erp";
 import type { Product } from "@/types/product";
 
+interface StockMeta {
+  stock: number;
+  enabled: boolean;
+  syncedAt: string | null;
+}
+
+interface StockMetaRow {
+  id: string;
+  stock: number | null;
+  erp_stock_enabled: boolean | null;
+  erp_stock_synced_at: string | null;
+}
+
 function logUnexpectedError(action: string, err: unknown): void {
   const name = err instanceof Error ? err.name : "UnknownError";
   const message = err instanceof Error ? err.message : String(err);
@@ -40,7 +53,28 @@ async function withAdmin<T>(
   }
 }
 
-function productOption(product: Product): AdminProductOptionDTO {
+async function loadStockMetaMany(client: SupabaseClient, productIds: string[]): Promise<Map<string, StockMeta>> {
+  if (productIds.length === 0) return new Map();
+  const { data, error } = await client
+    .from("products")
+    .select("id,stock,erp_stock_enabled,erp_stock_synced_at")
+    .in("id", productIds)
+    .returns<StockMetaRow[]>();
+  if (error) throw new RepositoryError("loadStockMetaMany falló", error);
+
+  return new Map((data ?? []).map((row) => [row.id, {
+    stock: Number(row.stock ?? 0),
+    enabled: row.erp_stock_enabled === true,
+    syncedAt: row.erp_stock_synced_at ?? null,
+  }]));
+}
+
+async function loadStockMetaOne(client: SupabaseClient, productId: string): Promise<StockMeta | null> {
+  const all = await loadStockMetaMany(client, [productId]);
+  return all.get(productId) ?? null;
+}
+
+function productOption(product: Product, meta?: StockMeta): AdminProductOptionDTO {
   return {
     id: product.id,
     title: product.title,
@@ -49,13 +83,13 @@ function productOption(product: Product): AdminProductOptionDTO {
     cpu: product.cpu,
     ram: product.ram,
     storage: product.storage,
-    stock: product.stock,
+    stock: meta?.stock ?? product.stock,
     visibleWeb: product.visibleWeb,
-    erpStockEnabled: product.erpStockEnabled === true,
+    erpStockEnabled: meta?.enabled ?? false,
   };
 }
 
-function unitDTO(unit: ProductUnit, product: Product | undefined): AdminInventoryUnitDTO {
+function unitDTO(unit: ProductUnit, product: Product | undefined, meta?: StockMeta): AdminInventoryUnitDTO {
   return {
     id: unit.id,
     unitCode: unit.unitCode,
@@ -65,9 +99,9 @@ function unitDTO(unit: ProductUnit, product: Product | undefined): AdminInventor
     productTitle: product?.title ?? "Producto no disponible",
     productBrand: product?.brand ?? "",
     productModel: product?.model ?? "",
-    webStock: product?.stock ?? 0,
-    erpStockEnabled: product?.erpStockEnabled === true,
-    erpStockSyncedAt: product?.erpStockSyncedAt?.toISOString() ?? null,
+    webStock: meta?.stock ?? product?.stock ?? 0,
+    erpStockEnabled: meta?.enabled ?? false,
+    erpStockSyncedAt: meta?.syncedAt ?? null,
     acquisitionCostCop: unit.acquisitionCostCop,
     batteryHealthPercent: unit.batteryHealthPercent,
     storageHealthPercent: unit.storageHealthPercent,
@@ -83,9 +117,12 @@ export async function listInventory(payload: { accessToken: unknown; limit?: unk
     if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
     const units = await createProductUnitsRepository(client).listRecent(parsed.data.limit);
     const productIds = [...new Set(units.map((unit) => unit.productId))];
-    const products = await createProductsRepository(client).findManyByIds(productIds);
+    const [products, stockMeta] = await Promise.all([
+      createProductsRepository(client).findManyByIds(productIds),
+      loadStockMetaMany(client, productIds),
+    ]);
     const byId = new Map(products.map((product) => [product.id, product]));
-    return { ok: true, data: { items: units.map((unit) => unitDTO(unit, byId.get(unit.productId))) } };
+    return { ok: true, data: { items: units.map((unit) => unitDTO(unit, byId.get(unit.productId), stockMeta.get(unit.productId))) } };
   });
 }
 
@@ -94,7 +131,8 @@ export async function searchInventoryProducts(payload: { accessToken: unknown; q
     const parsed = productSearchSchema.safeParse({ query: payload.query });
     if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
     const products = await createProductsRepository(client).search(parsed.data.query, 15);
-    return { ok: true, data: { items: products.map(productOption) } };
+    const stockMeta = await loadStockMetaMany(client, products.map((p) => p.id));
+    return { ok: true, data: { items: products.map((product) => productOption(product, stockMeta.get(product.id))) } };
   });
 }
 
@@ -129,7 +167,8 @@ export async function receiveProductUnit(payload: { accessToken: unknown; [key: 
       specOverrides,
       notes: parsed.data.notes,
     });
-    return { ok: true, data: unitDTO(created, product) };
+    const meta = await loadStockMetaOne(client, created.productId);
+    return { ok: true, data: unitDTO(created, product, meta ?? undefined) };
   });
 }
 
@@ -146,10 +185,11 @@ export async function markUnitAvailable(payload: { accessToken: unknown; unitId:
     }
 
     const updated = await unitsRepo.markAvailable(parsed.data);
-    // Si el producto ya usa stock ERP, el trigger de Fase 1D recalculó
-    // products.stock dentro de la misma transacción del cambio de estado.
-    const product = await createProductsRepository(client).findById(updated.productId);
-    return { ok: true, data: unitDTO(updated, product ?? undefined) };
+    const [product, meta] = await Promise.all([
+      createProductsRepository(client).findById(updated.productId),
+      loadStockMetaOne(client, updated.productId),
+    ]);
+    return { ok: true, data: unitDTO(updated, product ?? undefined, meta ?? undefined) };
   });
 }
 
@@ -172,8 +212,7 @@ export async function setProductStockMode(payload: {
       return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
     }
 
-    const productsRepo = createProductsRepository(client);
-    const current = await productsRepo.findById(parsed.data.productId);
+    const current = await createProductsRepository(client).findById(parsed.data.productId);
     if (!current) return { ok: false, error: "NOT_FOUND" };
 
     const { error } = await client.rpc("erp_set_product_stock_mode", {
@@ -184,16 +223,16 @@ export async function setProductStockMode(payload: {
       throw new RepositoryError("setProductStockMode: RPC erp_set_product_stock_mode falló", error);
     }
 
-    const updated = await productsRepo.findById(parsed.data.productId);
+    const updated = await loadStockMetaOne(client, parsed.data.productId);
     if (!updated) return { ok: false, error: "NOT_FOUND" };
 
     return {
       ok: true,
       data: {
-        productId: updated.id,
+        productId: parsed.data.productId,
         stock: updated.stock,
-        erpStockEnabled: updated.erpStockEnabled === true,
-        erpStockSyncedAt: updated.erpStockSyncedAt?.toISOString() ?? null,
+        erpStockEnabled: updated.enabled,
+        erpStockSyncedAt: updated.syncedAt,
       },
     };
   });
