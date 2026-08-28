@@ -6,10 +6,12 @@ import { mapUnexpectedError } from "@/lib/personalizadorAdmin/errorMapping";
 import type { AdminResult } from "@/lib/personalizadorAdmin/types";
 import { createProductUnitsRepository } from "@/lib/repositories/productUnits.repository";
 import { createProductsRepository } from "@/lib/repositories/products.repository";
+import { RepositoryError } from "@/lib/repositories/errors";
 import {
   inventoryListSchema,
   issuesFromZod,
   productSearchSchema,
+  productStockModeSchema,
   receiveProductUnitAdminSchema,
   unitIdSchema,
 } from "@/lib/erpAdmin/validation";
@@ -49,6 +51,7 @@ function productOption(product: Product): AdminProductOptionDTO {
     storage: product.storage,
     stock: product.stock,
     visibleWeb: product.visibleWeb,
+    erpStockEnabled: product.erpStockEnabled === true,
   };
 }
 
@@ -63,6 +66,8 @@ function unitDTO(unit: ProductUnit, product: Product | undefined): AdminInventor
     productBrand: product?.brand ?? "",
     productModel: product?.model ?? "",
     webStock: product?.stock ?? 0,
+    erpStockEnabled: product?.erpStockEnabled === true,
+    erpStockSyncedAt: product?.erpStockSyncedAt?.toISOString() ?? null,
     acquisitionCostCop: unit.acquisitionCostCop,
     batteryHealthPercent: unit.batteryHealthPercent,
     storageHealthPercent: unit.storageHealthPercent,
@@ -141,7 +146,55 @@ export async function markUnitAvailable(payload: { accessToken: unknown; unitId:
     }
 
     const updated = await unitsRepo.markAvailable(parsed.data);
+    // Si el producto ya usa stock ERP, el trigger de Fase 1D recalculó
+    // products.stock dentro de la misma transacción del cambio de estado.
     const product = await createProductsRepository(client).findById(updated.productId);
     return { ok: true, data: unitDTO(updated, product ?? undefined) };
+  });
+}
+
+export async function setProductStockMode(payload: {
+  accessToken: unknown;
+  productId: unknown;
+  enabled: unknown;
+}): Promise<AdminResult<{
+  productId: string;
+  stock: number;
+  erpStockEnabled: boolean;
+  erpStockSyncedAt: string | null;
+}>> {
+  return withAdmin("setProductStockMode", payload.accessToken, async (client) => {
+    const parsed = productStockModeSchema.safeParse({
+      productId: payload.productId,
+      enabled: payload.enabled,
+    });
+    if (!parsed.success) {
+      return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
+    }
+
+    const productsRepo = createProductsRepository(client);
+    const current = await productsRepo.findById(parsed.data.productId);
+    if (!current) return { ok: false, error: "NOT_FOUND" };
+
+    const { error } = await client.rpc("erp_set_product_stock_mode", {
+      p_product_id: parsed.data.productId,
+      p_enabled: parsed.data.enabled,
+    });
+    if (error) {
+      throw new RepositoryError("setProductStockMode: RPC erp_set_product_stock_mode falló", error);
+    }
+
+    const updated = await productsRepo.findById(parsed.data.productId);
+    if (!updated) return { ok: false, error: "NOT_FOUND" };
+
+    return {
+      ok: true,
+      data: {
+        productId: updated.id,
+        stock: updated.stock,
+        erpStockEnabled: updated.erpStockEnabled === true,
+        erpStockSyncedAt: updated.erpStockSyncedAt?.toISOString() ?? null,
+      },
+    };
   });
 }
