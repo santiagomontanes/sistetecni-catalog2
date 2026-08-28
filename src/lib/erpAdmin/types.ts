@@ -31,6 +31,11 @@ export interface AdminInventoryUnitDTO {
   specOverrides: Record<string, unknown>;
   notes: string | null;
   receivedAt: string | null;
+  reservedAt: string | null;
+  reservationExpiresAt: string | null;
+  reservationCustomerName: string | null;
+  reservationCustomerPhone: string | null;
+  reservationNote: string | null;
 }
 
 export interface AdminProductOptionDTO {
