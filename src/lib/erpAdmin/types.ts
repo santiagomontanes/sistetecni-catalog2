@@ -23,6 +23,8 @@ export interface AdminInventoryUnitDTO {
   productBrand: string;
   productModel: string;
   webStock: number;
+  erpStockEnabled: boolean;
+  erpStockSyncedAt: string | null;
   acquisitionCostCop: number | null;
   batteryHealthPercent: number | null;
   storageHealthPercent: number | null;
@@ -41,6 +43,7 @@ export interface AdminProductOptionDTO {
   storage: string;
   stock: number;
   visibleWeb: boolean;
+  erpStockEnabled: boolean;
 }
 
 export interface CreateCustomerAdminPayload {
