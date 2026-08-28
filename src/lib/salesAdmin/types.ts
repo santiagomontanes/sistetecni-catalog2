@@ -1,5 +1,6 @@
 import type { AdminResult } from "../personalizadorAdmin/types";
 import type { PaymentMethod, PaymentStatus, SaleItemType, SaleItemSpecsSnapshot } from "../../types/sale";
+import type { ProductUnitStatus } from "../../types/erp";
 
 export type { AdminResult };
 
@@ -69,7 +70,11 @@ export interface AdminAvailableUnitDTO {
   productId: string;
   unitCode: string;
   serialNumber: string | null;
+  status: Extract<ProductUnitStatus, "available" | "reserved">;
   batteryHealthPercent: number | null;
   storageHealthPercent: number | null;
   specOverrides: Record<string, unknown>;
+  reservationCustomerName: string | null;
+  reservationCustomerPhone: string | null;
+  reservationExpiresAt: string | null;
 }
