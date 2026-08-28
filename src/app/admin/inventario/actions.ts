@@ -166,6 +166,7 @@ function unitDTO(
     specOverrides: unit.specOverrides,
     notes: unit.notes,
     receivedAt: unit.receivedAt?.toISOString() ?? null,
+    soldAt: unit.soldAt?.toISOString() ?? null,
     reservedAt: operational?.reservedAt ?? null,
     reservationExpiresAt: operational?.reservationExpiresAt ?? null,
     reservationCustomerName: operational?.reservationCustomerName ?? null,
@@ -256,7 +257,6 @@ export async function receiveProductUnit(payload: { accessToken: unknown; [key: 
   });
 }
 
-// Compatibilidad 1C: el botón antiguo puede seguir usando esta acción.
 export async function markUnitAvailable(payload: { accessToken: unknown; unitId: unknown }): Promise<AdminResult<AdminInventoryUnitDTO>> {
   return withAdmin("markUnitAvailable", payload.accessToken, async (client) => {
     const parsed = unitIdSchema.safeParse(payload.unitId);
@@ -308,6 +308,14 @@ export async function transitionUnit(payload: {
         ok: false,
         error: "VALIDATION_ERROR",
         issues: ["Una unidad sin venta previa no puede marcarse como Vendida desde Inventario."],
+      };
+    }
+
+    if (current.status === "repair" && parsed.data.toStatus === "available" && current.soldAt !== null) {
+      return {
+        ok: false,
+        error: "VALIDATION_ERROR",
+        issues: ["Esta reparación pertenece a un equipo ya vendido. Debe devolverse al cliente o retirarse; no puede volver al stock disponible."],
       };
     }
 
