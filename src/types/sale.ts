@@ -1,4 +1,4 @@
-// Corresponde al esquema de supabase/migrations/20260826000000_ventas_comprobantes.sql
+// Corresponde al esquema de ventas + ERP Fase 1C.
 
 export type PaymentMethod = "efectivo" | "transferencia" | "nequi" | "daviplata" | "tarjeta" | "otro";
 
@@ -17,14 +17,10 @@ export const PAYMENT_STATUSES: readonly PaymentStatus[] = ["pagado", "pendiente"
 
 export type SaleItemType = "catalog" | "manual";
 
-/**
- * Reservado para una futura integración de facturación electrónica DIAN —
- * sin lógica asociada todavía. "no_aplica" es el único valor que la app
- * escribe hoy; existe para no tener que rediseñar el esquema más adelante.
- */
+/** Reservado para una futura integración de facturación electrónica DIAN. */
 export type DianStatus = "no_aplica" | "pendiente_integracion";
 
-/** Snapshot de las características relevantes del producto en el momento de la venta. */
+/** Snapshot de las características comerciales del producto al vender. */
 export interface SaleItemSpecsSnapshot {
   brand?: string;
   model?: string;
@@ -39,15 +35,21 @@ export interface SaleItem {
   id: string;
   saleId: string;
   itemType: SaleItemType;
-  /** null si es un ítem manual (producto todavía no publicado en el catálogo). */
+  /** null si es ítem manual. */
   productId: string | null;
+  /** Unidad física exacta entregada. Null en manuales y ventas históricas pre-ERP. */
+  productUnitId: string | null;
+  /** Snapshot legible de la unidad para trazabilidad histórica. */
+  unitCodeSnapshot: string | null;
+  serialNumberSnapshot: string | null;
+  unitSpecOverridesSnapshot: Record<string, unknown> | null;
   productName: string;
   productDescription: string | null;
   productImage: string | null;
   productSpecs: SaleItemSpecsSnapshot | null;
-  /** Precio del catálogo al momento de la venta; null si es manual. Nunca se recalcula después. */
+  /** Precio de catálogo al momento de la venta. */
   originalUnitPriceCop: number | null;
-  /** Precio realmente vendido — puede diferir del original por negociación/descuento puntual del ítem. */
+  /** Precio realmente vendido. */
   unitPriceCop: number;
   quantity: number;
   subtotalCop: number;
@@ -57,8 +59,9 @@ export interface SaleItem {
 
 export interface Sale {
   id: string;
-  /** Generado atómicamente por la base de datos (trigger) — formato SV-2026-000001. Nunca lo envía la app. */
   saleNumber: string;
+  /** Cliente canónico opcional; el snapshot customer_* nunca depende de esta fila después. */
+  customerId: string | null;
   customerName: string;
   customerDocument: string;
   customerPhone: string;
@@ -80,14 +83,16 @@ export interface SaleWithItems extends Sale {
   items: SaleItem[];
 }
 
-/** Ítem tal como lo arma el formulario — sin subtotal (se recalcula siempre server-side). */
+/** Ítem tal como lo arma el formulario; totales y snapshots se resuelven server-side. */
 export type CreateSaleItemInput =
   | {
       itemType: "catalog";
       productId: string;
+      /** Fase 1C: computador físico exacto; una unidad = una venta. */
+      productUnitId: string;
       description?: string;
       unitPriceCop: number;
-      quantity: number;
+      quantity: 1;
     }
   | {
       itemType: "manual";
@@ -107,12 +112,10 @@ export interface CreateSaleInput {
   paymentStatus: PaymentStatus;
   warrantyMonths: number;
   notes?: string | null;
-  /** Generado una vez en el cliente al abrir el formulario — evita ventas duplicadas por doble clic. */
   idempotencyKey: string;
 }
 
 export interface ListSalesFilter {
-  /** Búsqueda unificada sobre sale_number/customer_name/customer_document/customer_phone. */
   search?: string;
   offset?: number;
   pageSize?: number;
