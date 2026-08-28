@@ -40,6 +40,7 @@ declare
   v_sale public.sales%rowtype;
   v_reserved_phone text;
   v_sale_phone text;
+  v_phone_matches boolean;
 begin
   if new.product_unit_id is null then
     return new;
@@ -65,7 +66,13 @@ begin
   v_sale_phone := regexp_replace(coalesce(v_sale.customer_phone, ''), '[^0-9]', '', 'g');
 
   if length(v_reserved_phone) >= 7 then
-    if v_sale_phone <> v_reserved_phone then
+    v_phone_matches := case
+      when length(v_reserved_phone) >= 10 and length(v_sale_phone) >= 10
+        then right(v_reserved_phone, 10) = right(v_sale_phone, 10)
+      else v_reserved_phone = v_sale_phone
+    end;
+
+    if not v_phone_matches then
       raise exception 'reservation_customer_mismatch';
     end if;
   elsif lower(btrim(coalesce(v_unit.reservation_customer_name, ''))) <>
@@ -83,4 +90,4 @@ create trigger sale_items_guard_reserved_customer
   for each row execute function public.erp_guard_reserved_sale_customer();
 
 comment on function public.erp_guard_reserved_sale_customer() is
-  'Fase 1E: impide consumir una reserva en una venta cuyo cliente no coincide con el celular reservado o, sin celular, con el nombre reservado.';
+  'Fase 1E: impide consumir una reserva en una venta cuyo cliente no coincide. Para móviles con indicativo compara los últimos 10 dígitos; sin celular compara nombre normalizado.';
