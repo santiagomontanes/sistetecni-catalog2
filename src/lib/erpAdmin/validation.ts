@@ -58,6 +58,57 @@ export const productStockModeSchema = z
   })
   .strict();
 
+const operationalStatusSchema = z.enum([
+  "inspection",
+  "available",
+  "reserved",
+  "sold",
+  "warranty",
+  "repair",
+  "returned",
+  "retired",
+]);
+
+export const transitionProductUnitSchema = z
+  .object({
+    unitId: z.string().uuid("Selecciona una unidad válida."),
+    toStatus: operationalStatusSchema,
+    reason: optionalTrimmed(500),
+    reservationCustomerName: optionalTrimmed(160),
+    reservationCustomerPhone: optionalTrimmed(50),
+    reservationExpiresAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.toStatus === "reserved") {
+      if (!value.reservationCustomerName || value.reservationCustomerName.length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["reservationCustomerName"],
+          message: "Para reservar debes indicar el nombre del cliente.",
+        });
+      }
+    } else if (
+      value.reservationCustomerName !== undefined ||
+      value.reservationCustomerPhone !== undefined ||
+      value.reservationExpiresAt !== undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["toStatus"],
+        message: "Los datos de reserva solo se aceptan al pasar a Reservado.",
+      });
+    }
+
+    if (["repair", "warranty", "returned", "retired"].includes(value.toStatus) && !value.reason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reason"],
+        message: "Indica el motivo de este cambio de estado.",
+      });
+    }
+  });
+
 export const receiveProductUnitAdminSchema = z.object({
   productId: z.string().uuid("Selecciona un producto válido."),
   serialNumber: optionalTrimmed(120),
