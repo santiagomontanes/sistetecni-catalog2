@@ -29,16 +29,14 @@ function seedSale(overrides: Partial<SaleWithItemsResult> = {}): SaleWithItemsRe
 }
 
 function fakeRepo(sales: SaleWithItemsResult[]): SalesRepository {
+  const notUsed = async (): Promise<SaleWithItemsResult> => {
+    throw new Error("no usado en este test");
+  };
   return {
-    async createWithItems() {
-      throw new Error("no usado en este test");
-    },
-    async findById(id) {
-      return sales.find((s) => s.id === id) ?? null;
-    },
-    async findByIdempotencyKey() {
-      return null;
-    },
+    createWithUnits: notUsed,
+    createWithItems: notUsed,
+    async findById(id) { return sales.find((s) => s.id === id) ?? null; },
+    async findByIdempotencyKey() { return null; },
     async list(filter) {
       const filtered = filter.search
         ? sales.filter((s) => s.saleNumber.includes(filter.search!) || s.customerName.includes(filter.search!))
@@ -56,26 +54,22 @@ test("listSalesAdmin: sin filtro devuelve todas mapeadas al DTO de listado", asy
 });
 
 test("listSalesAdmin: filtro inválido (extra field, .strict()) -> VALIDATION_ERROR", async () => {
-  const repo = fakeRepo([]);
-  const result = await listSalesAdmin({ status: "pagado" }, repo);
+  const result = await listSalesAdmin({ status: "pagado" }, fakeRepo([]));
   assert.equal(result.ok, false);
 });
 
 test("getSaleDetailAdmin: id inexistente -> NOT_FOUND", async () => {
-  const repo = fakeRepo([]);
-  const result = await getSaleDetailAdmin("11111111-1111-1111-1111-111111111111", repo);
+  const result = await getSaleDetailAdmin("11111111-1111-1111-1111-111111111111", fakeRepo([]));
   assert.deepEqual(result, { ok: false, error: "NOT_FOUND" });
 });
 
-test("getSaleDetailAdmin: id con formato inválido -> VALIDATION_ERROR, ni siquiera consulta", async () => {
-  const repo = fakeRepo([]);
-  const result = await getSaleDetailAdmin("no-es-un-uuid", repo);
+test("getSaleDetailAdmin: id con formato inválido -> VALIDATION_ERROR", async () => {
+  const result = await getSaleDetailAdmin("no-es-un-uuid", fakeRepo([]));
   assert.equal(result.ok, false);
 });
 
-test("getSaleDetailAdmin: devuelve el detalle completo con sus ítems", async () => {
-  const repo = fakeRepo([seedSale({ id: "11111111-1111-1111-1111-111111111111" })]);
-  const result = await getSaleDetailAdmin("11111111-1111-1111-1111-111111111111", repo);
+test("getSaleDetailAdmin: devuelve el detalle completo", async () => {
+  const result = await getSaleDetailAdmin("11111111-1111-1111-1111-111111111111", fakeRepo([seedSale({ id: "11111111-1111-1111-1111-111111111111" })]));
   assert.ok(result.ok);
   if (result.ok) assert.equal(result.data.saleNumber, "SV-2026-000001");
 });
