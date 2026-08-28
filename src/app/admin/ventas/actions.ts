@@ -11,6 +11,7 @@ import { createSalesRepository } from "@/lib/repositories/sales.repository";
 import { createProductsRepository } from "@/lib/repositories/products.repository";
 import { createProductUnitsRepository } from "@/lib/repositories/productUnits.repository";
 import { createCustomersRepository } from "@/lib/repositories/customers.repository";
+import { RepositoryError } from "@/lib/repositories/errors";
 
 function logUnexpectedError(action: string, err: unknown): void {
   const name = err instanceof Error ? err.name : "UnknownError";
@@ -62,6 +63,23 @@ export async function searchProducts(payload: { accessToken: unknown; query: unk
   );
 }
 
+interface SellableUnitRow {
+  id: string;
+  product_id: string;
+  unit_code: string;
+  serial_number: string | null;
+  status: "available" | "reserved";
+  battery_health_percent: number | null;
+  storage_health_percent: number | null;
+  spec_overrides: Record<string, unknown> | null;
+  reservation_customer_name: string | null;
+  reservation_customer_phone: string | null;
+  reservation_expires_at: string | null;
+}
+
+// Mantiene el nombre histórico para no romper la página, pero desde 1E devuelve
+// unidades disponibles Y reservadas. Una reservada solo se vuelve sold dentro
+// del RPC transaccional de venta; no se libera previamente en otra transacción.
 export async function listAvailableUnits(payload: {
   accessToken: unknown;
   productId: unknown;
@@ -72,18 +90,33 @@ export async function listAvailableUnits(payload: {
       return { ok: false, error: "VALIDATION_ERROR", issues: ["Producto inválido."] };
     }
 
-    const units = await createProductUnitsRepository(client).listAvailableByProduct(parsed.data);
+    const { data, error } = await client
+      .from("product_units")
+      .select(
+        "id,product_id,unit_code,serial_number,status,battery_health_percent,storage_health_percent,spec_overrides,reservation_customer_name,reservation_customer_phone,reservation_expires_at"
+      )
+      .eq("product_id", parsed.data)
+      .in("status", ["available", "reserved"])
+      .order("received_at", { ascending: true })
+      .returns<SellableUnitRow[]>();
+
+    if (error) throw new RepositoryError("listAvailableUnits: consulta de unidades vendibles falló", error);
+
     return {
       ok: true,
       data: {
-        items: units.map((unit) => ({
+        items: (data ?? []).map((unit) => ({
           id: unit.id,
-          productId: unit.productId,
-          unitCode: unit.unitCode,
-          serialNumber: unit.serialNumber,
-          batteryHealthPercent: unit.batteryHealthPercent,
-          storageHealthPercent: unit.storageHealthPercent,
-          specOverrides: unit.specOverrides,
+          productId: unit.product_id,
+          unitCode: unit.unit_code,
+          serialNumber: unit.serial_number,
+          status: unit.status,
+          batteryHealthPercent: unit.battery_health_percent,
+          storageHealthPercent: unit.storage_health_percent,
+          specOverrides: unit.spec_overrides ?? {},
+          reservationCustomerName: unit.reservation_customer_name,
+          reservationCustomerPhone: unit.reservation_customer_phone,
+          reservationExpiresAt: unit.reservation_expires_at,
         })),
       },
     };
