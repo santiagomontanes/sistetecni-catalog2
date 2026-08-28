@@ -6,13 +6,30 @@ import type {
 } from "../../types/erp";
 import { RepositoryError } from "./errors";
 
+export interface ReceiveProductUnitInput {
+  productId: string;
+  serialNumber?: string | null;
+  acquisitionCostCop?: number | null;
+  batteryHealthPercent?: number | null;
+  storageHealthPercent?: number | null;
+  specOverrides?: Record<string, unknown>;
+  notes?: string | null;
+}
+
 export interface ProductUnitsRepository {
+  /**
+   * Operación de dominio para el panel ERP. Genera unitCode y confirma
+   * product_unit + receipt movement + audit_event en una sola transacción.
+   */
+  receive(input: ReceiveProductUnitInput): Promise<ProductUnit>;
+  /** Insert de bajo nivel conservado para migraciones/tests; la UI no debe usarlo. */
   create(input: CreateProductUnitInput): Promise<ProductUnit>;
   findById(id: string): Promise<ProductUnit | null>;
   findBySerial(serialNumber: string): Promise<ProductUnit | null>;
   findByUnitCode(unitCode: string): Promise<ProductUnit | null>;
   listByProduct(productId: string): Promise<ProductUnit[]>;
   listByStatus(status: ProductUnitStatus, limit?: number): Promise<ProductUnit[]>;
+  listRecent(limit?: number): Promise<ProductUnit[]>;
 }
 
 const UNIT_COLUMNS =
@@ -36,6 +53,11 @@ interface ProductUnitRow {
   created_by: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+interface ReceiveRpcRow {
+  unit_id: string;
+  unit_code: string;
 }
 
 function cleanOptional(value: string | null | undefined): string | null {
@@ -68,6 +90,30 @@ function mapRow(row: ProductUnitRow): ProductUnit {
 
 export function createProductUnitsRepository(client: SupabaseClient): ProductUnitsRepository {
   return {
+    async receive(input) {
+      const { data, error } = await client.rpc("erp_receive_product_unit", {
+        p_product_id: input.productId,
+        p_serial_number: cleanOptional(input.serialNumber),
+        p_acquisition_cost_cop: input.acquisitionCostCop ?? null,
+        p_battery_health_percent: input.batteryHealthPercent ?? null,
+        p_storage_health_percent: input.storageHealthPercent ?? null,
+        p_spec_overrides: input.specOverrides ?? {},
+        p_notes: cleanOptional(input.notes),
+      });
+
+      const rows = (data ?? []) as ReceiveRpcRow[];
+      const unitId = rows[0]?.unit_id;
+      if (error || !unitId) {
+        throw new RepositoryError("ProductUnitsRepository.receive: RPC erp_receive_product_unit falló", error);
+      }
+
+      const created = await this.findById(unitId);
+      if (!created) {
+        throw new RepositoryError("ProductUnitsRepository.receive: unidad creada no pudo releerse");
+      }
+      return created;
+    },
+
     async create(input) {
       const unitCode = input.unitCode.trim();
       if (!unitCode) throw new RepositoryError("ProductUnitsRepository.create: unitCode vacío");
@@ -166,6 +212,20 @@ export function createProductUnitsRepository(client: SupabaseClient): ProductUni
 
       if (error) {
         throw new RepositoryError(`ProductUnitsRepository.listByStatus(${status}) falló`, error);
+      }
+      return (data ?? []).map(mapRow);
+    },
+
+    async listRecent(limit = 100) {
+      const { data, error } = await client
+        .from("product_units")
+        .select(UNIT_COLUMNS)
+        .order("created_at", { ascending: false })
+        .limit(limit)
+        .returns<ProductUnitRow[]>();
+
+      if (error) {
+        throw new RepositoryError("ProductUnitsRepository.listRecent falló", error);
       }
       return (data ?? []).map(mapRow);
     },
