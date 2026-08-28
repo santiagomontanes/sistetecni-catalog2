@@ -18,6 +18,10 @@ export interface AdminSaleItemDTO {
   id: string;
   itemType: SaleItemType;
   productId: string | null;
+  productUnitId: string | null;
+  unitCodeSnapshot: string | null;
+  serialNumberSnapshot: string | null;
+  unitSpecOverridesSnapshot: Record<string, unknown> | null;
   productName: string;
   productDescription: string | null;
   productImage: string | null;
@@ -32,6 +36,7 @@ export interface AdminSaleDetailDTO {
   id: string;
   saleNumber: string;
   createdAt: string | null;
+  customerId: string | null;
   customerName: string;
   customerDocument: string;
   customerPhone: string;
@@ -60,4 +65,14 @@ export interface AdminProductSearchItemDTO {
   image: string | null;
   description: string;
   stock: number;
+}
+
+export interface AdminAvailableUnitDTO {
+  id: string;
+  productId: string;
+  unitCode: string;
+  serialNumber: string | null;
+  batteryHealthPercent: number | null;
+  storageHealthPercent: number | null;
+  specOverrides: Record<string, unknown>;
 }
