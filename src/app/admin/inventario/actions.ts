@@ -11,11 +11,9 @@ import {
   issuesFromZod,
   productSearchSchema,
   receiveProductUnitAdminSchema,
+  unitIdSchema,
 } from "@/lib/erpAdmin/validation";
-import type {
-  AdminInventoryUnitDTO,
-  AdminProductOptionDTO,
-} from "@/lib/erpAdmin/types";
+import type { AdminInventoryUnitDTO, AdminProductOptionDTO } from "@/lib/erpAdmin/types";
 import type { ProductUnit } from "@/types/erp";
 import type { Product } from "@/types/product";
 
@@ -74,55 +72,32 @@ function unitDTO(unit: ProductUnit, product: Product | undefined): AdminInventor
   };
 }
 
-export async function listInventory(payload: {
-  accessToken: unknown;
-  limit?: unknown;
-}): Promise<AdminResult<{ items: AdminInventoryUnitDTO[] }>> {
+export async function listInventory(payload: { accessToken: unknown; limit?: unknown }): Promise<AdminResult<{ items: AdminInventoryUnitDTO[] }>> {
   return withAdmin("listInventory", payload.accessToken, async (client) => {
-    const parsed = inventoryListSchema.safeParse({
-      limit: typeof payload.limit === "number" ? payload.limit : 100,
-    });
-    if (!parsed.success) {
-      return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
-    }
-
+    const parsed = inventoryListSchema.safeParse({ limit: typeof payload.limit === "number" ? payload.limit : 100 });
+    if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
     const units = await createProductUnitsRepository(client).listRecent(parsed.data.limit);
     const productIds = [...new Set(units.map((unit) => unit.productId))];
     const products = await createProductsRepository(client).findManyByIds(productIds);
     const byId = new Map(products.map((product) => [product.id, product]));
-
-    return {
-      ok: true,
-      data: { items: units.map((unit) => unitDTO(unit, byId.get(unit.productId))) },
-    };
+    return { ok: true, data: { items: units.map((unit) => unitDTO(unit, byId.get(unit.productId))) } };
   });
 }
 
-export async function searchInventoryProducts(payload: {
-  accessToken: unknown;
-  query: unknown;
-}): Promise<AdminResult<{ items: AdminProductOptionDTO[] }>> {
+export async function searchInventoryProducts(payload: { accessToken: unknown; query: unknown }): Promise<AdminResult<{ items: AdminProductOptionDTO[] }>> {
   return withAdmin("searchInventoryProducts", payload.accessToken, async (client) => {
     const parsed = productSearchSchema.safeParse({ query: payload.query });
-    if (!parsed.success) {
-      return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
-    }
-
+    if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
     const products = await createProductsRepository(client).search(parsed.data.query, 15);
     return { ok: true, data: { items: products.map(productOption) } };
   });
 }
 
-export async function receiveProductUnit(payload: {
-  accessToken: unknown;
-  [key: string]: unknown;
-}): Promise<AdminResult<AdminInventoryUnitDTO>> {
+export async function receiveProductUnit(payload: { accessToken: unknown; [key: string]: unknown }): Promise<AdminResult<AdminInventoryUnitDTO>> {
   const { accessToken, ...input } = payload;
   return withAdmin("receiveProductUnit", accessToken, async (client) => {
     const parsed = receiveProductUnitAdminSchema.safeParse(input);
-    if (!parsed.success) {
-      return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
-    }
+    if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
 
     const productsRepo = createProductsRepository(client);
     const product = await productsRepo.findById(parsed.data.productId);
@@ -131,13 +106,7 @@ export async function receiveProductUnit(payload: {
     const unitsRepo = createProductUnitsRepository(client);
     if (parsed.data.serialNumber) {
       const existing = await unitsRepo.findBySerial(parsed.data.serialNumber);
-      if (existing) {
-        return {
-          ok: false,
-          error: "VALIDATION_ERROR",
-          issues: ["Ya existe una unidad con ese número de serial."],
-        };
-      }
+      if (existing) return { ok: false, error: "VALIDATION_ERROR", issues: ["Ya existe una unidad con ese número de serial."] };
     }
 
     const specOverrides: Record<string, unknown> = {};
@@ -155,7 +124,24 @@ export async function receiveProductUnit(payload: {
       specOverrides,
       notes: parsed.data.notes,
     });
-
     return { ok: true, data: unitDTO(created, product) };
+  });
+}
+
+export async function markUnitAvailable(payload: { accessToken: unknown; unitId: unknown }): Promise<AdminResult<AdminInventoryUnitDTO>> {
+  return withAdmin("markUnitAvailable", payload.accessToken, async (client) => {
+    const parsed = unitIdSchema.safeParse(payload.unitId);
+    if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
+
+    const unitsRepo = createProductUnitsRepository(client);
+    const current = await unitsRepo.findById(parsed.data);
+    if (!current) return { ok: false, error: "NOT_FOUND" };
+    if (!(["received", "inspection", "available"] as string[]).includes(current.status)) {
+      return { ok: false, error: "VALIDATION_ERROR", issues: [`${current.unitCode} no puede pasar a disponible desde ${current.status}.`] };
+    }
+
+    const updated = await unitsRepo.markAvailable(parsed.data);
+    const product = await createProductsRepository(client).findById(updated.productId);
+    return { ok: true, data: unitDTO(updated, product ?? undefined) };
   });
 }
