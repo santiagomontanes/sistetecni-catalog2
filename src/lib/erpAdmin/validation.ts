@@ -49,6 +49,8 @@ export const productSearchSchema = z.object({
   query: z.string().trim().min(1).max(100),
 });
 
+export const unitIdSchema = z.string().uuid("Selecciona una unidad válida.");
+
 export const receiveProductUnitAdminSchema = z.object({
   productId: z.string().uuid("Selecciona un producto válido."),
   serialNumber: optionalTrimmed(120),
