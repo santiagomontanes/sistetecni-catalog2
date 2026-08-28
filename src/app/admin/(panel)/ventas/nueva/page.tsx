@@ -31,6 +31,7 @@ interface LocalItem {
   productUnitId: string | null;
   unitCode: string | null;
   serialNumber: string | null;
+  unitStatus: "available" | "reserved" | null;
   title: string;
   image: string | null;
   description: string;
@@ -51,6 +52,16 @@ function unitSpecs(unit: AdminAvailableUnitDTO): string {
   if (typeof storage === "number") parts.push(`${storage} GB${typeof storageType === "string" ? ` ${storageType}` : ""}`);
   if (unit.batteryHealthPercent != null) parts.push(`Batería ${unit.batteryHealthPercent}%`);
   return parts.join(" · ");
+}
+
+function formatReservationExpiry(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Intl.DateTimeFormat("es-CO", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
 export default function NuevaVentaPage() {
@@ -88,6 +99,7 @@ export default function NuevaVentaPage() {
   const subtotalCop = useMemo(() => items.reduce((sum, item) => sum + item.unitPriceCop * item.quantity, 0), [items]);
   const clampedDiscount = Math.max(0, Math.min(discountCop, subtotalCop));
   const totalCop = subtotalCop - clampedDiscount;
+  const hasReservedUnit = items.some((item) => item.unitStatus === "reserved");
 
   const resetCatalogPicker = () => {
     setSelectedProduct(null);
@@ -117,13 +129,13 @@ export default function NuevaVentaPage() {
       setError("");
       const result = await callAdminAction(listAvailableUnits, { productId: product.id });
       if (!result.ok) {
-        setError("No fue posible consultar las unidades disponibles.");
+        setError("No fue posible consultar las unidades vendibles.");
         return;
       }
       const alreadySelected = new Set(items.map((item) => item.productUnitId).filter(Boolean));
       setAvailableUnits(result.data.items.filter((unit) => !alreadySelected.has(unit.id)));
     } catch {
-      setError("No fue posible consultar las unidades disponibles.");
+      setError("No fue posible consultar las unidades vendibles.");
     } finally {
       setLoadingUnits(false);
     }
@@ -131,6 +143,12 @@ export default function NuevaVentaPage() {
 
   const addCatalogUnit = (unit: AdminAvailableUnitDTO) => {
     if (!selectedProduct) return;
+
+    if (unit.status === "reserved") {
+      if (!customerName.trim() && unit.reservationCustomerName) setCustomerName(unit.reservationCustomerName);
+      if (!customerPhone.trim() && unit.reservationCustomerPhone) setCustomerPhone(unit.reservationCustomerPhone);
+    }
+
     setItems((prev) => [
       ...prev,
       {
@@ -140,6 +158,7 @@ export default function NuevaVentaPage() {
         productUnitId: unit.id,
         unitCode: unit.unitCode,
         serialNumber: unit.serialNumber,
+        unitStatus: unit.status,
         title: selectedProduct.title,
         image: selectedProduct.image,
         description: selectedProduct.description,
@@ -164,6 +183,7 @@ export default function NuevaVentaPage() {
         productUnitId: null,
         unitCode: null,
         serialNumber: null,
+        unitStatus: null,
         title: manualDescription.trim(),
         image: null,
         description: manualDescription.trim(),
@@ -247,7 +267,7 @@ export default function NuevaVentaPage() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-primary">ERP · Venta por serial</p>
         <h1 className="text-2xl font-bold text-text">Nueva venta</h1>
-        <p className="mt-1 text-sm text-muted">Cada computador debe asociarse a una unidad física Disponible.</p>
+        <p className="mt-1 text-sm text-muted">Cada computador debe asociarse a una unidad física Disponible o Reservada. Una reserva solo puede venderse al cliente asociado.</p>
       </div>
 
       {error ? <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p> : null}
@@ -294,14 +314,18 @@ export default function NuevaVentaPage() {
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-text">{selectedProduct.title}</p><p className="text-xs text-muted">Selecciona la máquina física que se entrega.</p></div><button type="button" onClick={() => { setSelectedProduct(null); setAvailableUnits([]); }} className="text-xs font-semibold text-primary">← Cambiar producto</button></div>
-                {loadingUnits ? <p className="text-sm text-muted">Buscando unidades disponibles...</p> : null}
-                {!loadingUnits && availableUnits.length === 0 ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No hay unidades físicas disponibles de este producto. Recíbela y márcala como Disponible desde Inventario antes de vender.</div> : null}
-                {availableUnits.map((unit) => (
-                  <button type="button" key={unit.id} onClick={() => addCatalogUnit(unit)} className="w-full rounded-xl border border-border bg-white p-4 text-left transition hover:border-primary">
-                    <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-sm font-bold text-primary">{unit.unitCode}</p><p className="text-sm font-medium text-text">Serial: {unit.serialNumber ?? "Sin serial"}</p></div><span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">Disponible</span></div>
-                    {unitSpecs(unit) ? <p className="mt-2 text-xs text-muted">{unitSpecs(unit)}</p> : null}
-                  </button>
-                ))}
+                {loadingUnits ? <p className="text-sm text-muted">Buscando unidades disponibles o reservadas...</p> : null}
+                {!loadingUnits && availableUnits.length === 0 ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No hay unidades físicas disponibles ni reservadas de este producto.</div> : null}
+                {availableUnits.map((unit) => {
+                  const reserved = unit.status === "reserved";
+                  return (
+                    <button type="button" key={unit.id} onClick={() => addCatalogUnit(unit)} className="w-full rounded-xl border border-border bg-white p-4 text-left transition hover:border-primary">
+                      <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-sm font-bold text-primary">{unit.unitCode}</p><p className="text-sm font-medium text-text">Serial: {unit.serialNumber ?? "Sin serial"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${reserved ? "bg-violet-50 text-violet-700" : "bg-green-50 text-green-700"}`}>{reserved ? "Reservado" : "Disponible"}</span></div>
+                      {unitSpecs(unit) ? <p className="mt-2 text-xs text-muted">{unitSpecs(unit)}</p> : null}
+                      {reserved ? <div className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800"><p className="font-semibold">Para: {unit.reservationCustomerName ?? "Cliente"}</p>{unit.reservationCustomerPhone ? <p>Celular: {unit.reservationCustomerPhone}</p> : null}{unit.reservationExpiresAt ? <p>Vence: {formatReservationExpiry(unit.reservationExpiresAt)}</p> : null}</div> : null}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -325,7 +349,7 @@ export default function NuevaVentaPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-3">
                     {item.image ? <img src={item.image} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" /> : null}
-                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-text">{item.title}</p>{item.itemType === "catalog" ? <p className="text-xs font-medium text-primary">{item.unitCode} · Serial {item.serialNumber ?? "sin registrar"}</p> : <span className="inline-block rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold uppercase text-muted">Manual</span>}</div>
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-text">{item.title}</p>{item.itemType === "catalog" ? <p className="text-xs font-medium text-primary">{item.unitCode} · Serial {item.serialNumber ?? "sin registrar"} · {item.unitStatus === "reserved" ? "Reservado" : "Disponible"}</p> : <span className="inline-block rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold uppercase text-muted">Manual</span>}</div>
                   </div>
                   <button type="button" onClick={() => removeItem(item.localId)} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Eliminar</button>
                 </div>
@@ -363,9 +387,10 @@ export default function NuevaVentaPage() {
             <div className="mt-3 space-y-2 text-sm">
               <p><span className="font-semibold text-text">Cliente:</span> {customerName} ({customerDocument})</p>
               <p><span className="font-semibold text-text">Celular:</span> {customerPhone}</p>
-              <div className="rounded-xl border border-border p-3">{items.map((item) => <div key={item.localId} className="py-1 text-sm"><div className="flex justify-between gap-3"><span className="text-muted">{item.quantity} × {item.title}</span><span className="font-medium text-text">{formatCOP(item.unitPriceCop * item.quantity)}</span></div>{item.unitCode ? <p className="text-xs font-medium text-primary">{item.unitCode} · Serial {item.serialNumber ?? "sin registrar"}</p> : null}</div>)}</div>
+              <div className="rounded-xl border border-border p-3">{items.map((item) => <div key={item.localId} className="py-1 text-sm"><div className="flex justify-between gap-3"><span className="text-muted">{item.quantity} × {item.title}</span><span className="font-medium text-text">{formatCOP(item.unitPriceCop * item.quantity)}</span></div>{item.unitCode ? <p className="text-xs font-medium text-primary">{item.unitCode} · Serial {item.serialNumber ?? "sin registrar"}{item.unitStatus === "reserved" ? " · Reserva" : ""}</p> : null}</div>)}</div>
               <div className="space-y-1 rounded-xl bg-surface p-3"><div className="flex justify-between text-sm text-muted"><span>Subtotal</span><span>{formatCOP(subtotalCop)}</span></div><div className="flex justify-between text-sm text-muted"><span>Descuento</span><span>{formatCOP(clampedDiscount)}</span></div><div className="flex justify-between text-base font-bold text-text"><span>Total</span><span>{formatCOP(totalCop)}</span></div></div>
-              <p className="text-muted">Al confirmar, cada unidad seleccionada pasará de Disponible a Vendido en la misma transacción del comprobante.</p>
+              <p className="text-muted">Al confirmar, cada unidad seleccionada pasará de Disponible/Reservado a Vendido en la misma transacción del comprobante.</p>
+              {hasReservedUnit ? <p className="rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800">La venta incluye una reserva. La base verificará que el cliente coincida con la reserva antes de consumirla.</p> : null}
             </div>
             <div className="mt-4 flex gap-2"><button type="button" onClick={() => setShowConfirm(false)} disabled={submitting} className="flex-1 rounded-xl border border-border py-3 text-sm font-semibold text-text disabled:opacity-60">Volver</button><button type="button" onClick={() => void handleConfirm()} disabled={submitting} className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-white disabled:opacity-60">{submitting ? "Guardando..." : "Confirmar y generar comprobante"}</button></div>
           </div>
