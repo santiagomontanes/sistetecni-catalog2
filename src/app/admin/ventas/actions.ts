@@ -1,26 +1,20 @@
 "use server";
 
-/**
- * Server Actions del panel admin de ventas — mismo patrón que
- * src/app/admin/personalizador/actions.ts: cada acción recibe
- * `accessToken` (ver src/lib/personalizadorAdmin/auth.ts, este proyecto
- * no usa cookies de sesión) y pasa primero por requireAdmin() antes de
- * tocar cualquier dato. El wrapper withAdmin() se duplica aquí en vez de
- * extraerse a un helper compartido — cambio mínimo y aislado, sin tocar
- * el archivo existente del personalizador.
- */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/personalizadorAdmin/auth";
 import { mapUnexpectedError } from "@/lib/personalizadorAdmin/errorMapping";
 import { createSaleAdmin, listSalesAdmin, getSaleDetailAdmin, searchProductsForSaleAdmin } from "@/lib/salesAdmin";
+import { productIdSchema } from "@/lib/salesAdmin/validation";
+import type { AdminAvailableUnitDTO } from "@/lib/salesAdmin/types";
 import type { AdminResult } from "@/lib/personalizadorAdmin/types";
 import { createSalesRepository } from "@/lib/repositories/sales.repository";
 import { createProductsRepository } from "@/lib/repositories/products.repository";
+import { createProductUnitsRepository } from "@/lib/repositories/productUnits.repository";
+import { createCustomersRepository } from "@/lib/repositories/customers.repository";
 
 function logUnexpectedError(action: string, err: unknown): void {
   const name = err instanceof Error ? err.name : "UnknownError";
   const message = err instanceof Error ? err.message : String(err);
-  // Nunca se registra nombre/documento/celular de un cliente aquí.
   console.error(`[admin/ventas/actions] "${action}" falló de forma inesperada: ${name}: ${message}`);
 }
 
@@ -45,6 +39,8 @@ export async function createSale(payload: { accessToken: unknown; [key: string]:
     createSaleAdmin(rest, userId, {
       salesRepo: createSalesRepository(client),
       productsRepo: createProductsRepository(client),
+      productUnitsRepo: createProductUnitsRepository(client),
+      customersRepo: createCustomersRepository(client),
     })
   );
 }
@@ -64,4 +60,32 @@ export async function searchProducts(payload: { accessToken: unknown; query: unk
   return withAdmin("searchProducts", payload.accessToken, (client) =>
     searchProductsForSaleAdmin(payload.query, createProductsRepository(client))
   );
+}
+
+export async function listAvailableUnits(payload: {
+  accessToken: unknown;
+  productId: unknown;
+}): Promise<AdminResult<{ items: AdminAvailableUnitDTO[] }>> {
+  return withAdmin("listAvailableUnits", payload.accessToken, async (client) => {
+    const parsed = productIdSchema.safeParse(payload.productId);
+    if (!parsed.success) {
+      return { ok: false, error: "VALIDATION_ERROR", issues: ["Producto inválido."] };
+    }
+
+    const units = await createProductUnitsRepository(client).listAvailableByProduct(parsed.data);
+    return {
+      ok: true,
+      data: {
+        items: units.map((unit) => ({
+          id: unit.id,
+          productId: unit.productId,
+          unitCode: unit.unitCode,
+          serialNumber: unit.serialNumber,
+          batteryHealthPercent: unit.batteryHealthPercent,
+          storageHealthPercent: unit.storageHealthPercent,
+          specOverrides: unit.specOverrides,
+        })),
+      },
+    };
+  });
 }
