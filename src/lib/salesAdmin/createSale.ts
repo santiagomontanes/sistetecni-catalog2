@@ -48,14 +48,21 @@ function repositoryCause(err: unknown): { code?: string; message?: string; detai
   return err.cause as { code?: string; message?: string; details?: string } | undefined;
 }
 
+function repositoryText(err: unknown): string {
+  const cause = repositoryCause(err);
+  return `${cause?.message ?? ""} ${cause?.details ?? ""}`;
+}
+
 function isUniqueViolation(err: unknown): boolean {
   return repositoryCause(err)?.code === "23505";
 }
 
 function isUnitAvailabilityError(err: unknown): boolean {
-  const cause = repositoryCause(err);
-  const text = `${cause?.message ?? ""} ${cause?.details ?? ""}`;
-  return /unit_not_available|unit_product_mismatch|unit_not_found|uq_sale_items_product_unit_once/i.test(text);
+  return /unit_not_available|unit_product_mismatch|unit_not_found|uq_sale_items_product_unit_once/i.test(repositoryText(err));
+}
+
+function isReservationCustomerMismatch(err: unknown): boolean {
+  return /reservation_customer_mismatch/i.test(repositoryText(err));
 }
 
 type ParsedCreateSaleInput = ReturnType<(typeof createSaleSchema)["parse"]>;
@@ -181,6 +188,13 @@ export async function createSaleAdmin(
     const created = await deps.salesRepo.createWithUnits(saleRow, resolved.rows);
     return { ok: true, data: toAdminSaleDetailDTO(created) };
   } catch (err) {
+    if (isReservationCustomerMismatch(err)) {
+      return {
+        ok: false,
+        error: "VALIDATION_ERROR",
+        issues: ["La unidad seleccionada está reservada para otro cliente. Usa los datos de la reserva o libera la reserva desde Inventario."],
+      };
+    }
     if (isUnitAvailabilityError(err)) {
       return {
         ok: false,
