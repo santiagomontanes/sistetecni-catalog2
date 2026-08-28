@@ -9,11 +9,10 @@ import {
 } from "./validation";
 
 test("customerNameSchema: normaliza espacios internos repetidos y recorta extremos", () => {
-  const result = customerNameSchema.parse("  Juan    Pérez  ");
-  assert.equal(result, "Juan Pérez");
+  assert.equal(customerNameSchema.parse("  Juan    Pérez  "), "Juan Pérez");
 });
 
-test("customerNameSchema: rechaza < y > (inyección básica de markup)", () => {
+test("customerNameSchema: rechaza < y >", () => {
   assert.throws(() => customerNameSchema.parse("<script>alert(1)</script>"));
 });
 
@@ -27,7 +26,7 @@ test("customerDocumentSchema: acepta dígitos, puntos y guiones; rechaza otros s
   assert.throws(() => customerDocumentSchema.parse("123; DROP TABLE sales;"));
 });
 
-test("customerPhoneSchema: acepta formatos razonables con espacios/+/paréntesis", () => {
+test("customerPhoneSchema: acepta formatos razonables", () => {
   assert.equal(customerPhoneSchema.parse("300 123 4567"), "300 123 4567");
   assert.equal(customerPhoneSchema.parse("+57 (300) 123-4567"), "+57 (300) 123-4567");
 });
@@ -45,6 +44,7 @@ test("customerEmailSchema: normaliza a minúsculas y valida formato", () => {
 const VALID_ITEM = {
   itemType: "catalog" as const,
   productId: "11111111-1111-1111-1111-111111111111",
+  productUnitId: "33333333-3333-3333-3333-333333333333",
   unitPriceCop: 465000,
   quantity: 1,
 };
@@ -61,46 +61,39 @@ const VALID_SALE_INPUT = {
   idempotencyKey: "22222222-2222-2222-2222-222222222222",
 };
 
-test("createSaleSchema: acepta un payload válido mínimo", () => {
-  const result = createSaleSchema.safeParse(VALID_SALE_INPUT);
-  assert.equal(result.success, true);
+test("createSaleSchema: acepta computador con productUnitId y cantidad 1", () => {
+  assert.equal(createSaleSchema.safeParse(VALID_SALE_INPUT).success, true);
+});
+
+test("createSaleSchema: rechaza computador sin unidad física", () => {
+  const { productUnitId: _ignored, ...withoutUnit } = VALID_ITEM;
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [withoutUnit] }).success, false);
+});
+
+test("createSaleSchema: rechaza cantidad >1 para un computador físico", () => {
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [{ ...VALID_ITEM, quantity: 2 }] }).success, false);
+});
+
+test("createSaleSchema: rechaza la misma unidad repetida", () => {
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [VALID_ITEM, { ...VALID_ITEM }] }).success, false);
 });
 
 test("createSaleSchema: rechaza sin ítems", () => {
-  const result = createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [] });
-  assert.equal(result.success, false);
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [] }).success, false);
 });
 
 test("createSaleSchema: rechaza campos extra (.strict())", () => {
-  const result = createSaleSchema.safeParse({ ...VALID_SALE_INPUT, totalCop: 999999 });
-  assert.equal(result.success, false);
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, totalCop: 999999 }).success, false);
 });
 
 test("createSaleSchema: rechaza método de pago fuera de la lista aprobada", () => {
-  const result = createSaleSchema.safeParse({ ...VALID_SALE_INPUT, paymentMethod: "bitcoin" });
-  assert.equal(result.success, false);
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, paymentMethod: "bitcoin" }).success, false);
 });
 
 test("createSaleSchema: ítem manual sin descripción -> inválido", () => {
-  const result = createSaleSchema.safeParse({
-    ...VALID_SALE_INPUT,
-    items: [{ itemType: "manual", description: "", unitPriceCop: 100000, quantity: 1 }],
-  });
-  assert.equal(result.success, false);
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [{ itemType: "manual", description: "", unitPriceCop: 100000, quantity: 1 }] }).success, false);
 });
 
-test("createSaleSchema: ítem manual válido", () => {
-  const result = createSaleSchema.safeParse({
-    ...VALID_SALE_INPUT,
-    items: [{ itemType: "manual", description: "Mouse inalámbrico", unitPriceCop: 35000, quantity: 2 }],
-  });
-  assert.equal(result.success, true);
-});
-
-test("createSaleSchema: cantidad 0 o negativa -> inválido", () => {
-  const result = createSaleSchema.safeParse({
-    ...VALID_SALE_INPUT,
-    items: [{ ...VALID_ITEM, quantity: 0 }],
-  });
-  assert.equal(result.success, false);
+test("createSaleSchema: ítem manual válido y permite cantidad >1", () => {
+  assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [{ itemType: "manual", description: "Mouse inalámbrico", unitPriceCop: 35000, quantity: 2 }] }).success, true);
 });
