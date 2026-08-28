@@ -1,9 +1,6 @@
 /**
- * Validación Zod del módulo de ventas — nunca se confía en lo que manda el
- * navegador, ni en los totales (siempre se recalculan, ver money.ts) ni en
- * los datos del cliente. Mismo estilo que
- * src/lib/personalizadorAdmin/validation.ts: .strict() en objetos
- * compuestos, formatZodIssues() para mapear errores a strings legibles.
+ * Validación Zod del módulo de ventas. En Fase 1C todo computador de catálogo
+ * debe indicar la unidad física exacta y su cantidad es siempre 1.
  */
 import { z } from "zod";
 import { formatZodIssues } from "../personalizadorAdmin/validation";
@@ -17,14 +14,11 @@ const MAX_QUANTITY = 999;
 const MAX_WARRANTY_MONTHS = 120;
 const MAX_ITEMS_PER_SALE = 50;
 
-/** Colapsa espacios internos repetidos y recorta extremos — "normalizar espacios" del pedido. */
 function normalizeSpaces(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-/** Rechaza los dos caracteres mínimos necesarios para inyectar markup (< >) — el resto ya lo escapa React al renderizar. */
 const noHtmlAngleBrackets = (value: string) => !/[<>]/.test(value);
-
 const uuidSchema = z.string().uuid();
 
 export const customerNameSchema = z
@@ -70,9 +64,10 @@ const catalogItemSchema = z
   .object({
     itemType: z.literal("catalog"),
     productId: uuidSchema,
+    productUnitId: uuidSchema,
     description: shortTextSchema(300).optional(),
     unitPriceCop: moneyCopSchema,
-    quantity: quantitySchema,
+    quantity: z.literal(1, { errorMap: () => ({ message: "Cada computador físico debe venderse como cantidad 1." }) }),
   })
   .strict();
 
@@ -101,7 +96,19 @@ export const createSaleSchema = z
     notes: shortTextSchema(1000).nullable().optional(),
     idempotencyKey: uuidSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const unitIds = value.items
+      .filter((item) => item.itemType === "catalog")
+      .map((item) => item.productUnitId);
+    if (new Set(unitIds).size !== unitIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items"],
+        message: "La misma unidad física no puede agregarse dos veces a una venta.",
+      });
+    }
+  });
 
 export const listSalesFilterSchema = z
   .object({
@@ -112,5 +119,5 @@ export const listSalesFilterSchema = z
   .strict();
 
 export const getSaleSchema = uuidSchema;
-
 export const searchProductsQuerySchema = z.string().trim().min(1, "Escribe algo para buscar.").max(80);
+export const productIdSchema = uuidSchema;
