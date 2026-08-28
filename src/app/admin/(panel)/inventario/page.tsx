@@ -85,6 +85,15 @@ function actionLabel(from: ProductUnitStatus, to: ProductUnitStatus): string {
   return labels[to] ?? STATUS_LABELS[to];
 }
 
+function targetsFor(unit: AdminInventoryUnitDTO): readonly ProductUnitStatus[] {
+  if (unit.status !== "repair") return TARGETS[unit.status];
+  return TARGETS.repair.filter((target) => {
+    if (target === "available") return !unit.soldAt;
+    if (target === "sold") return Boolean(unit.soldAt);
+    return true;
+  });
+}
+
 interface ProductStockSummary {
   productId: string;
   title: string;
@@ -287,10 +296,7 @@ export default function AdminInventarioPage() {
 
       {productStockSummaries.length > 0 ? (
         <section className="space-y-3 rounded-2xl border border-border bg-surface p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary">Fase 1D · Fuente de stock</p>
-            <h2 className="mt-1 text-lg font-bold text-text">Sincronización por producto</h2>
-          </div>
+          <div><p className="text-xs font-semibold uppercase tracking-widest text-primary">Fase 1D · Fuente de stock</p><h2 className="mt-1 text-lg font-bold text-text">Sincronización por producto</h2></div>
           <div className="grid gap-3 lg:grid-cols-2">
             {productStockSummaries.map((summary) => (
               <article key={summary.productId} className="rounded-xl border border-border bg-white p-4">
@@ -326,7 +332,7 @@ export default function AdminInventarioPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((unit) => {
           const details = overrideText(unit);
-          const targets = TARGETS[unit.status].filter((target) => !(target === "sold" && !unit.reservedAt && unit.status === "repair"));
+          const targets = targetsFor(unit);
           const expiredReservation = unit.status === "reserved" && unit.reservationExpiresAt && new Date(unit.reservationExpiresAt).getTime() < Date.now();
           return (
             <article key={unit.id} className="rounded-2xl border border-border bg-white p-5">
@@ -353,6 +359,12 @@ export default function AdminInventarioPage() {
                   {expiredReservation ? <p className="mt-1 font-semibold">Reserva vencida: sigue bloqueada hasta liberarla manualmente.</p> : null}
                   {unit.reservationNote ? <p className="mt-1">Nota: {unit.reservationNote}</p> : null}
                 </div>
+              ) : null}
+
+              {unit.status === "repair" ? (
+                <p className="mt-3 rounded-xl bg-surface px-3 py-2 text-xs text-muted">
+                  {unit.soldAt ? "Reparación postventa: al terminar, devuelve el equipo al cliente." : "Reparación preventa: al terminar, puede volver a Disponible."}
+                </p>
               ) : null}
 
               {unit.notes ? <p className="mt-3 text-xs text-muted">{unit.notes}</p> : null}
