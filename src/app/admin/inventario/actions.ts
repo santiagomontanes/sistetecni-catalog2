@@ -13,10 +13,11 @@ import {
   productSearchSchema,
   productStockModeSchema,
   receiveProductUnitAdminSchema,
+  transitionProductUnitSchema,
   unitIdSchema,
 } from "@/lib/erpAdmin/validation";
 import type { AdminInventoryUnitDTO, AdminProductOptionDTO } from "@/lib/erpAdmin/types";
-import type { ProductUnit } from "@/types/erp";
+import type { ProductUnit, ProductUnitStatus } from "@/types/erp";
 import type { Product } from "@/types/product";
 
 interface StockMeta {
@@ -31,6 +32,35 @@ interface StockMetaRow {
   erp_stock_enabled: boolean | null;
   erp_stock_synced_at: string | null;
 }
+
+interface OperationalMeta {
+  reservedAt: string | null;
+  reservationExpiresAt: string | null;
+  reservationCustomerName: string | null;
+  reservationCustomerPhone: string | null;
+  reservationNote: string | null;
+}
+
+interface OperationalMetaRow {
+  id: string;
+  reserved_at: string | null;
+  reservation_expires_at: string | null;
+  reservation_customer_name: string | null;
+  reservation_customer_phone: string | null;
+  reservation_note: string | null;
+}
+
+const ALLOWED_TARGETS: Record<ProductUnitStatus, readonly ProductUnitStatus[]> = {
+  received: ["inspection", "available", "retired"],
+  inspection: ["available", "repair", "retired"],
+  available: ["reserved", "repair", "retired"],
+  reserved: ["available", "repair", "retired"],
+  sold: ["warranty", "returned"],
+  warranty: ["repair", "sold", "retired"],
+  repair: ["available", "sold", "retired"],
+  returned: ["repair", "retired"],
+  retired: [],
+};
 
 function logUnexpectedError(action: string, err: unknown): void {
   const name = err instanceof Error ? err.name : "UnknownError";
@@ -74,6 +104,29 @@ async function loadStockMetaOne(client: SupabaseClient, productId: string): Prom
   return all.get(productId) ?? null;
 }
 
+async function loadOperationalMetaMany(client: SupabaseClient, unitIds: string[]): Promise<Map<string, OperationalMeta>> {
+  if (unitIds.length === 0) return new Map();
+  const { data, error } = await client
+    .from("product_units")
+    .select("id,reserved_at,reservation_expires_at,reservation_customer_name,reservation_customer_phone,reservation_note")
+    .in("id", unitIds)
+    .returns<OperationalMetaRow[]>();
+  if (error) throw new RepositoryError("loadOperationalMetaMany falló", error);
+
+  return new Map((data ?? []).map((row) => [row.id, {
+    reservedAt: row.reserved_at,
+    reservationExpiresAt: row.reservation_expires_at,
+    reservationCustomerName: row.reservation_customer_name,
+    reservationCustomerPhone: row.reservation_customer_phone,
+    reservationNote: row.reservation_note,
+  }]));
+}
+
+async function loadOperationalMetaOne(client: SupabaseClient, unitId: string): Promise<OperationalMeta | null> {
+  const all = await loadOperationalMetaMany(client, [unitId]);
+  return all.get(unitId) ?? null;
+}
+
 function productOption(product: Product, meta?: StockMeta): AdminProductOptionDTO {
   return {
     id: product.id,
@@ -89,7 +142,12 @@ function productOption(product: Product, meta?: StockMeta): AdminProductOptionDT
   };
 }
 
-function unitDTO(unit: ProductUnit, product: Product | undefined, meta?: StockMeta): AdminInventoryUnitDTO {
+function unitDTO(
+  unit: ProductUnit,
+  product: Product | undefined,
+  stock?: StockMeta,
+  operational?: OperationalMeta
+): AdminInventoryUnitDTO {
   return {
     id: unit.id,
     unitCode: unit.unitCode,
@@ -99,30 +157,56 @@ function unitDTO(unit: ProductUnit, product: Product | undefined, meta?: StockMe
     productTitle: product?.title ?? "Producto no disponible",
     productBrand: product?.brand ?? "",
     productModel: product?.model ?? "",
-    webStock: meta?.stock ?? product?.stock ?? 0,
-    erpStockEnabled: meta?.enabled ?? false,
-    erpStockSyncedAt: meta?.syncedAt ?? null,
+    webStock: stock?.stock ?? product?.stock ?? 0,
+    erpStockEnabled: stock?.enabled ?? false,
+    erpStockSyncedAt: stock?.syncedAt ?? null,
     acquisitionCostCop: unit.acquisitionCostCop,
     batteryHealthPercent: unit.batteryHealthPercent,
     storageHealthPercent: unit.storageHealthPercent,
     specOverrides: unit.specOverrides,
     notes: unit.notes,
     receivedAt: unit.receivedAt?.toISOString() ?? null,
+    reservedAt: operational?.reservedAt ?? null,
+    reservationExpiresAt: operational?.reservationExpiresAt ?? null,
+    reservationCustomerName: operational?.reservationCustomerName ?? null,
+    reservationCustomerPhone: operational?.reservationCustomerPhone ?? null,
+    reservationNote: operational?.reservationNote ?? null,
   };
+}
+
+async function buildUnitDTO(client: SupabaseClient, unit: ProductUnit): Promise<AdminInventoryUnitDTO> {
+  const [product, stock, operational] = await Promise.all([
+    createProductsRepository(client).findById(unit.productId),
+    loadStockMetaOne(client, unit.productId),
+    loadOperationalMetaOne(client, unit.id),
+  ]);
+  return unitDTO(unit, product ?? undefined, stock ?? undefined, operational ?? undefined);
 }
 
 export async function listInventory(payload: { accessToken: unknown; limit?: unknown }): Promise<AdminResult<{ items: AdminInventoryUnitDTO[] }>> {
   return withAdmin("listInventory", payload.accessToken, async (client) => {
     const parsed = inventoryListSchema.safeParse({ limit: typeof payload.limit === "number" ? payload.limit : 100 });
     if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
+
     const units = await createProductUnitsRepository(client).listRecent(parsed.data.limit);
     const productIds = [...new Set(units.map((unit) => unit.productId))];
-    const [products, stockMeta] = await Promise.all([
+    const [products, stockMeta, operationalMeta] = await Promise.all([
       createProductsRepository(client).findManyByIds(productIds),
       loadStockMetaMany(client, productIds),
+      loadOperationalMetaMany(client, units.map((unit) => unit.id)),
     ]);
     const byId = new Map(products.map((product) => [product.id, product]));
-    return { ok: true, data: { items: units.map((unit) => unitDTO(unit, byId.get(unit.productId), stockMeta.get(unit.productId))) } };
+    return {
+      ok: true,
+      data: {
+        items: units.map((unit) => unitDTO(
+          unit,
+          byId.get(unit.productId),
+          stockMeta.get(unit.productId),
+          operationalMeta.get(unit.id)
+        )),
+      },
+    };
   });
 }
 
@@ -172,6 +256,7 @@ export async function receiveProductUnit(payload: { accessToken: unknown; [key: 
   });
 }
 
+// Compatibilidad 1C: el botón antiguo puede seguir usando esta acción.
 export async function markUnitAvailable(payload: { accessToken: unknown; unitId: unknown }): Promise<AdminResult<AdminInventoryUnitDTO>> {
   return withAdmin("markUnitAvailable", payload.accessToken, async (client) => {
     const parsed = unitIdSchema.safeParse(payload.unitId);
@@ -185,11 +270,60 @@ export async function markUnitAvailable(payload: { accessToken: unknown; unitId:
     }
 
     const updated = await unitsRepo.markAvailable(parsed.data);
-    const [product, meta] = await Promise.all([
-      createProductsRepository(client).findById(updated.productId),
-      loadStockMetaOne(client, updated.productId),
-    ]);
-    return { ok: true, data: unitDTO(updated, product ?? undefined, meta ?? undefined) };
+    return { ok: true, data: await buildUnitDTO(client, updated) };
+  });
+}
+
+export async function transitionUnit(payload: {
+  accessToken: unknown;
+  unitId: unknown;
+  toStatus: unknown;
+  reason?: unknown;
+  reservationCustomerName?: unknown;
+  reservationCustomerPhone?: unknown;
+  reservationExpiresAt?: unknown;
+}): Promise<AdminResult<AdminInventoryUnitDTO>> {
+  const { accessToken, ...input } = payload;
+  return withAdmin("transitionUnit", accessToken, async (client) => {
+    const parsed = transitionProductUnitSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
+    }
+
+    const unitsRepo = createProductUnitsRepository(client);
+    const current = await unitsRepo.findById(parsed.data.unitId);
+    if (!current) return { ok: false, error: "NOT_FOUND" };
+
+    const allowed = ALLOWED_TARGETS[current.status];
+    if (!allowed.includes(parsed.data.toStatus)) {
+      return {
+        ok: false,
+        error: "VALIDATION_ERROR",
+        issues: [`${current.unitCode} no puede pasar de ${current.status} a ${parsed.data.toStatus}.`],
+      };
+    }
+
+    if (parsed.data.toStatus === "sold" && current.soldAt === null) {
+      return {
+        ok: false,
+        error: "VALIDATION_ERROR",
+        issues: ["Una unidad sin venta previa no puede marcarse como Vendida desde Inventario."],
+      };
+    }
+
+    const { error } = await client.rpc("erp_transition_product_unit", {
+      p_unit_id: parsed.data.unitId,
+      p_to_status: parsed.data.toStatus,
+      p_reason: parsed.data.reason ?? null,
+      p_reservation_customer_name: parsed.data.reservationCustomerName ?? null,
+      p_reservation_customer_phone: parsed.data.reservationCustomerPhone ?? null,
+      p_reservation_expires_at: parsed.data.reservationExpiresAt ?? null,
+    });
+    if (error) throw new RepositoryError("transitionUnit: RPC erp_transition_product_unit falló", error);
+
+    const updated = await unitsRepo.findById(parsed.data.unitId);
+    if (!updated) return { ok: false, error: "NOT_FOUND" };
+    return { ok: true, data: await buildUnitDTO(client, updated) };
   });
 }
 
@@ -219,9 +353,7 @@ export async function setProductStockMode(payload: {
       p_product_id: parsed.data.productId,
       p_enabled: parsed.data.enabled,
     });
-    if (error) {
-      throw new RepositoryError("setProductStockMode: RPC erp_set_product_stock_mode falló", error);
-    }
+    if (error) throw new RepositoryError("setProductStockMode: RPC erp_set_product_stock_mode falló", error);
 
     const updated = await loadStockMetaOne(client, parsed.data.productId);
     if (!updated) return { ok: false, error: "NOT_FOUND" };
