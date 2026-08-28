@@ -71,7 +71,6 @@ async function resolveItemRows(
 
   const products = catalogProductIds.length > 0 ? await productsRepo.findManyByIds(catalogProductIds) : [];
   const productById = new Map(products.map((p) => [p.id, p]));
-
   const rows: NewSaleItemRow[] = [];
   const issues: string[] = [];
 
@@ -157,12 +156,14 @@ export async function createSaleAdmin(
     input.discountCop
   );
 
-  // Si el cliente ya existe en el ERP por documento, enlazarlo. El RPC toma
-  // la fila canónica como autoridad y conserva el snapshot en sales.customer_*.
+  // Solo enlazar a customers cuando la fila canónica tiene los datos mínimos
+  // que sales exige. Si está incompleta, conservar exclusivamente el snapshot
+  // ingresado en la venta en vez de hacer fallar la transacción.
   const existingCustomer = await deps.customersRepo.findByDocument(input.customerDocument);
+  const linkableCustomerId = existingCustomer?.documentNumber && existingCustomer.phone ? existingCustomer.id : null;
 
   const saleRow: NewSaleRow = {
-    customerId: existingCustomer?.id ?? null,
+    customerId: linkableCustomerId,
     customerName: input.customerName,
     customerDocument: input.customerDocument,
     customerPhone: input.customerPhone,
