@@ -18,10 +18,10 @@ export interface AdminSaleItemDTO {
   id: string;
   itemType: SaleItemType;
   productId: string | null;
-  productUnitId: string | null;
-  unitCodeSnapshot: string | null;
-  serialNumberSnapshot: string | null;
-  unitSpecOverridesSnapshot: Record<string, unknown> | null;
+  productUnitId?: string | null;
+  unitCodeSnapshot?: string | null;
+  serialNumberSnapshot?: string | null;
+  unitSpecOverridesSnapshot?: Record<string, unknown> | null;
   productName: string;
   productDescription: string | null;
   productImage: string | null;
@@ -36,7 +36,7 @@ export interface AdminSaleDetailDTO {
   id: string;
   saleNumber: string;
   createdAt: string | null;
-  customerId: string | null;
+  customerId?: string | null;
   customerName: string;
   customerDocument: string;
   customerPhone: string;
@@ -51,10 +51,7 @@ export interface AdminSaleDetailDTO {
   items: AdminSaleItemDTO[];
 }
 
-export interface AdminSaleListResultDTO {
-  items: AdminSaleListItemDTO[];
-  total: number;
-}
+export interface AdminSaleListResultDTO { items: AdminSaleListItemDTO[]; total: number; }
 
 export interface AdminProductSearchItemDTO {
   id: string;
