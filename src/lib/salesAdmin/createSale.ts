@@ -1,14 +1,12 @@
 /**
- * Orquestación de creación de una venta (B: módulo ventas). El navegador
- * NO decide precio ni total: `selectedProductId`/`unitPriceCop` de cada
- * ítem son solo una propuesta — el servidor relee el producto del
- * catálogo AHORA MISMO para congelar el snapshot (nombre, precio
- * original, specs), y SIEMPRE recalcula subtotal/descuento/total desde
- * cero con money.ts, ignorando cualquier total que mandara el cliente
- * (punto 22 del pedido). El producto se relee UNA SOLA VEZ, en este
- * momento — nunca después (punto 7/12/13: snapshot inmutable).
+ * Fase 1C: creación de venta por computador físico.
+ * El servidor valida producto + unidad y PostgreSQL vuelve a validar/lockear
+ * dentro de erp_create_sale_with_units; la base es la autoridad final ante
+ * concurrencia.
  */
 import type { ProductsRepository } from "../repositories/products.repository";
+import type { ProductUnitsRepository } from "../repositories/productUnits.repository";
+import type { CustomersRepository } from "../repositories/customers.repository";
 import type { NewSaleItemRow, NewSaleRow, SalesRepository } from "../repositories/sales.repository";
 import type { Product } from "../../types/product";
 import type { SaleItemSpecsSnapshot } from "../../types/sale";
@@ -21,6 +19,8 @@ import type { AdminResult, AdminSaleDetailDTO } from "./types";
 export interface CreateSaleDeps {
   salesRepo: SalesRepository;
   productsRepo: ProductsRepository;
+  productUnitsRepo: ProductUnitsRepository;
+  customersRepo: CustomersRepository;
 }
 
 function buildProductSpecsSnapshot(product: Product): SaleItemSpecsSnapshot {
@@ -42,11 +42,19 @@ function buildDefaultCatalogDescription(product: Product): string {
   return parts.length > 0 ? parts.join(" / ") : product.title;
 }
 
-/** SQLSTATE 23505 = unique_violation — el único caso tolerado de "leer luego escribir" en este módulo (ver plan §6). */
+function repositoryCause(err: unknown): { code?: string; message?: string; details?: string } | undefined {
+  if (!(err instanceof RepositoryError)) return undefined;
+  return err.cause as { code?: string; message?: string; details?: string } | undefined;
+}
+
 function isUniqueViolation(err: unknown): boolean {
-  if (!(err instanceof RepositoryError)) return false;
-  const cause = err.cause as { code?: string } | undefined;
-  return cause?.code === "23505";
+  return repositoryCause(err)?.code === "23505";
+}
+
+function isUnitAvailabilityError(err: unknown): boolean {
+  const cause = repositoryCause(err);
+  const text = `${cause?.message ?? ""} ${cause?.details ?? ""}`;
+  return /unit_not_available|unit_product_mismatch|unit_not_found|uq_sale_items_product_unit_once/i.test(text);
 }
 
 type ParsedCreateSaleInput = ReturnType<(typeof createSaleSchema)["parse"]>;
@@ -54,45 +62,63 @@ type ParsedSaleItemInput = ParsedCreateSaleInput["items"][number];
 
 async function resolveItemRows(
   items: ParsedSaleItemInput[],
-  productsRepo: ProductsRepository
+  productsRepo: ProductsRepository,
+  productUnitsRepo: ProductUnitsRepository
 ): Promise<{ ok: true; rows: NewSaleItemRow[] } | { ok: false; issues: string[] }> {
   const catalogProductIds = items
     .filter((item): item is Extract<ParsedSaleItemInput, { itemType: "catalog" }> => item.itemType === "catalog")
     .map((item) => item.productId);
 
-  const products =
-    catalogProductIds.length > 0 ? await productsRepo.findManyByIds(catalogProductIds) : [];
+  const products = catalogProductIds.length > 0 ? await productsRepo.findManyByIds(catalogProductIds) : [];
   const productById = new Map(products.map((p) => [p.id, p]));
 
   const rows: NewSaleItemRow[] = [];
   const issues: string[] = [];
 
-  items.forEach((item, index) => {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
     if (item.itemType === "catalog") {
       const product = productById.get(item.productId);
       if (!product) {
         issues.push(`items.${index}: el producto seleccionado ya no existe en el catálogo.`);
-        return;
+        continue;
       }
+
+      const unit = await productUnitsRepo.findById(item.productUnitId);
+      if (!unit) {
+        issues.push(`items.${index}: la unidad física seleccionada ya no existe.`);
+        continue;
+      }
+      if (unit.productId !== product.id) {
+        issues.push(`items.${index}: la unidad seleccionada no pertenece a ese producto.`);
+        continue;
+      }
+      if (unit.status !== "available") {
+        issues.push(`items.${index}: ${unit.unitCode} ya no está disponible para venta.`);
+        continue;
+      }
+
       rows.push({
         itemType: "catalog",
         productId: product.id,
+        productUnitId: unit.id,
         productName: product.title,
         productDescription: item.description?.trim() || buildDefaultCatalogDescription(product),
         productImage: product.images[0] ?? null,
         productSpecs: buildProductSpecsSnapshot(product),
         originalUnitPriceCop: Math.round(product.price),
         unitPriceCop: item.unitPriceCop,
-        quantity: item.quantity,
-        subtotalCop: computeItemSubtotalCop(item.unitPriceCop, item.quantity),
+        quantity: 1,
+        subtotalCop: computeItemSubtotalCop(item.unitPriceCop, 1),
         sortOrder: index,
       });
-      return;
+      continue;
     }
 
     rows.push({
       itemType: "manual",
       productId: null,
+      productUnitId: null,
       productName: item.description,
       productDescription: null,
       productImage: null,
@@ -103,7 +129,7 @@ async function resolveItemRows(
       subtotalCop: computeItemSubtotalCop(item.unitPriceCop, item.quantity),
       sortOrder: index,
     });
-  });
+  }
 
   if (issues.length > 0) return { ok: false, issues };
   return { ok: true, rows };
@@ -121,21 +147,22 @@ export async function createSaleAdmin(
   const input = parsed.data;
 
   const existing = await deps.salesRepo.findByIdempotencyKey(input.idempotencyKey);
-  if (existing) {
-    return { ok: true, data: toAdminSaleDetailDTO(existing) };
-  }
+  if (existing) return { ok: true, data: toAdminSaleDetailDTO(existing) };
 
-  const resolved = await resolveItemRows(input.items, deps.productsRepo);
-  if (!resolved.ok) {
-    return { ok: false, error: "VALIDATION_ERROR", issues: resolved.issues };
-  }
+  const resolved = await resolveItemRows(input.items, deps.productsRepo, deps.productUnitsRepo);
+  if (!resolved.ok) return { ok: false, error: "VALIDATION_ERROR", issues: resolved.issues };
 
   const totals = computeSaleTotalsCop(
     resolved.rows.map((r) => ({ unitPriceCop: r.unitPriceCop, quantity: r.quantity })),
     input.discountCop
   );
 
+  // Si el cliente ya existe en el ERP por documento, enlazarlo. El RPC toma
+  // la fila canónica como autoridad y conserva el snapshot en sales.customer_*.
+  const existingCustomer = await deps.customersRepo.findByDocument(input.customerDocument);
+
   const saleRow: NewSaleRow = {
+    customerId: existingCustomer?.id ?? null,
     customerName: input.customerName,
     customerDocument: input.customerDocument,
     customerPhone: input.customerPhone,
@@ -152,15 +179,24 @@ export async function createSaleAdmin(
   };
 
   try {
-    const created = await deps.salesRepo.createWithItems(saleRow, resolved.rows);
+    const created = await deps.salesRepo.createWithUnits(saleRow, resolved.rows);
     return { ok: true, data: toAdminSaleDetailDTO(created) };
   } catch (err) {
+    if (isUnitAvailabilityError(err)) {
+      return {
+        ok: false,
+        error: "VALIDATION_ERROR",
+        issues: ["Una de las unidades seleccionadas ya no está disponible. Actualiza la selección antes de confirmar."],
+      };
+    }
     if (isUniqueViolation(err)) {
-      // Carrera de milisegundos entre el findByIdempotencyKey de arriba y este insert
-      // (doble clic casi simultáneo). La garantía real es la constraint UNIQUE de la
-      // base de datos, no la lectura previa — aquí solo se relee el resultado ya creado.
       const raced = await deps.salesRepo.findByIdempotencyKey(input.idempotencyKey);
       if (raced) return { ok: true, data: toAdminSaleDetailDTO(raced) };
+      return {
+        ok: false,
+        error: "VALIDATION_ERROR",
+        issues: ["Una de las unidades seleccionadas ya fue asociada a otra venta."],
+      };
     }
     throw err;
   }
