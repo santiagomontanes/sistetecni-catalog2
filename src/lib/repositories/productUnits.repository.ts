@@ -17,18 +17,17 @@ export interface ReceiveProductUnitInput {
 }
 
 export interface ProductUnitsRepository {
-  /**
-   * Operación de dominio para el panel ERP. Genera unitCode y confirma
-   * product_unit + receipt movement + audit_event en una sola transacción.
-   */
   receive(input: ReceiveProductUnitInput): Promise<ProductUnit>;
-  /** Insert de bajo nivel conservado para migraciones/tests; la UI no debe usarlo. */
   create(input: CreateProductUnitInput): Promise<ProductUnit>;
   findById(id: string): Promise<ProductUnit | null>;
   findBySerial(serialNumber: string): Promise<ProductUnit | null>;
   findByUnitCode(unitCode: string): Promise<ProductUnit | null>;
   listByProduct(productId: string): Promise<ProductUnit[]>;
   listByStatus(status: ProductUnitStatus, limit?: number): Promise<ProductUnit[]>;
+  /** Solo las unidades que la Fase 1C permite vender. */
+  listAvailableByProduct(productId: string): Promise<ProductUnit[]>;
+  /** received/inspection -> available con movimiento + auditoría atómicos. */
+  markAvailable(unitId: string): Promise<ProductUnit>;
   listRecent(limit?: number): Promise<ProductUnit[]>;
 }
 
@@ -73,8 +72,7 @@ function mapRow(row: ProductUnitRow): ProductUnit {
     unitCode: row.unit_code,
     serialNumber: row.serial_number,
     status: row.status,
-    acquisitionCostCop:
-      row.acquisition_cost_cop === null ? null : Number(row.acquisition_cost_cop),
+    acquisitionCostCop: row.acquisition_cost_cop === null ? null : Number(row.acquisition_cost_cop),
     batteryHealthPercent: row.battery_health_percent,
     storageHealthPercent: row.storage_health_percent,
     specOverrides: row.spec_overrides ?? {},
@@ -100,24 +98,19 @@ export function createProductUnitsRepository(client: SupabaseClient): ProductUni
         p_spec_overrides: input.specOverrides ?? {},
         p_notes: cleanOptional(input.notes),
       });
-
       const rows = (data ?? []) as ReceiveRpcRow[];
       const unitId = rows[0]?.unit_id;
       if (error || !unitId) {
         throw new RepositoryError("ProductUnitsRepository.receive: RPC erp_receive_product_unit falló", error);
       }
-
       const created = await this.findById(unitId);
-      if (!created) {
-        throw new RepositoryError("ProductUnitsRepository.receive: unidad creada no pudo releerse");
-      }
+      if (!created) throw new RepositoryError("ProductUnitsRepository.receive: unidad creada no pudo releerse");
       return created;
     },
 
     async create(input) {
       const unitCode = input.unitCode.trim();
       if (!unitCode) throw new RepositoryError("ProductUnitsRepository.create: unitCode vacío");
-
       const payload = {
         product_id: input.productId,
         unit_code: unitCode,
@@ -131,26 +124,13 @@ export function createProductUnitsRepository(client: SupabaseClient): ProductUni
         notes: cleanOptional(input.notes),
         created_by: input.createdBy ?? null,
       };
-
-      const { data, error } = await client
-        .from("product_units")
-        .insert(payload)
-        .select(UNIT_COLUMNS)
-        .single<ProductUnitRow>();
-
-      if (error || !data) {
-        throw new RepositoryError("ProductUnitsRepository.create falló", error);
-      }
+      const { data, error } = await client.from("product_units").insert(payload).select(UNIT_COLUMNS).single<ProductUnitRow>();
+      if (error || !data) throw new RepositoryError("ProductUnitsRepository.create falló", error);
       return mapRow(data);
     },
 
     async findById(id) {
-      const { data, error } = await client
-        .from("product_units")
-        .select(UNIT_COLUMNS)
-        .eq("id", id)
-        .maybeSingle<ProductUnitRow>();
-
+      const { data, error } = await client.from("product_units").select(UNIT_COLUMNS).eq("id", id).maybeSingle<ProductUnitRow>();
       if (error) throw new RepositoryError(`ProductUnitsRepository.findById(${id}) falló`, error);
       return data ? mapRow(data) : null;
     },
@@ -158,75 +138,55 @@ export function createProductUnitsRepository(client: SupabaseClient): ProductUni
     async findBySerial(serialNumber) {
       const serial = serialNumber.trim();
       if (!serial) return null;
-
-      const { data, error } = await client
-        .from("product_units")
-        .select(UNIT_COLUMNS)
-        .ilike("serial_number", serial)
-        .maybeSingle<ProductUnitRow>();
-
-      if (error) {
-        throw new RepositoryError(`ProductUnitsRepository.findBySerial(${serial}) falló`, error);
-      }
+      const { data, error } = await client.from("product_units").select(UNIT_COLUMNS).ilike("serial_number", serial).maybeSingle<ProductUnitRow>();
+      if (error) throw new RepositoryError(`ProductUnitsRepository.findBySerial(${serial}) falló`, error);
       return data ? mapRow(data) : null;
     },
 
     async findByUnitCode(unitCode) {
       const code = unitCode.trim();
       if (!code) return null;
-
-      const { data, error } = await client
-        .from("product_units")
-        .select(UNIT_COLUMNS)
-        .eq("unit_code", code)
-        .maybeSingle<ProductUnitRow>();
-
-      if (error) {
-        throw new RepositoryError(`ProductUnitsRepository.findByUnitCode(${code}) falló`, error);
-      }
+      const { data, error } = await client.from("product_units").select(UNIT_COLUMNS).eq("unit_code", code).maybeSingle<ProductUnitRow>();
+      if (error) throw new RepositoryError(`ProductUnitsRepository.findByUnitCode(${code}) falló`, error);
       return data ? mapRow(data) : null;
     },
 
     async listByProduct(productId) {
-      const { data, error } = await client
-        .from("product_units")
-        .select(UNIT_COLUMNS)
-        .eq("product_id", productId)
-        .order("created_at", { ascending: false })
-        .returns<ProductUnitRow[]>();
-
-      if (error) {
-        throw new RepositoryError(`ProductUnitsRepository.listByProduct(${productId}) falló`, error);
-      }
+      const { data, error } = await client.from("product_units").select(UNIT_COLUMNS).eq("product_id", productId).order("created_at", { ascending: false }).returns<ProductUnitRow[]>();
+      if (error) throw new RepositoryError(`ProductUnitsRepository.listByProduct(${productId}) falló`, error);
       return (data ?? []).map(mapRow);
     },
 
     async listByStatus(status, limit = 100) {
-      const { data, error } = await client
-        .from("product_units")
-        .select(UNIT_COLUMNS)
-        .eq("status", status)
-        .order("created_at", { ascending: false })
-        .limit(limit)
-        .returns<ProductUnitRow[]>();
-
-      if (error) {
-        throw new RepositoryError(`ProductUnitsRepository.listByStatus(${status}) falló`, error);
-      }
+      const { data, error } = await client.from("product_units").select(UNIT_COLUMNS).eq("status", status).order("created_at", { ascending: false }).limit(limit).returns<ProductUnitRow[]>();
+      if (error) throw new RepositoryError(`ProductUnitsRepository.listByStatus(${status}) falló`, error);
       return (data ?? []).map(mapRow);
     },
 
-    async listRecent(limit = 100) {
+    async listAvailableByProduct(productId) {
       const { data, error } = await client
         .from("product_units")
         .select(UNIT_COLUMNS)
-        .order("created_at", { ascending: false })
-        .limit(limit)
+        .eq("product_id", productId)
+        .eq("status", "available")
+        .order("received_at", { ascending: true })
         .returns<ProductUnitRow[]>();
+      if (error) throw new RepositoryError(`ProductUnitsRepository.listAvailableByProduct(${productId}) falló`, error);
+      return (data ?? []).map(mapRow);
+    },
 
-      if (error) {
-        throw new RepositoryError("ProductUnitsRepository.listRecent falló", error);
-      }
+    async markAvailable(unitId) {
+      const { data, error } = await client.rpc("erp_mark_unit_available", { p_unit_id: unitId });
+      const id = typeof data === "string" ? data : unitId;
+      if (error) throw new RepositoryError("ProductUnitsRepository.markAvailable: RPC erp_mark_unit_available falló", error);
+      const updated = await this.findById(id);
+      if (!updated) throw new RepositoryError("ProductUnitsRepository.markAvailable: unidad actualizada no pudo releerse");
+      return updated;
+    },
+
+    async listRecent(limit = 100) {
+      const { data, error } = await client.from("product_units").select(UNIT_COLUMNS).order("created_at", { ascending: false }).limit(limit).returns<ProductUnitRow[]>();
+      if (error) throw new RepositoryError("ProductUnitsRepository.listRecent falló", error);
       return (data ?? []).map(mapRow);
     },
   };
