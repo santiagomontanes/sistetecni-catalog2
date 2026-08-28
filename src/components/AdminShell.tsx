@@ -7,10 +7,12 @@ import ProtectedAdmin from "@/components/ProtectedAdmin";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: "🏠", exact: true },
+  { href: "/admin/clientes", label: "Clientes", icon: "👥", exact: false },
+  { href: "/admin/inventario", label: "Inventario", icon: "🏷️", exact: false },
   { href: "/admin/productos", label: "Productos", icon: "📦", exact: false },
+  { href: "/admin/ventas", label: "Ventas", icon: "💵", exact: false },
   { href: "/admin/upgrades", label: "Upgrades", icon: "🔧", exact: false },
   { href: "/admin/cotizaciones", label: "Cotizaciones", icon: "🧾", exact: false },
-  { href: "/admin/ventas", label: "Ventas", icon: "💵", exact: false },
   { href: "/admin/galeria", label: "Galería", icon: "🖼️", exact: false },
   { href: "/admin/media", label: "Media inicio", icon: "🎬", exact: false },
   { href: "/admin/testimonios", label: "Testimonios", icon: "✍️", exact: false },
@@ -27,7 +29,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <aside className="w-48 shrink-0">
           <nav className="sticky top-24 rounded-2xl border border-border bg-surface p-3 space-y-1">
             <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-muted">
-              Panel Admin
+              ERP Sistetecni
             </p>
             {navItems.map((item) => {
               const isActive = item.exact
