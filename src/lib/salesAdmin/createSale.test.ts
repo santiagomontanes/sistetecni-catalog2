@@ -94,6 +94,7 @@ function createFakeUnitsRepo(units: ProductUnit[]): ProductUnitsRepository {
 
 function createFakeCustomersRepo(): CustomersRepository {
   return {
+    async createAudited() { throw new Error("not used"); },
     async create() { throw new Error("not used"); },
     async findById() { return null; },
     async findByDocument() { return null; },
