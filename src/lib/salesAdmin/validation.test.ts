@@ -66,7 +66,12 @@ test("createSaleSchema: acepta computador con productUnitId y cantidad 1", () =>
 });
 
 test("createSaleSchema: rechaza computador sin unidad física", () => {
-  const { productUnitId: _ignored, ...withoutUnit } = VALID_ITEM;
+  const withoutUnit = {
+    itemType: VALID_ITEM.itemType,
+    productId: VALID_ITEM.productId,
+    unitPriceCop: VALID_ITEM.unitPriceCop,
+    quantity: VALID_ITEM.quantity,
+  };
   assert.equal(createSaleSchema.safeParse({ ...VALID_SALE_INPUT, items: [withoutUnit] }).success, false);
 });
 
