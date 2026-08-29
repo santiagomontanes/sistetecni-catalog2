@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import type { Product } from "@/types/product";
 
 interface WhatsAppButtonProps {
@@ -19,6 +22,11 @@ export default function WhatsAppButton({
   product,
   fixed = true,
 }: WhatsAppButtonProps) {
+  const pathname = usePathname();
+
+  // El botón comercial flotante estorba operaciones del ERP, especialmente en móvil.
+  if (fixed && pathname.startsWith("/admin")) return null;
+
   const phoneValue = (phone ?? "573115996339").replace(/\D/g, "");
 
   const message = product
@@ -33,9 +41,7 @@ Estoy interesado en este equipo:
 ¿Sigue disponible?`
     : "Hola 👋 quiero más información sobre sus productos disponibles.";
 
-  const url = `https://wa.me/${phoneValue}?text=${encodeURIComponent(
-    message
-  )}`;
+  const url = `https://wa.me/${phoneValue}?text=${encodeURIComponent(message)}`;
 
   return (
     <a
