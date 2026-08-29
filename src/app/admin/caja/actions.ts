@@ -135,10 +135,10 @@ export async function findPurchaseForCash(payload: {
   accessToken: unknown;
   purchaseNumber: unknown;
 }): Promise<AdminResult<{ id: string; purchaseNumber: string; totalCop: number; supplier: string }>> {
-  if (
-    typeof payload.purchaseNumber !== "string" ||
-    !/^COMP-\d{6}$/.test(payload.purchaseNumber.trim().toUpperCase())
-  ) {
+  const purchaseNumber =
+    typeof payload.purchaseNumber === "string" ? payload.purchaseNumber.trim().toUpperCase() : "";
+
+  if (!/^COMP-\d{6}$/.test(purchaseNumber)) {
     return { ok: false, error: "VALIDATION_ERROR", issues: ["Usa un número COMP-000000 válido."] };
   }
 
@@ -146,7 +146,7 @@ export async function findPurchaseForCash(payload: {
     const { data, error } = await client
       .from("purchases")
       .select("id,purchase_number,total_cost_cop,supplier_name_snapshot")
-      .eq("purchase_number", payload.purchaseNumber.trim().toUpperCase())
+      .eq("purchase_number", purchaseNumber)
       .maybeSingle<{
         id: string;
         purchase_number: string;
