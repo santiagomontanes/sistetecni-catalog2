@@ -1,0 +1,21 @@
+"use server";
+
+import type {SupabaseClient} from "@supabase/supabase-js";
+import {requireAdmin} from "@/lib/personalizadorAdmin/auth";
+import {mapUnexpectedError} from "@/lib/personalizadorAdmin/errorMapping";
+import type {AdminResult} from "@/lib/personalizadorAdmin/types";
+import {RepositoryError} from "@/lib/repositories/errors";
+import {createProfitabilityRepository} from "@/lib/repositories/profitability.repository";
+import {addCostEntrySchema,issuesFromProfitabilityZod,profitabilityListSchema,reverseCostEntrySchema,unitProfitabilityIdSchema} from "@/lib/profitabilityAdmin/validation";
+import type {AdminProfitabilityDashboardDTO,AdminUnitProfitabilityDTO} from "@/lib/profitabilityAdmin/types";
+
+async function withAdmin<T>(accessToken:unknown,fn:(client:SupabaseClient)=>Promise<AdminResult<T>>):Promise<AdminResult<T>>{try{const{client}=await requireAdmin(accessToken);return await fn(client);}catch(err){return mapUnexpectedError(err);}}
+function causeText(err:unknown){if(!(err instanceof RepositoryError))return"";const c=err.cause as{message?:string;details?:string}|undefined;return`${c?.message??""} ${c?.details??""}`;}
+
+export async function listProfitability(payload:{accessToken:unknown;limit?:unknown}):Promise<AdminResult<AdminProfitabilityDashboardDTO>>{return withAdmin(payload.accessToken,async client=>{const p=profitabilityListSchema.safeParse({limit:typeof payload.limit==="number"?payload.limit:100});if(!p.success)return{ok:false,error:"VALIDATION_ERROR",issues:issuesFromProfitabilityZod(p.error)};return{ok:true,data:await createProfitabilityRepository(client).listDashboard(p.data.limit)};});}
+
+export async function getUnitProfitability(payload:{accessToken:unknown;unitId:unknown}):Promise<AdminResult<AdminUnitProfitabilityDTO>>{return withAdmin(payload.accessToken,async client=>{const p=unitProfitabilityIdSchema.safeParse(payload.unitId);if(!p.success)return{ok:false,error:"VALIDATION_ERROR",issues:issuesFromProfitabilityZod(p.error)};const item=await createProfitabilityRepository(client).findUnit(p.data);return item?{ok:true,data:item}:{ok:false,error:"NOT_FOUND"};});}
+
+export async function addCostEntry(payload:{accessToken:unknown;[key:string]:unknown}):Promise<AdminResult<AdminUnitProfitabilityDTO|{saleId:string}>>{const{accessToken,...input}=payload;return withAdmin(accessToken,async client=>{const p=addCostEntrySchema.safeParse(input);if(!p.success)return{ok:false,error:"VALIDATION_ERROR",issues:issuesFromProfitabilityZod(p.error)};try{const{error}=await client.rpc("erp_add_cost_entry",{p_scope_type:p.data.scopeType,p_scope_id:p.data.scopeId,p_category:p.data.category,p_description:p.data.description,p_amount_cop:p.data.amountCop,p_incurred_at:p.data.incurredAt??new Date().toISOString()});if(error)throw new RepositoryError("erp_add_cost_entry falló",error);if(p.data.scopeType==="unit"){const item=await createProfitabilityRepository(client).findUnit(p.data.scopeId);if(!item)return{ok:false,error:"NOT_FOUND"};return{ok:true,data:item};}return{ok:true,data:{saleId:p.data.scopeId}};}catch(err){const t=causeText(err);if(/unit_not_found|sale_not_found/i.test(t))return{ok:false,error:"NOT_FOUND"};throw err;}});}
+
+export async function reverseCostEntry(payload:{accessToken:unknown;unitId:unknown;costEntryId:unknown;reason:unknown}):Promise<AdminResult<AdminUnitProfitabilityDTO>>{return withAdmin(payload.accessToken,async client=>{const up=unitProfitabilityIdSchema.safeParse(payload.unitId);const p=reverseCostEntrySchema.safeParse({costEntryId:payload.costEntryId,reason:payload.reason});if(!up.success||!p.success)return{ok:false,error:"VALIDATION_ERROR",issues:[...(up.success?[]:issuesFromProfitabilityZod(up.error)),...(p.success?[]:issuesFromProfitabilityZod(p.error))]};try{const{error}=await client.rpc("erp_reverse_cost_entry",{p_cost_entry_id:p.data.costEntryId,p_reason:p.data.reason});if(error)throw new RepositoryError("erp_reverse_cost_entry falló",error);const item=await createProfitabilityRepository(client).findUnit(up.data);if(!item)return{ok:false,error:"NOT_FOUND"};return{ok:true,data:item};}catch(err){const t=causeText(err);if(/already_reversed|only_cost_can_be_reversed/i.test(t))return{ok:false,error:"VALIDATION_ERROR",issues:["Ese costo ya fue reversado o no admite reverso."]};throw err;}});}
