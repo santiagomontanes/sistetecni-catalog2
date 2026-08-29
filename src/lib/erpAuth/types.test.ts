@@ -1,0 +1,5 @@
+import{test}from"node:test";import assert from"node:assert/strict";import{roleHasPermission}from"./types";
+test("vendedor vende y reserva pero no ve rentabilidad",()=>{assert.equal(roleHasPermission("vendedor","sales.manage"),true);assert.equal(roleHasPermission("vendedor","inventory.reserve"),true);assert.equal(roleHasPermission("vendedor","profitability.view"),false);});
+test("técnico gestiona garantía pero no vende",()=>{assert.equal(roleHasPermission("tecnico","warranties.manage"),true);assert.equal(roleHasPermission("tecnico","sales.manage"),false);});
+test("caja lee compras y gestiona caja sin crearlas",()=>{assert.equal(roleHasPermission("caja","purchases.read"),true);assert.equal(roleHasPermission("caja","purchases.manage"),false);assert.equal(roleHasPermission("caja","cash.manage"),true);});
+test("bodega maneja inventario y compras, no utilidad",()=>{assert.equal(roleHasPermission("bodega","inventory.manage"),true);assert.equal(roleHasPermission("bodega","purchases.manage"),true);assert.equal(roleHasPermission("bodega","profitability.view"),false);});
