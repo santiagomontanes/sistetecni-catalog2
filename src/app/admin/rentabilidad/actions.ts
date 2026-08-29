@@ -6,13 +6,15 @@ import {mapUnexpectedError} from "@/lib/personalizadorAdmin/errorMapping";
 import type {AdminResult} from "@/lib/personalizadorAdmin/types";
 import {RepositoryError} from "@/lib/repositories/errors";
 import {createProfitabilityRepository} from "@/lib/repositories/profitability.repository";
-import {addCostEntrySchema,issuesFromProfitabilityZod,profitabilityListSchema,reverseCostEntrySchema,unitProfitabilityIdSchema} from "@/lib/profitabilityAdmin/validation";
+import {addCostEntrySchema,issuesFromProfitabilityZod,profitabilityListSchema,reverseCostEntrySchema,unitCodeLookupSchema,unitProfitabilityIdSchema} from "@/lib/profitabilityAdmin/validation";
 import type {AdminProfitabilityDashboardDTO,AdminUnitProfitabilityDTO} from "@/lib/profitabilityAdmin/types";
 
 async function withAdmin<T>(accessToken:unknown,fn:(client:SupabaseClient)=>Promise<AdminResult<T>>):Promise<AdminResult<T>>{try{const{client}=await requireAdmin(accessToken);return await fn(client);}catch(err){return mapUnexpectedError(err);}}
 function causeText(err:unknown){if(!(err instanceof RepositoryError))return"";const c=err.cause as{message?:string;details?:string}|undefined;return`${c?.message??""} ${c?.details??""}`;}
 
 export async function listProfitability(payload:{accessToken:unknown;limit?:unknown}):Promise<AdminResult<AdminProfitabilityDashboardDTO>>{return withAdmin(payload.accessToken,async client=>{const p=profitabilityListSchema.safeParse({limit:typeof payload.limit==="number"?payload.limit:100});if(!p.success)return{ok:false,error:"VALIDATION_ERROR",issues:issuesFromProfitabilityZod(p.error)};return{ok:true,data:await createProfitabilityRepository(client).listDashboard(p.data.limit)};});}
+
+export async function findUnitByCode(payload:{accessToken:unknown;unitCode:unknown}):Promise<AdminResult<{unitId:string}>>{return withAdmin(payload.accessToken,async client=>{const p=unitCodeLookupSchema.safeParse(payload.unitCode);if(!p.success)return{ok:false,error:"VALIDATION_ERROR",issues:issuesFromProfitabilityZod(p.error)};const{data,error}=await client.from("product_units").select("id").eq("unit_code",p.data).maybeSingle<{id:string}>();if(error)throw new RepositoryError("findUnitByCode falló",error);return data?{ok:true,data:{unitId:data.id}}:{ok:false,error:"NOT_FOUND"};});}
 
 export async function getUnitProfitability(payload:{accessToken:unknown;unitId:unknown}):Promise<AdminResult<AdminUnitProfitabilityDTO>>{return withAdmin(payload.accessToken,async client=>{const p=unitProfitabilityIdSchema.safeParse(payload.unitId);if(!p.success)return{ok:false,error:"VALIDATION_ERROR",issues:issuesFromProfitabilityZod(p.error)};const item=await createProfitabilityRepository(client).findUnit(p.data);return item?{ok:true,data:item}:{ok:false,error:"NOT_FOUND"};});}
 
