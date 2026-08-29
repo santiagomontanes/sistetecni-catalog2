@@ -21,6 +21,7 @@ export interface AdminCostEntryDTO {
   reversed:boolean;
 }
 
+export interface AdminProfitabilityUnitRefDTO { unitId:string; unitCode:string; serialNumber:string|null; }
 export interface AdminProfitabilitySaleDTO {
   saleId:string;
   saleNumber:string;
@@ -36,6 +37,7 @@ export interface AdminProfitabilitySaleDTO {
   physicalItemCount:number;
   manualItemCount:number;
   costingStatus:ProfitabilityCostingStatus;
+  units:AdminProfitabilityUnitRefDTO[];
 }
 
 export interface AdminProfitabilitySummaryDTO {
@@ -50,10 +52,7 @@ export interface AdminProfitabilitySummaryDTO {
   completeProfitCop:number;
 }
 
-export interface AdminProfitabilityDashboardDTO {
-  summary:AdminProfitabilitySummaryDTO;
-  sales:AdminProfitabilitySaleDTO[];
-}
+export interface AdminProfitabilityDashboardDTO { summary:AdminProfitabilitySummaryDTO; sales:AdminProfitabilitySaleDTO[]; }
 
 export interface AdminUnitProfitabilityDTO {
   unitId:string;
