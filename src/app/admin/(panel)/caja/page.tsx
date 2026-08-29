@@ -14,8 +14,28 @@ import { formatCOP } from "@/lib/personalizadorUi";
 import type { CashMovementDTO, CashSessionDTO, PaymentMethod } from "@/lib/adminPhase2/types";
 
 const METHODS: PaymentMethod[] = ["efectivo", "transferencia", "nequi", "daviplata", "tarjeta", "otro"];
+const CASH_TIMEOUT_MS = 10_000;
 
 type BusyAction = "load" | "open" | "close" | "movement" | "reverse" | null;
+
+function withCashTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error("CASH_REQUEST_TIMEOUT")),
+      CASH_TIMEOUT_MS
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
 
 export default function CajaPage() {
   const [open, setOpen] = useState<CashSessionDTO | null>(null);
@@ -28,15 +48,19 @@ export default function CajaPage() {
     setBusy("load");
     setError("");
     try {
-      const result = await callAdminAction(getCashDashboard, {});
+      const result = await withCashTimeout(callAdminAction(getCashDashboard, {}));
       if (!result.ok) {
-        setError("No fue posible cargar caja. Revisa que la migración de corrección de Caja esté aplicada en STAGING.");
+        setError("No fue posible cargar caja. La sesión o el permiso de Caja fue rechazado por el servidor.");
         return;
       }
       setOpen(result.data.open);
       setMovements(result.data.movements);
-    } catch {
-      setError("Caja no respondió correctamente. Recarga la página después de verificar la migración de corrección.");
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT"
+          ? "Caja tardó más de 10 segundos en responder. El botón ya fue habilitado nuevamente; revisa la terminal para identificar qué llamada quedó bloqueada."
+          : "Caja no respondió correctamente. Revisa la terminal del servidor de desarrollo."
+      );
     } finally {
       setBusy(null);
     }
@@ -80,19 +104,25 @@ export default function CajaPage() {
     setError("");
     setMessage("");
     try {
-      const result = await callAdminAction(openCash, { openingCashCop: amount, notes });
+      const result = await withCashTimeout(
+        callAdminAction(openCash, { openingCashCop: amount, notes })
+      );
       if (!result.ok) {
         setError(
           result.error === "VALIDATION_ERROR"
             ? result.issues.join(" ")
-            : "No se pudo abrir caja. Si ya existe una sesión abierta, recarga la pantalla."
+            : "No se pudo abrir caja. Si ya existe una sesión abierta, pulsa Actualizar."
         );
         return;
       }
       setMessage("Caja abierta correctamente.");
       await load();
-    } catch {
-      setError("La apertura de caja no respondió correctamente. Recarga para verificar si la sesión alcanzó a abrirse.");
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT"
+          ? "La apertura tardó más de 10 segundos. Pulsa Actualizar para comprobar si la sesión alcanzó a crearse."
+          : "La apertura de caja no respondió correctamente."
+      );
     } finally {
       setBusy(null);
     }
@@ -110,19 +140,25 @@ export default function CajaPage() {
     setError("");
     setMessage("");
     try {
-      const result = await callAdminAction(closeCash, {
-        sessionId: open.id,
-        countedCashCop: amount,
-        notes,
-      });
+      const result = await withCashTimeout(
+        callAdminAction(closeCash, {
+          sessionId: open.id,
+          countedCashCop: amount,
+          notes,
+        })
+      );
       if (!result.ok) {
         setError(result.error === "VALIDATION_ERROR" ? result.issues.join(" ") : "No se pudo cerrar caja.");
         return;
       }
       setMessage("Caja cerrada correctamente.");
       await load();
-    } catch {
-      setError("El cierre de caja no respondió correctamente.");
+    } catch (caught) {
+      setError(
+        caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT"
+          ? "El cierre tardó más de 10 segundos. Pulsa Actualizar antes de volver a intentarlo."
+          : "El cierre de caja no respondió correctamente."
+      );
     } finally {
       setBusy(null);
     }
@@ -140,13 +176,18 @@ export default function CajaPage() {
     if (type === "purchase_payment") {
       const number = prompt("Número de compra (ej. COMP-000001):")?.trim().toUpperCase();
       if (!number) return;
-      const found = await callAdminAction(findPurchaseForCash, { purchaseNumber: number });
-      if (!found.ok) {
-        setError(found.error === "VALIDATION_ERROR" ? found.issues.join(" ") : "No encontré esa compra.");
+      try {
+        const found = await withCashTimeout(callAdminAction(findPurchaseForCash, { purchaseNumber: number }));
+        if (!found.ok) {
+          setError(found.error === "VALIDATION_ERROR" ? found.issues.join(" ") : "No encontré esa compra.");
+          return;
+        }
+        purchaseId = found.data.id;
+        purchaseLabel = `${found.data.purchaseNumber} · ${found.data.supplier} · ${formatCOP(found.data.totalCop)}`;
+      } catch {
+        setError("La consulta de la compra no respondió.");
         return;
       }
-      purchaseId = found.data.id;
-      purchaseLabel = `${found.data.purchaseNumber} · ${found.data.supplier} · ${formatCOP(found.data.totalCop)}`;
       if (!confirm(`Registrar pago para ${purchaseLabel}?`)) return;
     }
 
@@ -160,19 +201,23 @@ export default function CajaPage() {
     setBusy("movement");
     setError("");
     try {
-      const result = await callAdminAction(addCashMovement, {
-        movementType: type,
-        paymentMethod: method,
-        amountCop: amount,
-        description,
-        purchaseId,
-      });
+      const result = await withCashTimeout(
+        callAdminAction(addCashMovement, {
+          movementType: type,
+          paymentMethod: method,
+          amountCop: amount,
+          description,
+          purchaseId,
+        })
+      );
       if (!result.ok) {
         setError(result.error === "VALIDATION_ERROR" ? result.issues.join(" ") : "No se pudo registrar movimiento.");
         return;
       }
       setMessage("Movimiento registrado.");
       await load();
+    } catch {
+      setError("El movimiento no respondió a tiempo. Pulsa Actualizar antes de repetirlo.");
     } finally {
       setBusy(null);
     }
@@ -185,13 +230,17 @@ export default function CajaPage() {
     setBusy("reverse");
     setError("");
     try {
-      const result = await callAdminAction(reverseCashMovement, { movementId: movement.id, reason });
+      const result = await withCashTimeout(
+        callAdminAction(reverseCashMovement, { movementId: movement.id, reason })
+      );
       if (!result.ok) {
         setError("Este movimiento no admite reverso manual o ya fue reversado.");
         return;
       }
       setMessage("Reverso registrado.");
       await load();
+    } catch {
+      setError("El reverso no respondió a tiempo. Pulsa Actualizar antes de repetirlo.");
     } finally {
       setBusy(null);
     }
@@ -209,7 +258,7 @@ export default function CajaPage() {
             El efectivo se cuadra por sesión. Los demás métodos permanecen en el flujo financiero sin afectar el conteo físico.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {open ? (
             <button
               onClick={() => void closeSession()}
@@ -233,6 +282,13 @@ export default function CajaPage() {
             className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
           >
             + Movimiento
+          </button>
+          <button
+            onClick={() => void load()}
+            disabled={disabled}
+            className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
+          >
+            {busy === "load" ? "Actualizando..." : "Actualizar"}
           </button>
         </div>
       </div>
