@@ -37,6 +37,8 @@ export interface AdminInventoryUnitDTO {
   reservationCustomerName: string | null;
   reservationCustomerPhone: string | null;
   reservationNote: string | null;
+  afterSalesCaseId?: string | null;
+  afterSalesCaseNumber?: string | null;
 }
 
 export interface AdminProductOptionDTO {
