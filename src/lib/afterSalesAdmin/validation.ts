@@ -1,13 +1,14 @@
 import { z } from "zod";
 
 const optionalText = (max: number) => z.string().trim().max(max).optional().transform((v) => (v ? v : undefined));
+const evidenceUrlSchema = z.string().trim().url("Cada evidencia debe ser una URL válida.").max(2000).refine((value) => /^https?:\/\//i.test(value), "Las evidencias solo admiten enlaces http/https.");
 
 export const openAfterSalesCaseSchema = z.object({
   saleItemId: z.string().uuid("Selecciona un equipo vendido válido."),
   caseType: z.enum(["warranty", "return"]),
   reportedIssue: z.string().trim().min(3, "Describe el motivo del ingreso.").max(2000),
   intakeCondition: optionalText(2000),
-  evidenceUrls: z.array(z.string().trim().url("Cada evidencia debe ser una URL válida.").max(2000)).max(12).default([]),
+  evidenceUrls: z.array(evidenceUrlSchema).max(12).default([]),
 }).strict();
 
 export const progressAfterSalesCaseSchema = z.object({
