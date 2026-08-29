@@ -13,6 +13,7 @@ const navItems = [
   { href: "/admin/inventario", label: "Inventario", icon: "🏷️", exact: false },
   { href: "/admin/productos", label: "Productos", icon: "📦", exact: false },
   { href: "/admin/ventas", label: "Ventas", icon: "💵", exact: false },
+  { href: "/admin/rentabilidad", label: "Rentabilidad", icon: "📊", exact: false },
   { href: "/admin/garantias", label: "Garantías", icon: "🛠️", exact: false },
   { href: "/admin/upgrades", label: "Upgrades", icon: "🔧", exact: false },
   { href: "/admin/cotizaciones", label: "Cotizaciones", icon: "🧾", exact: false },
