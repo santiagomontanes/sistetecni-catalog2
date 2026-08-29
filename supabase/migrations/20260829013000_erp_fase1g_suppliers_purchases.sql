@@ -110,7 +110,8 @@ create table if not exists public.purchase_items (
   constraint purchase_items_landed_consistency check (
     landed_cost_cop = base_cost_cop + allocated_extra_cost_cop
   ),
-  constraint purchase_items_sort_non_negative check (sort_order >= 0)
+  constraint purchase_items_sort_non_negative check (sort_order >= 0),
+  constraint purchase_items_purchase_sort_unique unique (purchase_id, sort_order)
 );
 create index if not exists idx_purchase_items_purchase_order on public.purchase_items(purchase_id, sort_order);
 create index if not exists idx_purchase_items_product on public.purchase_items(product_id);
