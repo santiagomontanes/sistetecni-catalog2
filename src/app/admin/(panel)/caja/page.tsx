@@ -14,16 +14,13 @@ import { formatCOP } from "@/lib/personalizadorUi";
 import type { CashMovementDTO, CashSessionDTO, PaymentMethod } from "@/lib/adminPhase2/types";
 
 const METHODS: PaymentMethod[] = ["efectivo", "transferencia", "nequi", "daviplata", "tarjeta", "otro"];
-const CASH_TIMEOUT_MS = 10_000;
+const CASH_TIMEOUT_MS = 20_000;
 
 type BusyAction = "load" | "open" | "close" | "movement" | "reverse" | null;
 
 function withCashTimeout<T>(promise: Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(
-      () => reject(new Error("CASH_REQUEST_TIMEOUT")),
-      CASH_TIMEOUT_MS
-    );
+    const timer = window.setTimeout(() => reject(new Error("CASH_REQUEST_TIMEOUT")), CASH_TIMEOUT_MS);
     promise.then(
       (value) => {
         window.clearTimeout(timer);
@@ -41,6 +38,7 @@ export default function CajaPage() {
   const [open, setOpen] = useState<CashSessionDTO | null>(null);
   const [movements, setMovements] = useState<CashMovementDTO[]>([]);
   const [busy, setBusy] = useState<BusyAction>("load");
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -55,10 +53,11 @@ export default function CajaPage() {
       }
       setOpen(result.data.open);
       setMovements(result.data.movements);
+      setNeedsRefresh(false);
     } catch (caught) {
       setError(
         caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT"
-          ? "Caja tardó más de 10 segundos en responder. El botón ya fue habilitado nuevamente; revisa la terminal para identificar qué llamada quedó bloqueada."
+          ? "Caja tardó más de 20 segundos en responder. Revisa la terminal; las operaciones de dinero quedan bloqueadas hasta que pulses Actualizar y obtengamos el estado real."
           : "Caja no respondió correctamente. Revisa la terminal del servidor de desarrollo."
       );
     } finally {
@@ -104,9 +103,7 @@ export default function CajaPage() {
     setError("");
     setMessage("");
     try {
-      const result = await withCashTimeout(
-        callAdminAction(openCash, { openingCashCop: amount, notes })
-      );
+      const result = await withCashTimeout(callAdminAction(openCash, { openingCashCop: amount, notes }));
       if (!result.ok) {
         setError(
           result.error === "VALIDATION_ERROR"
@@ -118,11 +115,12 @@ export default function CajaPage() {
       setMessage("Caja abierta correctamente.");
       await load();
     } catch (caught) {
-      setError(
-        caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT"
-          ? "La apertura tardó más de 10 segundos. Pulsa Actualizar para comprobar si la sesión alcanzó a crearse."
-          : "La apertura de caja no respondió correctamente."
-      );
+      if (caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT") {
+        setNeedsRefresh(true);
+        setError("La apertura superó 20 segundos. No repitas la operación: pulsa Actualizar para confirmar si la caja alcanzó a abrirse.");
+      } else {
+        setError("La apertura de caja no respondió correctamente.");
+      }
     } finally {
       setBusy(null);
     }
@@ -130,9 +128,7 @@ export default function CajaPage() {
 
   const closeSession = async () => {
     if (!open) return;
-    const amount = Number(
-      prompt(`Efectivo contado. Esperado: ${formatCOP(sessionCash)}`, String(sessionCash))
-    );
+    const amount = Number(prompt(`Efectivo contado. Esperado: ${formatCOP(sessionCash)}`, String(sessionCash)));
     if (!Number.isInteger(amount) || amount < 0) return;
     const notes = prompt("Nota de cierre (opcional):") ?? "";
 
@@ -141,11 +137,7 @@ export default function CajaPage() {
     setMessage("");
     try {
       const result = await withCashTimeout(
-        callAdminAction(closeCash, {
-          sessionId: open.id,
-          countedCashCop: amount,
-          notes,
-        })
+        callAdminAction(closeCash, { sessionId: open.id, countedCashCop: amount, notes })
       );
       if (!result.ok) {
         setError(result.error === "VALIDATION_ERROR" ? result.issues.join(" ") : "No se pudo cerrar caja.");
@@ -154,11 +146,12 @@ export default function CajaPage() {
       setMessage("Caja cerrada correctamente.");
       await load();
     } catch (caught) {
-      setError(
-        caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT"
-          ? "El cierre tardó más de 10 segundos. Pulsa Actualizar antes de volver a intentarlo."
-          : "El cierre de caja no respondió correctamente."
-      );
+      if (caught instanceof Error && caught.message === "CASH_REQUEST_TIMEOUT") {
+        setNeedsRefresh(true);
+        setError("El cierre superó 20 segundos. No vuelvas a cerrarla: pulsa Actualizar para confirmar el estado real de la sesión.");
+      } else {
+        setError("El cierre de caja no respondió correctamente.");
+      }
     } finally {
       setBusy(null);
     }
@@ -185,17 +178,14 @@ export default function CajaPage() {
         purchaseId = found.data.id;
         purchaseLabel = `${found.data.purchaseNumber} · ${found.data.supplier} · ${formatCOP(found.data.totalCop)}`;
       } catch {
-        setError("La consulta de la compra no respondió.");
+        setError("La consulta de la compra no respondió en 20 segundos.");
         return;
       }
       if (!confirm(`Registrar pago para ${purchaseLabel}?`)) return;
     }
 
     const amount = Number(prompt("Valor COP:") ?? "");
-    const description = prompt(
-      "Descripción:",
-      type === "purchase_payment" ? `Pago ${purchaseLabel}` : ""
-    )?.trim();
+    const description = prompt("Descripción:", type === "purchase_payment" ? `Pago ${purchaseLabel}` : "")?.trim();
     if (!Number.isInteger(amount) || amount <= 0 || !description) return;
 
     setBusy("movement");
@@ -217,7 +207,8 @@ export default function CajaPage() {
       setMessage("Movimiento registrado.");
       await load();
     } catch {
-      setError("El movimiento no respondió a tiempo. Pulsa Actualizar antes de repetirlo.");
+      setNeedsRefresh(true);
+      setError("El movimiento no respondió en 20 segundos. Pulsa Actualizar antes de repetirlo.");
     } finally {
       setBusy(null);
     }
@@ -240,13 +231,15 @@ export default function CajaPage() {
       setMessage("Reverso registrado.");
       await load();
     } catch {
-      setError("El reverso no respondió a tiempo. Pulsa Actualizar antes de repetirlo.");
+      setNeedsRefresh(true);
+      setError("El reverso no respondió en 20 segundos. Pulsa Actualizar antes de repetirlo.");
     } finally {
       setBusy(null);
     }
   };
 
-  const disabled = busy !== null;
+  const mutationDisabled = busy !== null || needsRefresh;
+  const refreshDisabled = busy !== null;
 
   return (
     <div className="space-y-6">
@@ -260,34 +253,18 @@ export default function CajaPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {open ? (
-            <button
-              onClick={() => void closeSession()}
-              disabled={disabled}
-              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            >
+            <button onClick={() => void closeSession()} disabled={mutationDisabled} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
               {busy === "close" ? "Cerrando..." : "Cerrar caja"}
             </button>
           ) : (
-            <button
-              onClick={() => void openSession()}
-              disabled={disabled}
-              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            >
+            <button onClick={() => void openSession()} disabled={mutationDisabled} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
               {busy === "open" ? "Abriendo..." : "Abrir caja"}
             </button>
           )}
-          <button
-            onClick={() => void add()}
-            disabled={disabled}
-            className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
-          >
+          <button onClick={() => void add()} disabled={mutationDisabled} className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
             + Movimiento
           </button>
-          <button
-            onClick={() => void load()}
-            disabled={disabled}
-            className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
-          >
+          <button onClick={() => void load()} disabled={refreshDisabled} className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
             {busy === "load" ? "Actualizando..." : "Actualizar"}
           </button>
         </div>
@@ -295,6 +272,7 @@ export default function CajaPage() {
 
       {message ? <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p> : null}
       {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+      {needsRefresh ? <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Estado pendiente de confirmar. Por seguridad, primero pulsa Actualizar; no se permite repetir una operación de dinero mientras la respuesta anterior sea incierta.</p> : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card label="Sesión" value={open?.sessionNumber ?? "Cerrada"} />
@@ -303,9 +281,7 @@ export default function CajaPage() {
       </div>
 
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {METHODS.map((method) => (
-          <Card key={method} label={method} value={formatCOP(Number(totals[method] ?? 0))} />
-        ))}
+        {METHODS.map((method) => <Card key={method} label={method} value={formatCOP(Number(totals[method] ?? 0))} />)}
       </div>
 
       {busy === "load" ? <p className="text-sm text-muted">Actualizando caja...</p> : null}
@@ -313,13 +289,7 @@ export default function CajaPage() {
       <div className="overflow-x-auto rounded-2xl border border-border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-surface text-left text-xs text-muted">
-            <tr>
-              <th className="p-3">Movimiento</th>
-              <th>Método</th>
-              <th>Descripción</th>
-              <th className="text-right">Valor</th>
-              <th />
-            </tr>
+            <tr><th className="p-3">Movimiento</th><th>Método</th><th>Descripción</th><th className="text-right">Valor</th><th /></tr>
           </thead>
           <tbody>
             {movements.map((movement) => (
@@ -327,18 +297,10 @@ export default function CajaPage() {
                 <td className="p-3 font-mono text-xs">{movement.movementNumber}</td>
                 <td>{movement.paymentMethod}</td>
                 <td>{movement.description}</td>
-                <td className={`text-right font-semibold ${movement.amountCop < 0 ? "text-red-600" : "text-green-700"}`}>
-                  {formatCOP(movement.amountCop)}
-                </td>
+                <td className={`text-right font-semibold ${movement.amountCop < 0 ? "text-red-600" : "text-green-700"}`}>{formatCOP(movement.amountCop)}</td>
                 <td className="px-3 text-right">
                   {!['sale', 'expense', 'reversal'].includes(movement.movementType) && !movement.reversalOfId ? (
-                    <button
-                      onClick={() => void reverse(movement)}
-                      disabled={disabled}
-                      className="text-xs font-semibold text-red-600 disabled:opacity-50"
-                    >
-                      Reversar
-                    </button>
+                    <button onClick={() => void reverse(movement)} disabled={mutationDisabled} className="text-xs font-semibold text-red-600 disabled:opacity-50">Reversar</button>
                   ) : null}
                 </td>
               </tr>
@@ -351,10 +313,5 @@ export default function CajaPage() {
 }
 
 function Card({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-white p-4">
-      <p className="text-xs font-semibold uppercase text-muted">{label}</p>
-      <p className="mt-2 text-xl font-bold text-text">{value}</p>
-    </div>
-  );
+  return <div className="rounded-2xl border border-border bg-white p-4"><p className="text-xs font-semibold uppercase text-muted">{label}</p><p className="mt-2 text-xl font-bold text-text">{value}</p></div>;
 }
