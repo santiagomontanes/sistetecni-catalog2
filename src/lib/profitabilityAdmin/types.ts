@@ -38,6 +38,7 @@ export interface AdminProfitabilitySaleDTO {
   manualItemCount:number;
   costingStatus:ProfitabilityCostingStatus;
   units:AdminProfitabilityUnitRefDTO[];
+  saleCostEntries:AdminCostEntryDTO[];
 }
 
 export interface AdminProfitabilitySummaryDTO {
