@@ -31,9 +31,9 @@ export function createProfitabilityRepository(client:SupabaseClient):Profitabili
     const reversedIds=new Set(costs.filter(c=>c.reversal_of_id).map(c=>c.reversal_of_id!));
     const unitMap=new Map(units.map(u=>[u.id,u]));const itemsBySale=new Map<string,ItemRow[]>();for(const i of itemRows){const a=itemsBySale.get(i.sale_id)??[];a.push(i);itemsBySale.set(i.sale_id,a);}
     const result:AdminProfitabilitySaleDTO[]=saleRows.map(s=>{
-      const its=(itemsBySale.get(s.id)??[]).sort((a,b)=>a.sort_order-b.sort_order);const physical=its.filter(i=>i.product_unit_id);const manual=its.filter(i=>i.item_type==="manual");
+      const its=(itemsBySale.get(s.id)??[]).sort((a,b)=>a.sort_order-b.sort_order);const physical=its.filter(i=>i.product_unit_id);const manual=its.filter(i=>i.item_type==="manual");const unlinkedCatalog=its.filter(i=>i.item_type==="catalog"&&!i.product_unit_id);
       const acquisition=physical.reduce((sum,i)=>sum+(unitMap.get(i.product_unit_id!)?.acquisition_cost_cop==null?0:n(unitMap.get(i.product_unit_id!)?.acquisition_cost_cop)),0);
-      const missing=physical.some(i=>unitMap.get(i.product_unit_id!)?.acquisition_cost_cop==null);
+      const missing=unlinkedCatalog.length>0||physical.some(i=>unitMap.get(i.product_unit_id!)?.acquisition_cost_cop==null);
       const unitSet=new Set(physical.map(i=>i.product_unit_id!));const unitExtras=sumCosts(costs.filter(c=>c.product_unit_id&&unitSet.has(c.product_unit_id)));const saleRowsCost=costs.filter(c=>c.sale_id===s.id);const saleCosts=sumCosts(saleRowsCost);const known=acquisition+unitExtras+saleCosts;const revenue=n(s.total_cop);const profit=revenue-known;
       const costingStatus=missing?"missing_acquisition_cost":manual.length?"manual_items_review":"complete";
       const refs=physical.map(i=>unitMap.get(i.product_unit_id!)).filter((u):u is UnitRow=>Boolean(u)).map(u=>({unitId:u.id,unitCode:u.unit_code,serialNumber:u.serial_number}));
