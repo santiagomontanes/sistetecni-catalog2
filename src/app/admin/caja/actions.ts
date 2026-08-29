@@ -37,6 +37,11 @@ interface CashMovementRow {
   reversal_of_id: string | null;
 }
 
+interface CashDashboardRpc {
+  sessions?: CashSessionRow[];
+  movements?: CashMovementRow[];
+}
+
 async function run<T>(
   token: unknown,
   permission: "cash.read" | "cash.manage",
@@ -82,32 +87,19 @@ export async function getCashDashboard(payload: {
   accessToken: unknown;
 }): Promise<AdminResult<{ open: CashSessionDTO | null; sessions: CashSessionDTO[]; movements: CashMovementDTO[] }>> {
   return run(payload.accessToken, "cash.read", async (client) => {
-    const [sessionsResult, movementsResult] = await Promise.all([
-      client
-        .from("cash_sessions")
-        .select("id,session_number,status,opening_cash_cop,expected_cash_cop,counted_cash_cop,difference_cop,opened_at,closed_at")
-        .order("opened_at", { ascending: false })
-        .limit(30)
-        .returns<CashSessionRow[]>(),
-      client
-        .from("cash_movements")
-        .select("id,movement_number,session_id,movement_type,payment_method,amount_cop,description,created_at,reversal_of_id")
-        .order("created_at", { ascending: false })
-        .limit(100)
-        .returns<CashMovementRow[]>(),
-    ]);
+    const { data, error } = await client.rpc("erp_get_cash_dashboard");
+    if (error) throw error;
 
-    if (sessionsResult.error || movementsResult.error) {
-      throw sessionsResult.error ?? movementsResult.error;
-    }
+    const snapshot = (data ?? {}) as CashDashboardRpc;
+    const sessions = (snapshot.sessions ?? []).map(mapSession);
+    const movements = (snapshot.movements ?? []).map(mapMovement);
 
-    const sessions = (sessionsResult.data ?? []).map(mapSession);
     return {
       ok: true,
       data: {
         open: sessions.find((item) => item.status === "open") ?? null,
         sessions,
-        movements: (movementsResult.data ?? []).map(mapMovement),
+        movements,
       },
     };
   });
