@@ -3,6 +3,7 @@ import {z} from "zod";
 const category=z.enum(["upgrade","repair","spare_part","labor","transport","after_sales","sale_fee","accessory","other"]);
 export const profitabilityListSchema=z.object({limit:z.number().int().min(1).max(200).optional().default(100)}).strict();
 export const unitProfitabilityIdSchema=z.string().uuid("Unidad inválida.");
+export const unitCodeLookupSchema=z.string().trim().toUpperCase().regex(/^STU-[0-9]{6}$/,"Código STU inválido.");
 export const addCostEntrySchema=z.object({
   scopeType:z.enum(["unit","sale"]),
   scopeId:z.string().uuid("Destino de costo inválido."),
