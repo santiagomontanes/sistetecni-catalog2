@@ -20,6 +20,20 @@ alter table public.after_sales_cases
   add constraint after_sales_cases_evidence_http_only
   check (public.erp_http_urls_only(evidence_urls));
 
+alter table public.after_sales_cases
+  drop constraint if exists after_sales_cases_repair_requires_diagnosis;
+alter table public.after_sales_cases
+  add constraint after_sales_cases_repair_requires_diagnosis
+  check (status <> 'repair' or (diagnosis is not null and length(btrim(diagnosis)) >= 3));
+
+alter table public.after_sales_cases
+  drop constraint if exists after_sales_cases_closed_requires_resolution;
+alter table public.after_sales_cases
+  add constraint after_sales_cases_closed_requires_resolution
+  check (status <> 'closed' or (
+    resolution is not null and length(btrim(resolution)) >= 3 and resolution_type is not null
+  ));
+
 comment on function public.erp_http_urls_only(text[]) is
   'Fase 1F: evidencias externas solo http/https; bloquea esquemas arbitrarios también si el RPC se invoca fuera de la UI.';
 
