@@ -1,7 +1,7 @@
 "use server";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { requireAdmin } from "@/lib/personalizadorAdmin/auth";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { AdminAuthError } from "@/lib/personalizadorAdmin/auth";
 import type { AdminResult } from "@/lib/personalizadorAdmin/types";
 import { mapUnexpectedError } from "@/lib/personalizadorAdmin/errorMapping";
 import {
@@ -42,21 +42,41 @@ interface CashDashboardRpc {
   movements?: CashMovementRow[];
 }
 
+function requiredEnv(name: "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_ANON_KEY"): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`[admin/caja] Falta ${name}.`);
+  return value;
+}
+
 /**
- * Caja no duplica la autorización fina en la capa Next.
- * requireAdmin() valida sesión + acceso al panel; los RPC de PostgreSQL
- * validan cash.read/cash.manage con erp_assert_permission(). Esto evita
- * una segunda lectura de profiles antes de cada RPC y mantiene la
- * autorización efectiva en la misma transacción que toca el dinero.
+ * Caja usa un cliente scoped con el JWT recibido del navegador, pero NO hace
+ * auth.getUser() ni un SELECT previo de profiles. Eso elimina dos round-trips.
+ * Supabase valida el JWT al recibir la petición y PostgreSQL valida auth.uid()
+ * + cash.read/cash.manage dentro de los RPC/RLS antes de leer o mover dinero.
  */
+function clientForCash(accessToken: unknown): SupabaseClient {
+  if (typeof accessToken !== "string" || accessToken.trim().length === 0) {
+    throw new AdminAuthError("No autenticado.");
+  }
+  return createClient(requiredEnv("NEXT_PUBLIC_SUPABASE_URL"), requiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"), {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+}
+
 async function run<T>(
+  action: string,
   token: unknown,
   fn: (client: SupabaseClient) => Promise<AdminResult<T>>
 ): Promise<AdminResult<T>> {
+  const startedAt = Date.now();
   try {
-    const { client } = await requireAdmin(token);
-    return await fn(client);
+    const client = clientForCash(token);
+    const result = await fn(client);
+    console.info(`[admin/caja] ${action} ${Date.now() - startedAt}ms ok=${result.ok}`);
+    return result;
   } catch (error) {
+    console.warn(`[admin/caja] ${action} ${Date.now() - startedAt}ms error=${error instanceof Error ? error.name : "UnknownError"}`);
     return mapUnexpectedError(error);
   }
 }
@@ -92,7 +112,7 @@ function mapMovement(row: CashMovementRow): CashMovementDTO {
 export async function getCashDashboard(payload: {
   accessToken: unknown;
 }): Promise<AdminResult<{ open: CashSessionDTO | null; sessions: CashSessionDTO[]; movements: CashMovementDTO[] }>> {
-  return run(payload.accessToken, async (client) => {
+  return run("dashboard", payload.accessToken, async (client) => {
     const { data, error } = await client.rpc("erp_get_cash_dashboard");
     if (error) throw error;
 
@@ -122,8 +142,7 @@ export async function findPurchaseForCash(payload: {
     return { ok: false, error: "VALIDATION_ERROR", issues: ["Usa un número COMP-000000 válido."] };
   }
 
-  return run(payload.accessToken, async (client) => {
-    // La policy de purchases mantiene purchases.read como segunda barrera.
+  return run("findPurchase", payload.accessToken, async (client) => {
     const { data, error } = await client
       .from("purchases")
       .select("id,purchase_number,total_cost_cop,supplier_name_snapshot")
@@ -163,7 +182,7 @@ export async function openCash(payload: {
     return { ok: false, error: "VALIDATION_ERROR", issues: issues(parsed.error) };
   }
 
-  return run(payload.accessToken, async (client) => {
+  return run("open", payload.accessToken, async (client) => {
     const { data, error } = await client.rpc("erp_open_cash_session", {
       p_opening_cash_cop: parsed.data.openingCashCop,
       p_notes: parsed.data.notes ?? null,
@@ -188,7 +207,7 @@ export async function closeCash(payload: {
     return { ok: false, error: "VALIDATION_ERROR", issues: issues(parsed.error) };
   }
 
-  return run(payload.accessToken, async (client) => {
+  return run("close", payload.accessToken, async (client) => {
     const { data, error } = await client.rpc("erp_close_cash_session", {
       p_session_id: parsed.data.sessionId,
       p_counted_cash_cop: parsed.data.countedCashCop,
@@ -209,7 +228,7 @@ export async function addCashMovement(payload: {
     return { ok: false, error: "VALIDATION_ERROR", issues: issues(parsed.error) };
   }
 
-  return run(accessToken, async (client) => {
+  return run("movement", accessToken, async (client) => {
     const { data, error } = await client.rpc("erp_add_cash_movement", {
       p_movement_type: parsed.data.movementType,
       p_payment_method: parsed.data.paymentMethod,
@@ -235,7 +254,7 @@ export async function reverseCashMovement(payload: {
     return { ok: false, error: "VALIDATION_ERROR", issues: issues(parsed.error) };
   }
 
-  return run(payload.accessToken, async (client) => {
+  return run("reverse", payload.accessToken, async (client) => {
     const { data, error } = await client.rpc("erp_reverse_cash_movement", {
       p_movement_id: parsed.data.movementId,
       p_reason: parsed.data.reason,
