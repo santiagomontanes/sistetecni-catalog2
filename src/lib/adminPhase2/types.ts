@@ -1,0 +1,8 @@
+import type {ErpRole} from "@/lib/erpAuth/types";
+export type PaymentMethod="efectivo"|"transferencia"|"nequi"|"daviplata"|"tarjeta"|"otro";
+export type ExpenseCategory="arriendo"|"servicios"|"publicidad"|"nomina"|"transporte"|"hosting"|"software"|"papeleria"|"impuestos"|"mantenimiento"|"otro";
+export interface CashSessionDTO{id:string;sessionNumber:string;status:"open"|"closed";openingCashCop:number;expectedCashCop:number|null;countedCashCop:number|null;differenceCop:number|null;openedAt:string;closedAt:string|null;}
+export interface CashMovementDTO{id:string;movementNumber:string;sessionId:string|null;movementType:string;paymentMethod:PaymentMethod;amountCop:number;description:string;createdAt:string;reversalOfId:string|null;}
+export interface ExpenseDTO{id:string;expenseNumber:string;category:ExpenseCategory;description:string;amountCop:number;paymentMethod:PaymentMethod;payee:string|null;receiptUrl:string|null;occurredOn:string;status:"active"|"voided";voidReason:string|null;createdAt:string;}
+export interface BusinessReportDTO{from:string;to:string;salesCount:number;salesRevenueCop:number;unitsSold:number;operatingExpensesCop:number;purchaseCount:number;purchasesCop:number;cashInCop:number;cashOutCop:number;openAfterSalesCases:number;inventoryAcquisitionValueCop:number;soldAcquisitionCostCop:number;extraCostsCop:number;knownNetResultCop:number;inventoryByStatus:Record<string,number>;salesByPaymentMethod:Record<string,number>;}
+export interface UserProfileDTO{id:string;email:string|null;displayName:string|null;role:ErpRole;active:boolean;isAdmin:boolean;createdAt:string|null;}
