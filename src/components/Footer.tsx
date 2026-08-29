@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const navLinks = [
   { href: "/catalog", label: "Catálogo" },
@@ -8,11 +11,13 @@ const navLinks = [
 ];
 
 export default function Footer() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/admin")) return null;
+
   return (
     <footer className="border-t border-border bg-surface">
       <div className="mx-auto max-w-6xl px-4 py-10">
         <div className="grid gap-8 md:grid-cols-3">
-          {/* Brand */}
           <div>
             <Link href="/" className="text-lg font-bold text-text">
               Siste<span className="text-primary">tecni</span>
@@ -22,16 +27,12 @@ export default function Footer() {
             </p>
           </div>
 
-          {/* Navigation */}
           <div>
             <h4 className="text-sm font-semibold text-text">Navegación</h4>
             <ul className="mt-3 space-y-2 text-sm">
               {navLinks.map((l) => (
                 <li key={l.href}>
-                  <Link
-                    href={l.href}
-                    className="text-muted transition hover:text-primary"
-                  >
+                  <Link href={l.href} className="text-muted transition hover:text-primary">
                     {l.label}
                   </Link>
                 </li>
@@ -39,7 +40,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Contact */}
           <div>
             <h4 className="text-sm font-semibold text-text">Contacto</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted">
@@ -52,22 +52,10 @@ export default function Footer() {
 
         <div className="mt-8 border-t border-border pt-6 text-center text-xs text-muted">
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-            <Link
-              href="/politica-de-privacidad"
-              className="transition hover:text-primary"
-            >
-              Política de privacidad
-            </Link>
-            <Link
-              href="/eliminacion-de-datos"
-              className="transition hover:text-primary"
-            >
-              Eliminación de datos
-            </Link>
+            <Link href="/politica-de-privacidad" className="transition hover:text-primary">Política de privacidad</Link>
+            <Link href="/eliminacion-de-datos" className="transition hover:text-primary">Eliminación de datos</Link>
           </div>
-          <div className="mt-4">
-            © {new Date().getFullYear()} Sistetecni. Todos los derechos reservados.
-          </div>
+          <div className="mt-4">© {new Date().getFullYear()} Sistetecni. Todos los derechos reservados.</div>
         </div>
       </div>
     </footer>
