@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { callAdminAction } from "@/lib/callAdminAction";
 import { getAfterSalesOrigin, openAfterSalesCase } from "@/app/admin/garantias/actions";
@@ -10,12 +10,12 @@ import type { AdminAfterSalesOriginDTO, AfterSalesCaseType } from "@/lib/afterSa
 function fmt(iso:string|null){if(!iso)return "—";return new Intl.DateTimeFormat("es-CO",{day:"2-digit",month:"long",year:"numeric"}).format(new Date(iso));}
 
 export default function NuevaGarantiaPage(){
-  const router=useRouter(); const search=useSearchParams(); const saleItemId=search.get("saleItemId")??"";
+  const router=useRouter(); const [saleItemId,setSaleItemId]=useState("");
   const [origin,setOrigin]=useState<AdminAfterSalesOriginDTO|null>(null); const [caseType,setCaseType]=useState<AfterSalesCaseType>("warranty"); const [reportedIssue,setReportedIssue]=useState(""); const [intakeCondition,setIntakeCondition]=useState(""); const [evidenceText,setEvidenceText]=useState(""); const [loading,setLoading]=useState(true); const [submitting,setSubmitting]=useState(false); const [error,setError]=useState("");
-  useEffect(()=>{let cancelled=false;(async()=>{if(!saleItemId){setError("Falta seleccionar un computador vendido.");setLoading(false);return;}try{const r=await callAdminAction(getAfterSalesOrigin,{saleItemId});if(cancelled)return;if(!r.ok){setError("No fue posible cargar el equipo de la venta.");return;}setOrigin(r.data);}catch{if(!cancelled)setError("No fue posible cargar el equipo de la venta.");}finally{if(!cancelled)setLoading(false);}})();return()=>{cancelled=true};},[saleItemId]);
+  useEffect(()=>{let cancelled=false;(async()=>{const id=new URLSearchParams(window.location.search).get("saleItemId")??"";setSaleItemId(id);if(!id){setError("Falta seleccionar un computador vendido.");setLoading(false);return;}try{const r=await callAdminAction(getAfterSalesOrigin,{saleItemId:id});if(cancelled)return;if(!r.ok){setError("No fue posible cargar el equipo de la venta.");return;}setOrigin(r.data);}catch{if(!cancelled)setError("No fue posible cargar el equipo de la venta.");}finally{if(!cancelled)setLoading(false);}})();return()=>{cancelled=true};},[]);
   const evidenceUrls=useMemo(()=>evidenceText.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),[evidenceText]);
   const canOpen=Boolean(origin&&origin.unitStatus==="sold"&&!origin.hasOpenCase&&reportedIssue.trim().length>=3&&evidenceUrls.length<=12);
-  const submit=async()=>{if(!canOpen||submitting)return;try{setSubmitting(true);setError("");const r=await callAdminAction(openAfterSalesCase,{saleItemId,caseType,reportedIssue,intakeCondition:intakeCondition.trim()||undefined,evidenceUrls});if(!r.ok){setError(r.error==="VALIDATION_ERROR"?r.issues.join(" "):"No fue posible abrir el caso.");return;}router.push(`/admin/garantias/${r.data.id}`);}catch{setError("No fue posible abrir el caso.");}finally{setSubmitting(false);}};
+  const submit=async()=>{if(!canOpen||submitting||!saleItemId)return;try{setSubmitting(true);setError("");const r=await callAdminAction(openAfterSalesCase,{saleItemId,caseType,reportedIssue,intakeCondition:intakeCondition.trim()||undefined,evidenceUrls});if(!r.ok){setError(r.error==="VALIDATION_ERROR"?r.issues.join(" "):"No fue posible abrir el caso.");return;}router.push(`/admin/garantias/${r.data.id}`);}catch{setError("No fue posible abrir el caso.");}finally{setSubmitting(false);}};
   if(loading)return <p className="text-sm text-muted">Cargando venta...</p>;
   if(error&&!origin)return <div className="space-y-4"><p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p><Link href="/admin/ventas" className="text-sm font-semibold text-primary">← Volver a ventas</Link></div>;
   if(!origin)return null;
