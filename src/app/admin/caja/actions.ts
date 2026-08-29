@@ -16,7 +16,7 @@ import type { CashMovementDTO, CashSessionDTO } from "@/lib/adminPhase2/types";
 interface CashSessionRow {
   id: string;
   session_number: string;
-  status: string;
+  status: CashSessionDTO["status"];
   opening_cash_cop: number | string;
   expected_cash_cop: number | string | null;
   counted_cash_cop: number | string | null;
