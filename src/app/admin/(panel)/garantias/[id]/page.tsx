@@ -21,7 +21,7 @@ export default function CasoPosventaPage(){
   if(loading)return <p className="text-sm text-muted">Cargando caso...</p>; if(!item)return <div className="space-y-3"><p className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error||"Caso no encontrado."}</p><Link href="/admin/garantias" className="text-sm font-semibold text-primary">← Volver</Link></div>;
   const terminal=item.status==="closed"||item.status==="cancelled";
   const canRepair=!terminal&&["warranty","returned"].includes(item.unitStatus)&&["open","diagnosing","waiting_customer"].includes(item.status);
-  const canReturn=!terminal&&((item.caseType==="warranty"&&["warranty","repair"].includes(item.unitStatus))||(item.caseType==="return"&&["returned","repair"].includes(item.unitStatus)));
+  const canReturn=!terminal&&((item.caseType==="warranty"&&["warranty","repair"].includes(item.unitStatus))||(item.caseType==="return"&&item.unitStatus==="returned"));
   const canRetire=!terminal&&["warranty","returned","repair"].includes(item.unitStatus);
   const canCancel=!terminal&&["open","diagnosing","waiting_customer"].includes(item.status)&&["warranty","returned"].includes(item.unitStatus);
   return <div className="space-y-6">
