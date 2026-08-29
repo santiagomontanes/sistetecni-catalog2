@@ -20,6 +20,11 @@ test("openAfterSalesCaseSchema: rechaza motivo vacío y campos extra", () => {
   assert.equal(openAfterSalesCaseSchema.safeParse({ saleItemId: SALE_ITEM_ID, caseType: "return", reportedIssue: "Devolución solicitada", fake: true }).success, false);
 });
 
+test("openAfterSalesCaseSchema: evidencias solo http/https y máximo 12", () => {
+  assert.equal(openAfterSalesCaseSchema.safeParse({ saleItemId: SALE_ITEM_ID, caseType: "warranty", reportedIssue: "Falla", evidenceUrls: ["javascript:alert(1)"] }).success, false);
+  assert.equal(openAfterSalesCaseSchema.safeParse({ saleItemId: SALE_ITEM_ID, caseType: "warranty", reportedIssue: "Falla", evidenceUrls: Array.from({ length: 13 }, (_, i) => `https://example.com/${i}`) }).success, false);
+});
+
 test("progressAfterSalesCaseSchema: enviar a reparación exige diagnóstico", () => {
   assert.equal(progressAfterSalesCaseSchema.safeParse({ caseId: CASE_ID, action: "send_repair" }).success, false);
   assert.equal(progressAfterSalesCaseSchema.safeParse({ caseId: CASE_ID, action: "send_repair", diagnosis: "SSD con fallas SMART", costCop: 80000 }).success, true);
