@@ -129,7 +129,15 @@ test("producto manipulado: selectedProductId de un producto que YA NO cumple -> 
 // ─── honeypot ─────────────────────────────────────────────────────────────
 
 test("honeypot relleno: NUNCA crea una cotización, responde igual que un input inválido genérico", async () => {
-  const before = await adminClient.from("quote_requests").select("id", { count: "exact", head: true });
+  const realRepo = createQuoteRequestsRepository(adminClient);
+  let createCalls = 0;
+  const trackedRepo = {
+    ...realRepo,
+    create: async (...args: Parameters<typeof realRepo.create>) => {
+      createCalls += 1;
+      return realRepo.create(...args);
+    },
+  };
 
   const result = await crearCotizacionPersonalizada(
     {
@@ -143,12 +151,10 @@ test("honeypot relleno: NUNCA crea una cotización, responde igual que un input 
       },
       selectedProductId: P1_ID,
     },
-    { ...readDeps(), quoteRequestsRepo: createQuoteRequestsRepository(adminClient) }
+    { ...readDeps(), quoteRequestsRepo: trackedRepo }
   );
   assert.deepEqual(result, { ok: false, error: "VALIDATION_ERROR", issues: ["Solicitud inválida."] });
-
-  const after = await adminClient.from("quote_requests").select("id", { count: "exact", head: true });
-  assert.equal(after.count, before.count); // ni una fila nueva
+  assert.equal(createCalls, 0, "el honeypot debe cortar antes de intentar crear quote_requests");
 });
 
 test("honeypot también bloquea la búsqueda (no revela catálogo a un bot detectado)", async () => {
