@@ -75,7 +75,10 @@ export function verifyErpAgentRequest(params: {
 
 export function confirmationCodeForRequest(requestId: string, secret: string): string {
   const hex = createHmac("sha256", secret).update(`erp-confirm:${requestId}`, "utf8").digest("hex");
-  const numeric = Number(BigInt(`0x${hex.slice(0, 12)}`) % 1_000_000n);
+  // 12 hex chars = 48 bits (máx. 281,474,976,710,655), muy por debajo de
+  // Number.MAX_SAFE_INTEGER. Así evitamos BigInt y mantenemos compatibilidad
+  // con el target TypeScript actual del proyecto sin perder determinismo.
+  const numeric = Number.parseInt(hex.slice(0, 12), 16) % 1_000_000;
   return String(numeric).padStart(6, "0");
 }
 
