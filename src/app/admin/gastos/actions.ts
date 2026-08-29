@@ -10,7 +10,7 @@ import type { ExpenseDTO } from "@/lib/adminPhase2/types";
 interface ExpenseRow {
   id: string;
   expense_number: string;
-  category: string;
+  category: ExpenseDTO["category"];
   description: string;
   amount_cop: number | string;
   payment_method: ExpenseDTO["paymentMethod"];
