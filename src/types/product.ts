@@ -17,6 +17,12 @@ export interface Product {
   visibleWeb: boolean;
   createdAt: Date | null;
 
+  // ERP Fase 1D — opcionales para mantener compatibilidad con mapeos/tests
+  // históricos. Cuando erpStockEnabled=true, `stock` deja de ser manual y
+  // representa exactamente las product_units con status=available.
+  erpStockEnabled?: boolean;
+  erpStockSyncedAt?: Date | null;
+
   // Columnas del personalizador (Fase 2B) — confirmadas en el esquema real
   // desplegado en STAGING (supabase/migrations/20260812223000_...). Todas
   // nullable en la base y OPCIONALES aquí a propósito: mapProduct() en

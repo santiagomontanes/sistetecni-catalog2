@@ -2,33 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getSession, isAdmin } from '@/supabase/auth';
+import { getSession, hasErpPanelAccess } from '@/supabase/auth';
 
 export default function ProtectedAdmin({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     async function check() {
       const session = await getSession();
-      if (!session) {
-        router.replace('/admin/login');
-        return;
-      }
-
-      const ok = await isAdmin();
-      if (!ok) {
-        router.replace('/');
-        return;
-      }
-
+      if (!session) { router.replace('/admin/login'); return; }
+      const ok = await hasErpPanelAccess();
+      if (!ok) { router.replace('/'); return; }
       setLoading(false);
     }
-
     check();
   }, [router]);
-
   if (loading) return <p className="p-6">Cargando...</p>;
-
   return <>{children}</>;
 }

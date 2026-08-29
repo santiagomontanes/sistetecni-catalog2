@@ -35,3 +35,51 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/*
+ * Admin responsive/táctil.
+ * - 16px en inputs evita el zoom automático de Safari/iPhone al enfocar.
+ * - 44px sigue el tamaño táctil mínimo práctico en móvil.
+ * - todo queda acotado al viewport; las tablas que ya usan overflow-x-auto
+ *   conservan desplazamiento horizontal con inercia en iOS.
+ */
+.admin-shell {
+  max-width: 100%;
+}
+
+.admin-shell input:not([type="checkbox"]):not([type="radio"]),
+.admin-shell select,
+.admin-shell textarea {
+  max-width: 100%;
+  min-height: 44px;
+  font-size: 16px;
+}
+
+.admin-shell button,
+.admin-shell a,
+.admin-shell input,
+.admin-shell select,
+.admin-shell textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.admin-shell .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.admin-shell img,
+.admin-shell video,
+.admin-shell canvas,
+.admin-shell svg {
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .admin-shell input:not([type="checkbox"]):not([type="radio"]),
+  .admin-shell select,
+  .admin-shell textarea {
+    font-size: 0.875rem;
+  }
+}

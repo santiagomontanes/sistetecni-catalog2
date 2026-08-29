@@ -1,6 +1,6 @@
 /**
- * Mapeo Sale/SaleItem -> DTOs del panel admin. Nunca recalcula nada — todo
- * sale de las columnas ya persistidas (el snapshot congelado en la venta).
+ * Mapeo Sale/SaleItem -> DTOs del panel admin. Nunca recalcula nada: usa
+ * exclusivamente snapshots persistidos.
  */
 import type { Sale, SaleItem, SaleWithItems } from "../../types/sale";
 import { maskPhone } from "./mask";
@@ -24,6 +24,10 @@ function toAdminSaleItemDTO(item: SaleItem): AdminSaleItemDTO {
     id: item.id,
     itemType: item.itemType,
     productId: item.productId,
+    productUnitId: item.productUnitId,
+    unitCodeSnapshot: item.unitCodeSnapshot,
+    serialNumberSnapshot: item.serialNumberSnapshot,
+    unitSpecOverridesSnapshot: item.unitSpecOverridesSnapshot,
     productName: item.productName,
     productDescription: item.productDescription,
     productImage: item.productImage,
@@ -40,6 +44,7 @@ export function toAdminSaleDetailDTO(sale: SaleWithItems): AdminSaleDetailDTO {
     id: sale.id,
     saleNumber: sale.saleNumber,
     createdAt: sale.createdAt ? sale.createdAt.toISOString() : null,
+    customerId: sale.customerId,
     customerName: sale.customerName,
     customerDocument: sale.customerDocument,
     customerPhone: sale.customerPhone,

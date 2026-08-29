@@ -1,15 +1,7 @@
 /**
  * GET /api/admin/sales/[id]/pdf — descarga del comprobante de venta.
- *
- * Este proyecto no usa cookies de sesión (ver src/lib/personalizadorAdmin/
- * auth.ts): el access_token llega por header Authorization, y se valida
- * con el MISMO requireAdmin() que ya usan las Server Actions del panel
- * admin — es agnóstico de si el token viene de un payload o de un header.
- * Doble capa de protección: verificación explícita aquí + RLS del
- * cliente scoped que requireAdmin() devuelve.
- *
- * El PDF se construye EXCLUSIVAMENTE desde el snapshot ya guardado de la
- * venta (buildSalePdfBytes) — nunca se vuelve a consultar el catálogo.
+ * El PDF se construye exclusivamente desde snapshots persistidos; Fase 1C
+ * agrega al texto del ítem el STU/serial congelado sin releer inventario.
  */
 import { NextResponse } from "next/server";
 import { requireAdmin, AdminAuthError } from "@/lib/personalizadorAdmin/auth";
@@ -32,16 +24,23 @@ export async function GET(
 
   try {
     const { client } = await requireAdmin(extractBearerToken(request));
-
     const result = await getSaleDetailAdmin(id, createSalesRepository(client));
     if (!result.ok) {
-      if (result.error === "NOT_FOUND") {
-        return NextResponse.json({ error: "VENTA_NO_ENCONTRADA" }, { status: 404 });
-      }
+      if (result.error === "NOT_FOUND") return NextResponse.json({ error: "VENTA_NO_ENCONTRADA" }, { status: 404 });
       return NextResponse.json({ error: "SOLICITUD_INVALIDA" }, { status: 400 });
     }
 
-    const pdfBytes = await buildSalePdfBytes(result.data);
+    const pdfSale = {
+      ...result.data,
+      items: result.data.items.map((item) => ({
+        ...item,
+        productName: item.unitCodeSnapshot
+          ? `${item.productName} · ${item.unitCodeSnapshot} · Serial ${item.serialNumberSnapshot ?? "sin registrar"}`
+          : item.productName,
+      })),
+    };
+
+    const pdfBytes = await buildSalePdfBytes(pdfSale);
     return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
@@ -51,10 +50,7 @@ export async function GET(
       },
     });
   } catch (err) {
-    if (err instanceof AdminAuthError) {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-    }
-    // Nunca se registra nombre/documento/celular del cliente — solo el tipo de error.
+    if (err instanceof AdminAuthError) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     const name = err instanceof Error ? err.name : "UnknownError";
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[api/admin/sales/pdf] GET falló de forma inesperada: ${name}: ${message}`);
