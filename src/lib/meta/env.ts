@@ -37,6 +37,20 @@ export function onboardingHabilitado(env: FuenteEnv = process.env): boolean {
   return env.META_ONBOARDING_ENABLED === "true";
 }
 
+/**
+ * Kill switch de la página TEMPORAL de Coexistence (`/meta/coexistence`) y de su
+ * endpoint de exchange (`/api/meta/coexistence/exchange`). Mismo criterio
+ * estricto que `onboardingHabilitado`: solo la cadena exacta "true" abre la
+ * ruta; cualquier otra cosa la deja en 404.
+ *
+ * Es un interruptor SEPARADO de `META_ONBOARDING_ENABLED` a propósito: el
+ * onboarding alojado (callback) y la incorporación por SDK son flujos distintos
+ * y se encienden/apagan por separado.
+ */
+export function coexistenceHabilitado(env: FuenteEnv = process.env): boolean {
+  return env.META_COEXISTENCE_ENABLED === "true";
+}
+
 function requerirVariable(nombre: string, env: FuenteEnv): string {
   const valor = env[nombre];
   if (!valor) {

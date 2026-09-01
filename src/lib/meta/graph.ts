@@ -220,16 +220,22 @@ export async function listarNumerosDeWaba(
 }
 
 /**
- * ⚠️ NO SE LLAMA TODAVÍA — deliberadamente.
+ * Suscribe la app a una WABA (`POST /<WABA_ID>/subscribed_apps`) — la operación
+ * que conecta de verdad el agente con una cuenta.
  *
- * Suscribir la app a una WABA (`POST /<WABA_ID>/subscribed_apps`) es la
- * operación que conecta de verdad el agente con una cuenta. En esta primera
- * ejecución queremos separar identificar de conectar: si el flujo devolviera
- * una WABA que no es la nuestra, una suscripción automática ya nos habría
- * enganchado a la cuenta de otro.
+ * ── QUIÉN LA LLAMA ──────────────────────────────────────────────────────
+ * SOLO `src/lib/meta/confirm.ts` (endpoint `/api/meta/coexistence/confirm`), y
+ * ÚNICAMENTE después de: intercambiar el code, validar que el token es de
+ * nuestra app y comprobar que el `phone_number_id` pertenece a la WABA. Si
+ * cualquiera de esas validaciones falla, esta petición no se llega a emitir
+ * (hay tests en `confirm.test.ts`).
  *
- * Queda implementada para cuando la autorices explícitamente. Hay un test que
- * comprueba que el callback NUNCA emite esta petición.
+ * El callback OAuth alojado (`callback.ts`) NUNCA la llama — hay un test en
+ * `meta.test.ts` que lo verifica: identificar y conectar son flujos separados.
+ *
+ * `POST /<WABA_ID>/subscribed_apps` es idempotente según la documentación de
+ * Meta: repetir la llamada con la app ya suscrita responde `{ success: true }`
+ * igual (no verificado contra Meta real — ver docs/erp/12).
  */
 export async function suscribirAppAWaba(
   wabaId: string,
