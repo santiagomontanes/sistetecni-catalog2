@@ -60,3 +60,31 @@ test("erp agent: contrato rechaza acciones inventadas y confirmaciones no numér
   assert.equal(ErpAgentRequestSchema.safeParse({ ...base, kind: "confirm", confirmationCode: "ABC123" }).success, false);
   assert.equal(ErpAgentRequestSchema.safeParse({ ...base, kind: "command", action: "inventory.summary", arguments: {} }).success, true);
 });
+
+
+test("erp agent: contrato HTTP acepta acciones P20.17B", () => {
+  const base = {
+    waId: "573001234567",
+    metaMessageId: "wamid.P2017BHTTPTEST",
+    requestId: "22222222-2222-4222-8222-222222222222",
+    kind: "command" as const,
+    arguments: {},
+  };
+
+  const actions = [
+    "inventory.sequence_status",
+    "inventory.resolve_unit",
+    "inventory.receive_units",
+    "inventory.assign_manufacturer_serial",
+    "inventory.correct_manufacturer_serial",
+    "inventory.update_unit_condition",
+  ];
+
+  for (const action of actions) {
+    assert.equal(
+      ErpAgentRequestSchema.safeParse({ ...base, action }).success,
+      true,
+      `debe aceptar ${action}`
+    );
+  }
+});

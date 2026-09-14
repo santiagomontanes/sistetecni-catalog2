@@ -9,6 +9,11 @@ export const ERP_AGENT_ACTIONS = [
   "purchases.recent",
   "warranties.open",
   "customers.find",
+
+  // P20.17B — inventario físico.
+  "inventory.sequence_status",
+  "inventory.resolve_unit",
+
   "inventory.reserve",
   "inventory.release",
   "customer.create",
@@ -17,6 +22,12 @@ export const ERP_AGENT_ACTIONS = [
   "cash.close",
   "cash.movement",
   "sale.create_by_stu",
+
+  // P20.17B — recepción y administración de unidades físicas.
+  "inventory.receive_units",
+  "inventory.assign_manufacturer_serial",
+  "inventory.correct_manufacturer_serial",
+  "inventory.update_unit_condition",
 ] as const;
 
 export type ErpAgentAction = (typeof ERP_AGENT_ACTIONS)[number];
