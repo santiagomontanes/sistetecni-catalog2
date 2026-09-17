@@ -36,6 +36,11 @@ export const ERP_AGENT_ACTIONS = [
   // P20.17C — publicación confirmada de AdminProductDraft.
   "catalog.publish_draft",
 
+  // P20.20E — edición confirmada de información visible del producto.
+  // Inicialmente solo permite title y cpu; la validación/escritura final
+  // ocurre en el dispatcher SQL y requiere CONFIRMAR.
+  "catalog.product.update",
+
   // P20.18 — lenguaje natural completo sobre inventario físico: detalle
   // real de 1..100 STU, transición atómica de 1..100 STU, y listado de
   // productos como lectura directa del administrador (no solo interna).

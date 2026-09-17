@@ -381,3 +381,76 @@ test("erp agent: contrato HTTP acepta customers.list", () => {
   });
   assert.equal(parsed.success, true);
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// P20.20E — edición confirmada de publicación existente
+// ═══════════════════════════════════════════════════════════════════════
+
+import {
+  catalogProductUpdateConfirmationSummary,
+} from "./catalogProductUpdateSummary";
+
+test("P20.20E: contrato HTTP acepta catalog.product.update", () => {
+  const parsed = ErpAgentRequestSchema.safeParse({
+    waId: "573001234567",
+    metaMessageId: "wamid.P2020EPRODUCTUPDATE",
+    requestId: "77777777-7777-4777-8777-777777777777",
+    kind: "command",
+    action: "catalog.product.update",
+    arguments: {
+      productId: "11111111-1111-4111-8111-111111111111",
+      title: "Acer Corporativo 14 | UltraCorporate",
+      cpu: "Intel Core i5-6300U 6ª generación",
+    },
+  });
+
+  assert.equal(parsed.success, true);
+});
+
+test("P20.20E: preview muestra Antes → Después para nombre y procesador", () => {
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "Intel Core i5-6200U",
+    arguments: {
+      title: "Acer Corporativo 14 | UltraCorporate",
+      cpu: "Intel Core i5-6300U 6ª generación",
+    },
+  });
+
+  assert.equal(
+    resumen,
+    [
+      "📝 EDITAR PUBLICACIÓN",
+      "",
+      "Producto: Acer Corporate 14",
+      "",
+      "Nombre:",
+      "Antes: Acer Corporate 14",
+      "Después: Acer Corporativo 14 | UltraCorporate",
+      "",
+      "Procesador:",
+      "Antes: Intel Core i5-6200U",
+      "Después: Intel Core i5-6300U 6ª generación",
+    ].join("\n")
+  );
+});
+
+test("P20.20E: preview NO normaliza el texto nuevo", () => {
+  const literal =
+    "  Acer  Corporativo 14 | UltraCorporate  ";
+
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "",
+    arguments: {
+      title: literal,
+    },
+  });
+
+  assert.ok(
+    resumen.includes(`Después: ${literal}`),
+    "el literal debe conservar espacios, mayúsculas y símbolos exactamente"
+  );
+});

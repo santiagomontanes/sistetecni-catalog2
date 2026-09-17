@@ -5,6 +5,9 @@ if (typeof window !== "undefined") {
 import { getAdminClient } from "@/supabase/admin";
 import type { ErpAgentCommand, ErpAgentRequest } from "./contracts";
 import {
+  catalogProductUpdateConfirmationSummary,
+} from "./catalogProductUpdateSummary";
+import {
   confirmationCodeForRequest,
   erpAgentControlConfig,
   hashConfirmationCode,
@@ -143,6 +146,33 @@ async function confirmationSummary(
     case "inventory.unit_media.replace": {
       const n = Number.isInteger(a.mediaCount) ? Number(a.mediaCount) : 0;
       return `Reemplazar las fotos de la unidad ${text("unitCode")} por ${n} foto${n === 1 ? "" : "s"} nueva${n === 1 ? "" : "s"}`;
+    }
+
+    case "catalog.product.update": {
+      const productId = text("productId");
+
+      let tituloActual = "";
+      let cpuActual = "";
+
+      if (productId) {
+        const { data } = await client
+          .from("products")
+          .select("title,cpu")
+          .eq("id", productId)
+          .maybeSingle();
+
+        tituloActual =
+          typeof data?.title === "string" ? data.title : "";
+        cpuActual =
+          typeof data?.cpu === "string" ? data.cpu : "";
+      }
+
+      return catalogProductUpdateConfirmationSummary({
+        productId,
+        currentTitle: tituloActual,
+        currentCpu: cpuActual,
+        arguments: a,
+      });
     }
 
     case "catalog.publish_draft": {
