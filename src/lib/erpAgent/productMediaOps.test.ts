@@ -70,10 +70,14 @@ function fakeClienteCas({
   const llamadas: Array<{ tipo: "is" | "filter"; literal: string | null }> = [];
   const client = {
     from(_tabla: string) {
+      void _tabla;
       return {
         select(_cols: string) {
+          void _cols;
           return {
             eq(_col: string, _val: string) {
+              void _col;
+              void _val;
               return {
                 async maybeSingle() {
                   return { data: lecturas[intento], error: null };
@@ -83,19 +87,26 @@ function fakeClienteCas({
           };
         },
         update(_valores: { images: string[] }) {
+          void _valores;
           return {
             eq(_col: string, _val: string) {
+              void _col;
+              void _val;
               const resultado = () => {
                 const filas = actualizaciones[intento] ?? [];
                 intento += 1;
-                return { async select(_c: string) { return { data: filas, error: null }; } };
+                return { async select(_c: string) { void _c; return { data: filas, error: null }; } };
               };
               return {
                 is(_col: string, _val: null) {
+                  void _col;
+                  void _val;
                   llamadas.push({ tipo: "is", literal: null });
                   return resultado();
                 },
                 filter(_col: string, _op: string, literal: string) {
+                  void _col;
+                  void _op;
                   llamadas.push({ tipo: "filter", literal });
                   return resultado();
                 },
