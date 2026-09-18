@@ -454,3 +454,258 @@ test("P20.20E: preview NO normaliza el texto nuevo", () => {
     "el literal debe conservar espacios, mayúsculas y símbolos exactamente"
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// P20.20G — extiende catalog.product.update con condition/description
+// ═══════════════════════════════════════════════════════════════════════
+
+test("P20.20G: contrato HTTP acepta condition", () => {
+  const parsed = ErpAgentRequestSchema.safeParse({
+    waId: "573001234567",
+    metaMessageId: "wamid.P2020GCONDITION",
+    requestId: "77777777-7777-4777-8777-777777777778",
+    kind: "command",
+    action: "catalog.product.update",
+    arguments: {
+      productId: "11111111-1111-4111-8111-111111111111",
+      condition: "Grado A, batería nueva",
+    },
+  });
+
+  assert.equal(parsed.success, true);
+});
+
+test("P20.20G: contrato HTTP acepta description", () => {
+  const parsed = ErpAgentRequestSchema.safeParse({
+    waId: "573001234567",
+    metaMessageId: "wamid.P2020GDESCRIPTION",
+    requestId: "77777777-7777-4777-8777-777777777779",
+    kind: "command",
+    action: "catalog.product.update",
+    arguments: {
+      productId: "11111111-1111-4111-8111-111111111111",
+      description: "Equipo compacto, ideal para oficina.",
+    },
+  });
+
+  assert.equal(parsed.success, true);
+});
+
+test("P20.20G: contrato HTTP acepta los 4 campos juntos (title, cpu, condition, description)", () => {
+  const parsed = ErpAgentRequestSchema.safeParse({
+    waId: "573001234567",
+    metaMessageId: "wamid.P2020GALLFOUR",
+    requestId: "77777777-7777-4777-8777-77777777777a",
+    kind: "command",
+    action: "catalog.product.update",
+    arguments: {
+      productId: "11111111-1111-4111-8111-111111111111",
+      title: "Acer Corporativo 14 | UltraCorporate",
+      cpu: "Intel Core i5-6300U 6ª generación",
+      condition: "Grado A, batería nueva",
+      description: "Equipo compacto, ideal para oficina.",
+    },
+  });
+
+  assert.equal(parsed.success, true);
+});
+
+test("P20.20G: preview muestra los 4 bloques Antes → Después cuando los 4 campos cambian", () => {
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "Intel Core i5-6200U",
+    currentCondition: "Grado B",
+    currentDescription: "Equipo usado para oficina.",
+    arguments: {
+      title: "Acer Corporativo 14 | UltraCorporate",
+      cpu: "Intel Core i5-6300U 6ª generación",
+      condition: "Grado A, batería nueva",
+      description: "Equipo compacto, ideal para oficina.",
+    },
+  });
+
+  assert.equal(
+    resumen,
+    [
+      "📝 EDITAR PUBLICACIÓN",
+      "",
+      "Producto: Acer Corporate 14",
+      "",
+      "Nombre:",
+      "Antes: Acer Corporate 14",
+      "Después: Acer Corporativo 14 | UltraCorporate",
+      "",
+      "Procesador:",
+      "Antes: Intel Core i5-6200U",
+      "Después: Intel Core i5-6300U 6ª generación",
+      "",
+      "Condición:",
+      "Antes: Grado B",
+      "Después: Grado A, batería nueva",
+      "",
+      "Descripción:",
+      "Antes: Equipo usado para oficina.",
+      "Después: Equipo compacto, ideal para oficina.",
+    ].join("\n")
+  );
+});
+
+test("P20.20G: preview con SOLO condition no muestra bloques de Nombre/Procesador/Descripción", () => {
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "Intel Core i5-6200U",
+    currentCondition: "Grado B",
+    currentDescription: "Equipo usado para oficina.",
+    arguments: {
+      condition: "Grado A, batería nueva",
+    },
+  });
+
+  assert.equal(
+    resumen,
+    [
+      "📝 EDITAR PUBLICACIÓN",
+      "",
+      "Producto: Acer Corporate 14",
+      "",
+      "Condición:",
+      "Antes: Grado B",
+      "Después: Grado A, batería nueva",
+    ].join("\n")
+  );
+  assert.ok(!resumen.includes("Nombre:"));
+  assert.ok(!resumen.includes("Procesador:"));
+  assert.ok(!resumen.includes("Descripción:"));
+});
+
+test("P20.20G: preview con SOLO description no muestra los otros bloques", () => {
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "Intel Core i5-6200U",
+    currentCondition: "Grado B",
+    currentDescription: "Equipo usado para oficina.",
+    arguments: {
+      description: "Equipo compacto, ideal para oficina.",
+    },
+  });
+
+  assert.equal(
+    resumen,
+    [
+      "📝 EDITAR PUBLICACIÓN",
+      "",
+      "Producto: Acer Corporate 14",
+      "",
+      "Descripción:",
+      "Antes: Equipo usado para oficina.",
+      "Después: Equipo compacto, ideal para oficina.",
+    ].join("\n")
+  );
+  assert.ok(!resumen.includes("Nombre:"));
+  assert.ok(!resumen.includes("Procesador:"));
+  assert.ok(!resumen.includes("Condición:"));
+});
+
+test("P20.20G: preview NO normaliza condition (espacios y mayúsculas literales)", () => {
+  const literal = "  Grado A,  batería NUEVA  ";
+
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "",
+    currentCondition: "",
+    currentDescription: "",
+    arguments: {
+      condition: literal,
+    },
+  });
+
+  assert.ok(
+    resumen.includes(`Después: ${literal}`),
+    "el literal de condition debe conservar espacios y mayúsculas exactamente"
+  );
+});
+
+test("P20.20G: preview NO normaliza description (comas, mayúsculas y espacios literales)", () => {
+  const literal = "  Equipo, Compacto,  ideal PARA oficina.  ";
+
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "",
+    currentCondition: "",
+    currentDescription: "",
+    arguments: {
+      description: literal,
+    },
+  });
+
+  assert.ok(
+    resumen.includes(`Después: ${literal}`),
+    "el literal de description debe conservar comas, mayúsculas y espacios exactamente"
+  );
+});
+
+test("P20.20G: preview usa el fallback \"(sin condición)\" cuando no hay condición actual", () => {
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "",
+    currentCondition: "",
+    currentDescription: "",
+    arguments: {
+      condition: "Grado A",
+    },
+  });
+
+  assert.ok(resumen.includes("Antes: (sin condición)"));
+});
+
+test("P20.20G: preview usa el fallback \"(sin descripción)\" cuando no hay descripción actual", () => {
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "",
+    currentCondition: null,
+    currentDescription: null,
+    arguments: {
+      description: "Equipo compacto.",
+    },
+  });
+
+  assert.ok(resumen.includes("Antes: (sin descripción)"));
+});
+
+test("P20.20G: el comportamiento P20.20E de title/cpu queda intacto sin condition/description", () => {
+  const resumen = catalogProductUpdateConfirmationSummary({
+    productId: "11111111-1111-4111-8111-111111111111",
+    currentTitle: "Acer Corporate 14",
+    currentCpu: "Intel Core i5-6200U",
+    arguments: {
+      title: "Acer Corporativo 14 | UltraCorporate",
+      cpu: "Intel Core i5-6300U 6ª generación",
+    },
+  });
+
+  assert.equal(
+    resumen,
+    [
+      "📝 EDITAR PUBLICACIÓN",
+      "",
+      "Producto: Acer Corporate 14",
+      "",
+      "Nombre:",
+      "Antes: Acer Corporate 14",
+      "Después: Acer Corporativo 14 | UltraCorporate",
+      "",
+      "Procesador:",
+      "Antes: Intel Core i5-6200U",
+      "Después: Intel Core i5-6300U 6ª generación",
+    ].join("\n")
+  );
+  assert.ok(!resumen.includes("Condición:"));
+  assert.ok(!resumen.includes("Descripción:"));
+});

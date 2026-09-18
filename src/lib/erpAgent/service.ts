@@ -153,11 +153,13 @@ async function confirmationSummary(
 
       let tituloActual = "";
       let cpuActual = "";
+      let condicionActual = "";
+      let descripcionActual = "";
 
       if (productId) {
         const { data } = await client
           .from("products")
-          .select("title,cpu")
+          .select("title,cpu,condition,descripcion")
           .eq("id", productId)
           .maybeSingle();
 
@@ -165,12 +167,18 @@ async function confirmationSummary(
           typeof data?.title === "string" ? data.title : "";
         cpuActual =
           typeof data?.cpu === "string" ? data.cpu : "";
+        condicionActual =
+          typeof data?.condition === "string" ? data.condition : "";
+        descripcionActual =
+          typeof data?.descripcion === "string" ? data.descripcion : "";
       }
 
       return catalogProductUpdateConfirmationSummary({
         productId,
         currentTitle: tituloActual,
         currentCpu: cpuActual,
+        currentCondition: condicionActual,
+        currentDescription: descripcionActual,
         arguments: a,
       });
     }
