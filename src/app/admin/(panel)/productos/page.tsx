@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import AdminProductForm from "@/components/AdminProductForm";
 import AdminProductTable from "@/components/AdminProductTable";
 import AdminProductCompatibility from "@/components/AdminProductCompatibility";
+import CatalogPdfButton from "@/components/CatalogPdfButton";
 import { deleteProduct, getProductsList, setProductVisibility } from "@/supabase/db";
 import type { Product } from "@/types/product";
 
@@ -81,11 +82,16 @@ export default function AdminProductosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text">Productos</h1>
-        <p className="mt-1 text-sm text-muted">
-          Gestiona el catálogo de equipos · {total} en total
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Productos</h1>
+          <p className="mt-1 text-sm text-muted">
+            Gestiona el catálogo de equipos · {total} en total
+          </p>
+        </div>
+        {/* P20.21C — genera el catálogo PDF con el inventario vigente. Solo
+            lectura: no modifica ningún producto. */}
+        <CatalogPdfButton />
       </div>
 
       <AdminProductForm
