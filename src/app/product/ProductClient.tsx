@@ -110,6 +110,22 @@ export default function ProductClient() {
               <Spec label="Pantalla" value={product.screen} />
             </div>
 
+            {/* Descripción COMPLETA (P20.21A).
+                Misma columna `products.descripcion` que alimenta la tarjeta
+                del catálogo (allí recortada visualmente), el bot y el PDF:
+                una sola fuente de verdad, sin copias por canal.
+                `whitespace-pre-line` conserva los saltos de línea que
+                escribió el administrador. Texto plano de React: nada de
+                dangerouslySetInnerHTML, así que el contenido se escapa. */}
+            {product.description ? (
+              <div className="mt-6 border-t border-border pt-5">
+                <h3 className="text-sm font-semibold text-text">Sobre este equipo</h3>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted">
+                  {product.description}
+                </p>
+              </div>
+            ) : null}
+
             <div className="mt-6 flex flex-wrap gap-3">
               <WhatsAppButton phone="+57 3115996339" product={product} fixed={false} />
 

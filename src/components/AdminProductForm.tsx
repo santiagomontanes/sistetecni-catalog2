@@ -35,6 +35,12 @@ interface ProductFormState {
   touchScreen: boolean | null;
   screenSizeInches: number | null;
   storageGb: number | null;
+  // P20.21A — descripción comercial y garantía. MISMA columna
+  // (`products.descripcion` / `products.warranty_months`) que escribe el
+  // administrador por WhatsApp: el panel es otro escritor de la única
+  // fuente de verdad, nunca una copia paralela.
+  description: string;
+  warrantyMonths: number | null;
 }
 
 const initialState: ProductFormState = {
@@ -56,6 +62,8 @@ const initialState: ProductFormState = {
   touchScreen: null,
   screenSizeInches: null,
   storageGb: null,
+  description: "",
+  warrantyMonths: null,
 };
 
 function fromProduct(product: Product): ProductFormState {
@@ -78,6 +86,8 @@ function fromProduct(product: Product): ProductFormState {
     touchScreen: product.touchScreen ?? null,
     screenSizeInches: product.screenSizeInches ?? null,
     storageGb: product.storageGb ?? null,
+    description: product.description ?? "",
+    warrantyMonths: product.warrantyMonths ?? null,
   };
 }
 
@@ -316,11 +326,44 @@ export default function AdminProductForm({
         <input
           type="number"
           min={0}
+          max={60}
+          value={form.warrantyMonths ?? ""}
+          onChange={(e) =>
+            handleChange("warrantyMonths", e.target.value === "" ? null : Number(e.target.value))
+          }
+          placeholder="Garantía (meses)"
+          className={input}
+        />
+        <input
+          type="number"
+          min={0}
           value={form.stock}
           onChange={(e) => handleChange("stock", Number(e.target.value))}
           placeholder="Stock"
           className={input}
         />
+      </div>
+
+      {/* P20.21A — descripción comercial.
+          FUENTE ÚNICA: `products.descripcion`. Es la MISMA que escribe el
+          administrador por WhatsApp (al crear o con «cambia la descripción
+          del …») y la MISMA que leen el bot para sus argumentos grounded,
+          el catálogo PDF, la tarjeta del catálogo y la ficha pública.
+          No hay copias por canal ni proceso de sincronización.
+          Texto literal: nunca lo reescribe ni lo resume un LLM. */}
+      <div className="space-y-1.5">
+        <label className={label}>Descripción comercial</label>
+        <textarea
+          value={form.description}
+          onChange={(e) => handleChange("description", e.target.value)}
+          placeholder="Ej. Equipo corporativo robusto en aluminio, ideal para universidad, oficina y programación básica."
+          rows={4}
+          maxLength={2000}
+          className={`${input} resize-y`}
+        />
+        <p className="text-xs text-muted">
+          {form.description.length}/2000 · La ven el cliente en la web, el catálogo PDF y el asesor por WhatsApp.
+        </p>
       </div>
 
       <div className="space-y-3 rounded-xl border border-border bg-white p-4">

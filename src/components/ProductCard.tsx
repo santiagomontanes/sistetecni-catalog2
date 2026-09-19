@@ -93,6 +93,22 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           </div>
         )}
 
+        {/* Descripción comercial (P20.21A).
+            FUENTE ÚNICA: `products.descripcion`, la misma que escribe el
+            administrador por WhatsApp y que leen el bot y el catálogo PDF.
+            El recorte a 3 líneas es SOLO VISUAL (line-clamp, CSS): el texto
+            completo viaja íntegro y se muestra entero en la ficha.
+            Se renderiza como texto normal de React —nunca
+            dangerouslySetInnerHTML—, así que cualquier cosa que parezca
+            HTML se escapa y jamás se ejecuta.
+            Sin descripción NO se pinta ningún placeholder: un "N/A"
+            ensucia la tarjeta y no aporta nada. */}
+        {product.description ? (
+          <p className="line-clamp-3 text-xs leading-relaxed text-muted">
+            {product.description}
+          </p>
+        ) : null}
+
         {/* Price */}
         <p className="text-xl font-bold text-primary">{formatCOP(price)}</p>
 

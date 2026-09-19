@@ -36,6 +36,24 @@ export interface Product {
   touchScreen?: boolean | null;
   screenSizeInches?: number | null;
   storageGb?: number | null;
+
+  /**
+   * P20.21A — descripción comercial del producto.
+   *
+   * FUENTE ÚNICA: la columna `public.products.descripcion` (nombre histórico
+   * en español). Aquí se expone como `description` siguiendo la misma
+   * convención DB→dominio que ya usa el resto del tipo (`visible_web` →
+   * `visibleWeb`, `gpu_model` → `gpuModel`).
+   *
+   * La escriben el administrador por WhatsApp (creación y edición) y el
+   * panel; la leen el bot (capacidades grounded), el catálogo PDF, la
+   * tarjeta del catálogo web y la ficha individual. NO existe ninguna copia
+   * por canal: todos leen esta misma columna.
+   */
+  description?: string | null;
+
+  /** P20.21A — garantía en meses declarada al publicar. `null` = no declarada. */
+  warrantyMonths?: number | null;
 }
 
 export interface ProductFilters {

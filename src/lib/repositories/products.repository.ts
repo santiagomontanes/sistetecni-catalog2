@@ -27,7 +27,11 @@ export interface ProductsRepository {
 
 const SELECT_COLUMNS =
   "id,title,brand,model,cpu,ram,storage,screen,price,condition,stock,images,featured,visible_web,created_at," +
-  "cpu_generation,gpu_type,gpu_model,touch_screen,screen_size_inches,storage_gb";
+  "cpu_generation,gpu_type,gpu_model,touch_screen,screen_size_inches,storage_gb," +
+  // P20.21A — FUENTE ÚNICA de la descripción comercial y de la garantía.
+  // `descripcion` es el nombre histórico de la columna (español); el
+  // dominio la expone como `description`.
+  "descripcion,warranty_months";
 
 interface ProductRow {
   id: string;
@@ -48,6 +52,8 @@ interface ProductRow {
   cpu_generation: number | null;
   gpu_type: string | null;
   gpu_model: string | null;
+  descripcion: string | null;
+  warranty_months: number | null;
   touch_screen: boolean | null;
   screen_size_inches: number | null;
   storage_gb: number | null;
@@ -76,6 +82,8 @@ function mapRow(row: ProductRow): Product {
     touchScreen: row.touch_screen,
     screenSizeInches: row.screen_size_inches,
     storageGb: row.storage_gb,
+    description: row.descripcion,
+    warrantyMonths: row.warranty_months,
   };
 }
 

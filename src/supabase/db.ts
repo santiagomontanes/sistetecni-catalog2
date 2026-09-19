@@ -43,6 +43,12 @@ function mapProduct(row: DbRow): Product {
     touchScreen: typeof row.touch_screen === "boolean" ? row.touch_screen : null,
     screenSizeInches:
       row.screen_size_inches === null || row.screen_size_inches === undefined ? null : Number(row.screen_size_inches),
+    // P20.21A — FUENTE ÚNICA de la descripción comercial: la columna
+    // `descripcion`. La escriben WhatsApp (creación/edición) y el panel; la
+    // leen bot, PDF, tarjeta del catálogo y ficha individual.
+    description: typeof row.descripcion === "string" ? row.descripcion : null,
+    warrantyMonths:
+      row.warranty_months === null || row.warranty_months === undefined ? null : Number(row.warranty_months),
     storageGb: row.storage_gb === null || row.storage_gb === undefined ? null : Number(row.storage_gb),
   };
 }
@@ -68,6 +74,10 @@ function mapProductListItem(row: DbRow): Product {
     featured: Boolean(row.featured),
     visibleWeb: row.visible_web !== false,
     createdAt: toDate(row.created_at),
+    // P20.21A — la tarjeta del catálogo muestra un extracto; el TEXTO
+    // COMPLETO viaja igual y se recorta SOLO visualmente (CSS), nunca en
+    // los datos.
+    description: typeof row.descripcion === "string" ? row.descripcion : null,
   };
 }
 
@@ -75,7 +85,7 @@ function mapProductListItem(row: DbRow): Product {
 // — más importante — evita arrastrar el array completo de URLs que el
 // navegador podría intentar precargar.
 const LIST_COLUMNS =
-  "id,title,brand,model,ram,storage,price,condition,stock,images,featured,visible_web,created_at";
+  "id,title,brand,model,ram,storage,price,condition,stock,images,featured,visible_web,created_at,descripcion";
 
 function mapTestimonial(row: DbRow): Testimonial {
   return {
@@ -348,6 +358,11 @@ function cleanProductPayload(data: Partial<ProductPayload>): Record<string, unkn
     ...(data.touchScreen !== undefined ? { touch_screen: data.touchScreen } : {}),
     ...(data.screenSizeInches !== undefined ? { screen_size_inches: data.screenSizeInches } : {}),
     ...(data.storageGb !== undefined ? { storage_gb: data.storageGb } : {}),
+    // P20.21A — MISMA columna que escribe WhatsApp (`catalog.publish_draft`
+    // al crear, `catalog.product.update` al editar). El panel es solo otro
+    // escritor de la única fuente de verdad, nunca una copia paralela.
+    ...(data.description !== undefined ? { descripcion: data.description } : {}),
+    ...(data.warrantyMonths !== undefined ? { warranty_months: data.warrantyMonths } : {}),
   };
 }
 
