@@ -23,6 +23,7 @@
     "src/lib/erpAgent/**/*.ts",
     "src/lib/salesAdmin/**/*.ts",
     "src/lib/salesPdf/**/*.ts",
+    "src/lib/catalogPdf/**/*.ts",
     "src/config/**/*.ts",
     "src/components/EnvironmentBanner.test.ts",
     "src/types/**/*.ts"

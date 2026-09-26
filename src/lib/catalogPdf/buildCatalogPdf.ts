@@ -31,14 +31,30 @@ const TEXT_MUTED: RGB = rgb(0.42, 0.45, 0.5);
 const BORDER_GRAY: RGB = rgb(0.85, 0.87, 0.9);
 const CARD_BG: RGB = rgb(0.975, 0.98, 0.99);
 const WHITE: RGB = rgb(1, 1, 1);
+/** Acento para el precio: contrasta con el azul corporativo sin competir. */
+const ACCENT: RGB = rgb(0x0f / 255, 0x9d / 255, 0x58 / 255);
+const CHIP_BG: RGB = rgb(0.93, 0.95, 0.99);
 
 /** Alto fijo de la tarjeta de producto. Fija = layout predecible y paginable. */
-const CARD_HEIGHT = 150;
-const CARD_GAP = 14;
-const PHOTO_SIZE = 118;
+const CARD_GAP = 22;
+/** Foto principal de la ficha. */
+const FOTO_PRINCIPAL = 210;
+/** Miniaturas del resto de fotos del mismo equipo. */
+const MINIATURA = 62;
+const MINIATURA_GAP = 7;
+/** Alto mínimo que debe caber para empezar una ficha en la página actual. */
+const ALTO_MINIMO_FICHA = 300;
 
 /** Tope de líneas de descripción DENTRO de la tarjeta (el dato completo vive en DB). */
-const MAX_LINEAS_DESCRIPCION = 3;
+/**
+ * P20.28D — la descripción va COMPLETA.
+ *
+ * Antes se recortaba a tres líneas con puntos suspensivos. Ese recorte se
+ * pensó para una tarjeta compacta, pero el cliente recibe este PDF para
+ * decidir una compra: escondérselo le obliga a preguntar por WhatsApp algo
+ * que ya estaba escrito. Ahora la ficha crece lo que haga falta y salta de
+ * página sola.
+ */
 
 export interface CatalogProduct {
   id: string;
@@ -58,6 +74,12 @@ export interface CatalogProduct {
 }
 
 export interface BuildCatalogOptions {
+  /**
+   * Tope de fotos por equipo (P20.28D). Existe para acotar el peso del PDF:
+   * WhatsApp tiene un límite de tamaño y un catálogo no puede quedarse sin
+   * enviar por traer veinte fotos de un mismo portátil.
+   */
+  maxImagesPerProduct?: number;
   /** Reloj inyectable: los tests necesitan una fecha estable. */
   generatedAt?: Date;
   /**
@@ -174,6 +196,60 @@ function newPage(ctx: BuildContext): void {
 /** Tope por imagen: una foto enorme hincha el PDF y lo vuelve inenviable. */
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
+/**
+ * Ancho al que se reescalan las fotos antes de incrustarlas (P20.28D).
+ *
+ * La foto principal se dibuja a 210 pt y las miniaturas a 62 pt; incrustar el
+ * original de 2.000 px para eso solo engorda el PDF. Con las fotos reales del
+ * catálogo la diferencia es de 10 MB a menos de 2, y eso es lo que decide si
+ * un cliente con datos móviles llega a abrirlo.
+ *
+ * 760 px da holgura de sobra para imprimir la principal sin pixelarla.
+ */
+const ANCHO_REESCALADO = 760;
+const CALIDAD_JPEG = 72;
+
+/**
+ * Reescala con `sharp` si está disponible; si no, devuelve el original.
+ *
+ * `sharp` llega con Next.js y no está declarado como dependencia directa, así
+ * que NO se da por hecho: si faltara, el catálogo se sigue generando con las
+ * fotos tal cual —más pesado, pero completo—. Un catálogo pesado es un
+ * problema; un catálogo que no sale es otro mucho mayor.
+ */
+let sharpModulo: unknown | null | undefined;
+async function reescalar(
+  bytes: Uint8Array,
+  tipo: "jpg" | "png"
+): Promise<{ bytes: Uint8Array; tipo: "jpg" | "png" }> {
+  if (sharpModulo === undefined) {
+    try {
+      sharpModulo = (await import("sharp")).default;
+    } catch {
+      sharpModulo = null;
+    }
+  }
+  if (!sharpModulo) return { bytes, tipo };
+
+  try {
+    const fn = sharpModulo as (b: Uint8Array) => {
+      resize: (o: object) => { jpeg: (o: object) => { toBuffer: () => Promise<Buffer> } };
+    };
+    const salida = await fn(bytes)
+      .resize({ width: ANCHO_REESCALADO, withoutEnlargement: true })
+      .jpeg({ quality: CALIDAD_JPEG, mozjpeg: true })
+      .toBuffer();
+    // Si el "reescalado" saliera mayor que el original (fotos ya pequeñas),
+    // se queda el original.
+    if (salida.byteLength > 0 && salida.byteLength < bytes.byteLength) {
+      return { bytes: new Uint8Array(salida), tipo: "jpg" };
+    }
+  } catch {
+    // Una foto que sharp no sabe leer se incrusta tal cual.
+  }
+  return { bytes, tipo };
+}
+
 function hostPermitido(url: string, allowed: string[]): boolean {
   try {
     const u = new URL(url);
@@ -260,8 +336,10 @@ function drawPortada(ctx: BuildContext, opciones: BuildCatalogOptions, total: nu
     color: BRAND_BLUE,
   });
 
-  drawText(ctx, COMPANY.name, MARGIN, 40, { bold: true, color: WHITE, y: PAGE_HEIGHT - 150 });
-  drawText(ctx, "Calidad al mejor precio", MARGIN, 16, { color: WHITE, y: PAGE_HEIGHT - 176 });
+  // El nombre arranca DESPUÉS del logotipo: antes se solapaban y se leía
+  // "STSTETECNI".
+  drawText(ctx, COMPANY.name, logoX + logoSize + 18, 34, { bold: true, color: WHITE, y: PAGE_HEIGHT - 96 });
+  drawText(ctx, "Calidad al mejor precio", logoX + logoSize + 18, 14, { color: WHITE, y: PAGE_HEIGHT - 120 });
 
   drawText(ctx, "CATÁLOGO DE PRODUCTOS", MARGIN, 13, { bold: true, color: WHITE, y: PAGE_HEIGHT - 226 });
 
@@ -299,121 +377,319 @@ function drawPortada(ctx: BuildContext, opciones: BuildCatalogOptions, total: nu
 
 // ── Tarjeta de producto ───────────────────────────────────────────────────
 
-function drawTarjeta(ctx: BuildContext, p: CatalogProduct, imagen: PDFImage | null): void {
-  if (ctx.y - CARD_HEIGHT < BOTTOM_LIMIT) newPage(ctx);
+/**
+ * Las descripciones del catálogo vienen ESTRUCTURADAS: un párrafo de
+ * presentación, encabezados con emoji ("⚙️ CARACTERÍSTICAS", "🔌 PUERTOS Y
+ * CONECTIVIDAD") y listas con viñeta. Aplanarlo todo a un muro de texto,
+ * como se hacía, desperdicia el trabajo de quien escribió la ficha y deja al
+ * cliente sin poder localizar nada de un vistazo.
+ *
+ * Las fuentes estándar de PDF no tienen emojis, así que se usan como SEÑAL de
+ * estructura y luego se quitan del texto visible.
+ */
+type LineaDescripcion =
+  | { clase: "seccion"; texto: string }
+  | { clase: "vineta"; texto: string }
+  | { clase: "parrafo"; texto: string }
+  | { clase: "espacio" };
+
+/** Emoji o símbolo suelto al principio de la línea, que solo marca estructura. */
+const PREFIJO_DECORATIVO = /^[\s\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}]+/u;
+
+function clasificarDescripcion(texto: string, titulo?: string): LineaDescripcion[] {
+  const salida: LineaDescripcion[] = [];
+  for (const cruda of String(texto).split(/\r?\n/)) {
+    const sinDecorar = cruda.replace(PREFIJO_DECORATIVO, "").trim();
+    if (!sinDecorar) {
+      // Nunca dos espacios seguidos.
+      if (salida.length > 0 && salida[salida.length - 1].clase !== "espacio") salida.push({ clase: "espacio" });
+      continue;
+    }
+    if (/^[•·*-]\s+/.test(sinDecorar)) {
+      salida.push({ clase: "vineta", texto: sinDecorar.replace(/^[•·*-]\s+/, "").trim() });
+      continue;
+    }
+    // Encabezado: corto, en mayúsculas y sin puntuación final de frase.
+    const letras = sinDecorar.replace(/[^\p{L}]/gu, "");
+    const enMayusculas = letras.length > 0 && letras === letras.toUpperCase();
+    if (enMayusculas && sinDecorar.length <= 48 && !/[.:,;]$/.test(sinDecorar)) {
+      salida.push({ clase: "seccion", texto: sinDecorar });
+      continue;
+    }
+    salida.push({ clase: "parrafo", texto: sinDecorar });
+  }
+  // La primera línea suele repetir el nombre del equipo, que ya está en la
+  // cabecera de la ficha: se quita para no decirlo dos veces. Se compara por
+  // letras y números, para que una diferencia de comillas o de emoji no
+  // impida reconocerlo.
+  const clave = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  if (salida.length > 0 && salida[0].clase !== "espacio") {
+    const primera = clave((salida[0] as { texto: string }).texto);
+    const esperado = titulo ? clave(titulo) : "";
+    if (salida[0].clase === "seccion" || (esperado.length > 6 && primera === esperado)) salida.shift();
+  }
+  while (salida.length > 0 && salida[0].clase === "espacio") salida.shift();
+  return salida;
+}
+
+/** Dibuja una imagen ajustada dentro de un cuadro, manteniendo proporción. */
+function dibujarEnCuadro(ctx: BuildContext, img: PDFImage, x: number, y: number, lado: number): void {
+  const escala = Math.min(lado / img.width, lado / img.height);
+  const ancho = img.width * escala;
+  const alto = img.height * escala;
+  ctx.page.drawImage(img, { x: x + (lado - ancho) / 2, y: y + (lado - alto) / 2, width: ancho, height: alto });
+}
+
+/** Cuadro gris con el nombre de la marca, cuando no hay foto que poner. */
+function dibujarMarcador(ctx: BuildContext, x: number, y: number, lado: number): void {
+  ctx.page.drawRectangle({
+    x, y, width: lado, height: lado,
+    color: rgb(0.92, 0.94, 0.96), borderColor: BORDER_GRAY, borderWidth: 0.5,
+  });
+  const texto = "SISTETECNI";
+  const size = lado > 100 ? 11 : 7;
+  const ancho = ctx.fonts.bold.widthOfTextAtSize(texto, size);
+  ctx.page.drawText(texto, {
+    x: x + (lado - ancho) / 2, y: y + lado / 2 - size * 0.35,
+    size, font: ctx.fonts.bold, color: TEXT_MUTED,
+  });
+}
+
+/** Etiqueta redondeada (condición, garantía). */
+function dibujarChip(ctx: BuildContext, texto: string, x: number, y: number): number {
+  const size = 8.5;
+  const ancho = ctx.fonts.bold.widthOfTextAtSize(texto, size) + 14;
+  ctx.page.drawRectangle({
+    x, y: y - 4, width: ancho, height: 17,
+    color: CHIP_BG, borderColor: BORDER_GRAY, borderWidth: 0.5,
+  });
+  ctx.page.drawText(texto, { x: x + 7, y: y + 1, size, font: ctx.fonts.bold, color: BRAND_DARK });
+  return ancho;
+}
+
+/**
+ * Ficha de un producto: cabecera, galería con TODAS sus fotos,
+ * características completas y descripción íntegra.
+ *
+ * Se dibuja en dos pasadas porque el alto no se sabe de antemano: primero se
+ * mide el texto para saber cuánto ocupa, y solo entonces se decide si cabe en
+ * la página o hay que empezar una nueva. Sin eso, una descripción larga
+ * partía la ficha por la mitad.
+ */
+function drawFichaProducto(ctx: BuildContext, p: CatalogProduct, imagenes: (PDFImage | null)[], indice: number): void {
+  const nombre = p.title || [p.brand, p.model].filter(Boolean).join(" ") || "Equipo";
+  const textoX = MARGIN + FOTO_PRINCIPAL + 20;
+  const textoAncho = CONTENT_WIDTH - FOTO_PRINCIPAL - 20;
+
+  // ── Medición previa ──────────────────────────────────────────────────
+  const nombreLineas = wrapText(nombre, ctx.fonts.bold, 15, textoAncho);
+  const specs: [string, string][] = [];
+  if (p.cpu) specs.push(["Procesador", p.cpu]);
+  if (typeof p.ram === "number" && p.ram > 0) specs.push(["Memoria RAM", `${p.ram} GB`]);
+  if (p.storage) specs.push(["Almacenamiento", p.storage]);
+  if (p.screen) specs.push(["Pantalla", p.screen]);
+  if (p.gpuModel) specs.push(["Gráficos", p.gpuModel]);
+
+  const bloques = p.description ? clasificarDescripcion(p.description, nombre) : [];
+  // Alto aproximado, solo para decidir el salto de página.
+  const altoBloques = bloques.reduce((acc, b) => {
+    if (b.clase === "espacio") return acc + 6;
+    if (b.clase === "seccion") return acc + 20;
+    const ancho = b.clase === "vineta" ? CONTENT_WIDTH - 40 : CONTENT_WIDTH - 24;
+    return acc + wrapText(b.texto, ctx.fonts.regular, 9, ancho).length * 11.5;
+  }, 0);
+
+  const conFoto = imagenes.filter((i): i is PDFImage => i !== null);
+  const miniaturas = Math.max(0, conFoto.length - 1);
+  const filasMini = miniaturas > 0 ? Math.ceil(miniaturas / Math.floor((FOTO_PRINCIPAL + MINIATURA_GAP) / (MINIATURA + MINIATURA_GAP))) : 0;
+
+  const altoColumnaFoto = FOTO_PRINCIPAL + (filasMini > 0 ? 8 + filasMini * (MINIATURA + MINIATURA_GAP) : 0);
+  const altoColumnaTexto = nombreLineas.length * 19 + 26 + specs.length * 15 + 34;
+  const altoDescripcion = bloques.length > 0 ? 24 + altoBloques : 0;
+  const altoFicha = Math.max(altoColumnaFoto, altoColumnaTexto) + altoDescripcion + 34;
+
+  // ── Salto de página ──────────────────────────────────────────────────
+  // Se exige que quepa la ficha entera, o al menos su parte superior: una
+  // ficha muy larga (descripción de 2.000 caracteres) no cabe nunca en una
+  // página, y en ese caso se empieza en una limpia y se deja fluir.
+  if (ctx.y - Math.min(altoFicha, ALTO_MINIMO_FICHA) < BOTTOM_LIMIT) newPage(ctx);
 
   const top = ctx.y;
-  const cardY = top - CARD_HEIGHT;
 
+  // Marco de la ficha. Se acota a lo que cabe en ESTA página: una descripción
+  // larga continúa en la siguiente, y un rectángulo con el alto total se
+  // saldría por abajo.
+  const altoMarco = Math.min(altoFicha, top - BOTTOM_LIMIT + 10);
   ctx.page.drawRectangle({
-    x: MARGIN,
-    y: cardY,
-    width: CONTENT_WIDTH,
-    height: CARD_HEIGHT,
-    color: CARD_BG,
-    borderColor: BORDER_GRAY,
-    borderWidth: 0.7,
+    x: MARGIN - 6, y: top - altoMarco, width: CONTENT_WIDTH + 12, height: altoMarco,
+    color: CARD_BG, borderColor: BORDER_GRAY, borderWidth: 0.8,
+  });
+  // Filo de color a la izquierda: da identidad sin recargar.
+  ctx.page.drawRectangle({
+    x: MARGIN - 6, y: top - altoMarco, width: 4, height: altoMarco, color: BRAND_BLUE,
   });
 
-  // Foto (o marcador) a la izquierda.
-  const fotoX = MARGIN + 12;
-  const fotoY = cardY + (CARD_HEIGHT - PHOTO_SIZE) / 2;
-  if (imagen) {
-    // Se ajusta manteniendo proporción dentro del cuadro reservado.
-    const escala = Math.min(PHOTO_SIZE / imagen.width, PHOTO_SIZE / imagen.height);
-    const ancho = imagen.width * escala;
-    const alto = imagen.height * escala;
-    ctx.page.drawImage(imagen, {
-      x: fotoX + (PHOTO_SIZE - ancho) / 2,
-      y: fotoY + (PHOTO_SIZE - alto) / 2,
-      width: ancho,
-      height: alto,
-    });
-  } else {
+  // ── Galería ──────────────────────────────────────────────────────────
+  const fotoX = MARGIN + 8;
+  let fotoY = top - 16 - FOTO_PRINCIPAL;
+  if (conFoto.length > 0) {
     ctx.page.drawRectangle({
-      x: fotoX,
-      y: fotoY,
-      width: PHOTO_SIZE,
-      height: PHOTO_SIZE,
-      color: rgb(0.92, 0.94, 0.96),
-      borderColor: BORDER_GRAY,
-      borderWidth: 0.5,
+      x: fotoX, y: fotoY, width: FOTO_PRINCIPAL, height: FOTO_PRINCIPAL,
+      color: WHITE, borderColor: BORDER_GRAY, borderWidth: 0.5,
     });
-    const texto = "SISTETECNI";
-    const size = 9;
-    const ancho = ctx.fonts.bold.widthOfTextAtSize(texto, size);
-    ctx.page.drawText(texto, {
-      x: fotoX + (PHOTO_SIZE - ancho) / 2,
-      y: fotoY + PHOTO_SIZE / 2 - 3,
-      size,
-      font: ctx.fonts.bold,
-      color: TEXT_MUTED,
-    });
+    dibujarEnCuadro(ctx, conFoto[0], fotoX, fotoY, FOTO_PRINCIPAL);
+  } else {
+    dibujarMarcador(ctx, fotoX, fotoY, FOTO_PRINCIPAL);
   }
 
-  // Columna de texto a la derecha.
-  const textoX = fotoX + PHOTO_SIZE + 16;
-  const textoAncho = CONTENT_WIDTH - (textoX - MARGIN) - 16;
-  let cursor = top - 22;
-
-  const nombre = p.title || [p.brand, p.model].filter(Boolean).join(" ") || "Equipo";
-  const nombreLineas = wrapText(nombre, ctx.fonts.bold, 13, textoAncho);
-  for (const linea of nombreLineas.slice(0, 2)) {
-    drawText(ctx, linea, textoX, 13, { bold: true, color: BRAND_DARK, y: cursor });
-    cursor -= 16;
+  // Resto de fotos del MISMO equipo, en miniaturas bajo la principal.
+  if (miniaturas > 0) {
+    const porFila = Math.floor((FOTO_PRINCIPAL + MINIATURA_GAP) / (MINIATURA + MINIATURA_GAP));
+    let mx = fotoX;
+    let my = fotoY - 8 - MINIATURA;
+    conFoto.slice(1).forEach((img, i) => {
+      if (i > 0 && i % porFila === 0) {
+        mx = fotoX;
+        my -= MINIATURA + MINIATURA_GAP;
+      }
+      ctx.page.drawRectangle({
+        x: mx, y: my, width: MINIATURA, height: MINIATURA,
+        color: WHITE, borderColor: BORDER_GRAY, borderWidth: 0.5,
+      });
+      dibujarEnCuadro(ctx, img, mx, my, MINIATURA);
+      mx += MINIATURA + MINIATURA_GAP;
+    });
+    fotoY = my;
   }
 
-  // Specs en una línea compacta — SOLO las que existen de verdad. Nunca
-  // "GPU: N/A": un campo vacío simplemente no se imprime (§38).
-  const specs: string[] = [];
-  if (p.cpu) specs.push(p.cpu);
-  if (typeof p.ram === "number" && p.ram > 0) specs.push(`${p.ram} GB RAM`);
-  if (p.storage) specs.push(p.storage);
-  if (p.screen) specs.push(p.screen);
-  if (p.gpuModel) specs.push(p.gpuModel);
+  // ── Columna de texto ─────────────────────────────────────────────────
+  let cursor = top - 26;
 
-  if (specs.length > 0) {
-    const specLineas = wrapText(specs.join(" · "), ctx.fonts.regular, 9, textoAncho);
-    for (const linea of specLineas.slice(0, 2)) {
-      drawText(ctx, linea, textoX, 9, { color: TEXT_DARK, y: cursor });
+  // Número de la opción: es como el cliente la nombra por WhatsApp
+  // ("el tercero"), así que el orden visible tiene que ser el mismo que el
+  // del catálogo. Lo es: quien llama entrega la lista ya ordenada.
+  const etiqueta = `OPCIÓN ${indice + 1}`;
+  drawText(ctx, etiqueta, textoX, 8.5, { bold: true, color: BRAND_BLUE, y: cursor + 4 });
+  cursor -= 12;
+
+  for (const linea of nombreLineas) {
+    drawText(ctx, linea, textoX, 15, { bold: true, color: BRAND_DARK, y: cursor });
+    cursor -= 19;
+  }
+
+  // Precio, grande y con el acento de color.
+  drawText(ctx, formatCOP(p.price), textoX, 21, { bold: true, color: ACCENT, y: cursor - 4 });
+  cursor -= 32;
+
+  // Características, una por línea y con su etiqueta: se leen mucho mejor
+  // que la línea compacta separada por puntos que había antes.
+  for (const [etiquetaSpec, valor] of specs) {
+    drawText(ctx, `${etiquetaSpec}:`, textoX, 9, { bold: true, color: TEXT_MUTED, y: cursor });
+    const sangria = 82;
+    for (const linea of wrapText(valor, ctx.fonts.regular, 9, textoAncho - sangria).slice(0, 2)) {
+      drawText(ctx, linea, textoX + sangria, 9, { color: TEXT_DARK, y: cursor });
       cursor -= 12;
     }
+    if (specs.length > 0) cursor -= 3;
   }
 
-  const meta: string[] = [];
-  if (p.condition) meta.push(p.condition);
+  // Chips de condición y garantía.
+  let chipX = textoX;
+  if (p.condition) chipX += dibujarChip(ctx, p.condition, chipX, cursor - 4) + 6;
   if (typeof p.warrantyMonths === "number" && p.warrantyMonths > 0) {
-    meta.push(`Garantía ${p.warrantyMonths} ${p.warrantyMonths === 1 ? "mes" : "meses"}`);
-  }
-  if (meta.length > 0) {
-    drawText(ctx, meta.join(" · "), textoX, 8.5, { color: TEXT_MUTED, y: cursor });
-    cursor -= 13;
+    dibujarChip(ctx, `Garantía ${p.warrantyMonths} ${p.warrantyMonths === 1 ? "mes" : "meses"}`, chipX, cursor - 4);
   }
 
-  // Descripción: recorte SOLO VISUAL. El texto completo sigue íntegro en la
-  // base de datos — aquí se añade "…" para que se note que hay más.
-  if (p.description) {
-    const lineas = wrapText(p.description, ctx.fonts.regular, 8.5, textoAncho);
-    const visibles = lineas.slice(0, MAX_LINEAS_DESCRIPCION);
-    if (lineas.length > MAX_LINEAS_DESCRIPCION && visibles.length > 0) {
-      visibles[visibles.length - 1] = `${visibles[visibles.length - 1]}…`;
+  // ── Descripción completa, respetando su estructura ───────────────────
+  if (bloques.length > 0) {
+    let dy = Math.min(fotoY, cursor - 24) - 12;
+
+    // Si no queda sitio ni para el encabezado y un par de líneas, se pasa
+    // entera a la página siguiente: un "DESCRIPCIÓN" solo al pie es peor que
+    // un salto limpio.
+    if (dy < BOTTOM_LIMIT + 40) {
+      newPage(ctx);
+      dy = ctx.y - 12;
     }
-    for (const linea of visibles) {
-      if (cursor < cardY + 26) break;
-      drawText(ctx, linea, textoX, 8.5, { color: TEXT_MUTED, y: cursor });
-      cursor -= 11;
+
+    drawText(ctx, "DESCRIPCIÓN", MARGIN + 6, 8.5, { bold: true, color: BRAND_BLUE, y: dy });
+    ctx.page.drawLine({
+      start: { x: MARGIN + 6, y: dy - 5 },
+      end: { x: MARGIN + CONTENT_WIDTH - 6, y: dy - 5 },
+      thickness: 0.5,
+      color: BORDER_GRAY,
+    });
+    dy -= 20;
+
+    const saltarSiHaceFalta = (alto: number) => {
+      if (dy - alto < BOTTOM_LIMIT) {
+        newPage(ctx);
+        dy = ctx.y - 12;
+      }
+    };
+
+    for (const bloque of bloques) {
+      if (bloque.clase === "espacio") {
+        dy -= 6;
+        continue;
+      }
+      if (bloque.clase === "seccion") {
+        saltarSiHaceFalta(24);
+        dy -= 6;
+        drawText(ctx, bloque.texto, MARGIN + 6, 9.5, { bold: true, color: BRAND_DARK, y: dy });
+        dy -= 14;
+        continue;
+      }
+      const esVineta = bloque.clase === "vineta";
+      const x = MARGIN + (esVineta ? 20 : 6);
+      const ancho = CONTENT_WIDTH - (esVineta ? 40 : 24);
+      const lineas = wrapText(bloque.texto, ctx.fonts.regular, 9, ancho);
+      lineas.forEach((linea, i) => {
+        saltarSiHaceFalta(12);
+        if (esVineta && i === 0) {
+          // Punto de viñeta dibujado, no tecleado: el carácter "•" no existe
+          // en las fuentes estándar del PDF.
+          ctx.page.drawCircle({ x: MARGIN + 12, y: dy + 3, size: 1.6, color: BRAND_BLUE });
+        }
+        drawText(ctx, linea, x, 9, { color: TEXT_DARK, y: dy });
+        dy -= 11.5;
+      });
     }
+    ctx.y = dy - CARD_GAP;
+    return;
   }
 
-  // Precio destacado, abajo a la derecha de la tarjeta.
-  drawText(ctx, formatCOP(p.price), MARGIN + CONTENT_WIDTH - 14, 16, {
-    bold: true,
-    color: BRAND_BLUE,
-    align: "right",
-    y: cardY + 14,
+  ctx.y = Math.min(fotoY, cursor) - CARD_GAP;
+}
+
+/**
+ * Pie con paginación, al final y de una sola pasada.
+ *
+ * Se hace aquí y no al crear cada página porque el total no se conoce hasta
+ * que está todo dibujado: una descripción larga puede añadir páginas.
+ */
+function drawPiePaginas(ctx: BuildContext): void {
+  const paginas = ctx.doc.getPages();
+  paginas.forEach((pagina, i) => {
+    // La portada no lleva pie.
+    if (i === 0) return;
+    const texto = `${COMPANY.name}  ·  ${i + 1} de ${paginas.length}`;
+    const size = 8;
+    const ancho = ctx.fonts.regular.widthOfTextAtSize(texto, size);
+    pagina.drawLine({
+      start: { x: MARGIN, y: 44 },
+      end: { x: MARGIN + CONTENT_WIDTH, y: 44 },
+      thickness: 0.5,
+      color: BORDER_GRAY,
+    });
+    pagina.drawText(texto, {
+      x: PAGE_WIDTH - MARGIN - ancho,
+      y: 30,
+      size,
+      font: ctx.fonts.regular,
+      color: TEXT_MUTED,
+    });
   });
-
-  ctx.y = cardY - CARD_GAP;
 }
 
 // ── Entrada pública ───────────────────────────────────────────────────────
@@ -478,28 +754,53 @@ export async function buildCatalogPdfBytes(
     }
   }
 
-  // Solo la PRIMERA foto de cada producto: el encargo pide priorizar peso y
-  // velocidad sobre meter todas las imágenes disponibles.
-  const urls = lista.map((p) => (Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : null));
-  const descargadas = await descargarEnLotes(urls, concurrencia, async (url) =>
-    url && allowed.length > 0 ? descargarImagen(url, { allowed, fetchImpl, timeoutMs }) : null
+  // P20.28D — TODAS las fotos de cada equipo, no solo la primera.
+  //
+  // El cliente decide una compra con esto delante: enseñarle una sola foto de
+  // un portátil del que hay seis le obliga a pedirlas por WhatsApp. Se acota
+  // por producto (`maxImagesPerProduct`) para que un equipo con veinte fotos
+  // no infle el PDF por encima de lo que WhatsApp acepta.
+  //
+  // Cada URL conserva su posición, así que las fotos de un producto nunca se
+  // mezclan con las de otro: el índice manda, no el orden de llegada.
+  const maxPorProducto = opciones.maxImagesPerProduct ?? 6;
+  const plan: { producto: number; url: string }[] = [];
+  lista.forEach((p, i) => {
+    const urls = Array.isArray(p.images) ? p.images.filter((u) => typeof u === "string" && u.length > 0) : [];
+    for (const url of urls.slice(0, maxPorProducto)) plan.push({ producto: i, url });
+  });
+
+  const descargadas = await descargarEnLotes(plan, concurrencia, async ({ url }) =>
+    allowed.length > 0 ? descargarImagen(url, { allowed, fetchImpl, timeoutMs }) : null
   );
 
-  const imagenes: (PDFImage | null)[] = [];
-  for (const descarga of descargadas) {
-    if (!descarga) {
-      imagenes.push(placeholder);
-      continue;
+  // Una misma URL puede repetirse entre productos; se embebe una sola vez.
+  const embebidas = new Map<string, PDFImage | null>();
+  const porProducto: PDFImage[][] = lista.map(() => []);
+  for (let i = 0; i < plan.length; i++) {
+    const { producto, url } = plan[i];
+    const descarga = descargadas[i];
+    if (!descarga) continue;
+    if (!embebidas.has(url)) {
+      try {
+        const lista = await reescalar(descarga.bytes, descarga.tipo);
+        embebidas.set(url, lista.tipo === "png" ? await doc.embedPng(lista.bytes) : await doc.embedJpg(lista.bytes));
+      } catch {
+        // Imagen corrupta pese al content-type: se omite esa foto, nunca se
+        // aborta el catálogo.
+        embebidas.set(url, null);
+      }
     }
-    try {
-      imagenes.push(descarga.tipo === "png" ? await doc.embedPng(descarga.bytes) : await doc.embedJpg(descarga.bytes));
-    } catch {
-      // Imagen corrupta pese al content-type: degradar, nunca abortar.
-      imagenes.push(placeholder);
-    }
+    const img = embebidas.get(url);
+    if (img) porProducto[producto].push(img);
   }
 
-  lista.forEach((producto, i) => drawTarjeta(ctx, producto, imagenes[i] ?? placeholder));
+  lista.forEach((producto, i) => {
+    const fotos = porProducto[i].length > 0 ? porProducto[i] : placeholder ? [placeholder] : [];
+    drawFichaProducto(ctx, producto, fotos, i);
+  });
+
+  drawPiePaginas(ctx);
 
   return doc.save();
 }
