@@ -77,7 +77,11 @@ export interface BuildCatalogOptions {
   /**
    * Tope de fotos por equipo (P20.28D). Existe para acotar el peso del PDF:
    * WhatsApp tiene un límite de tamaño y un catálogo no puede quedarse sin
-   * enviar por traer veinte fotos de un mismo portátil.
+   * enviar por traer cincuenta fotos de un mismo portátil.
+   *
+   * 12 por defecto: hoy el equipo con más fotos del catálogo tiene 7, así que
+   * ninguna se queda fuera, y con el reescalado a 760 px el peso sigue muy
+   * por debajo de lo que WhatsApp admite.
    */
   maxImagesPerProduct?: number;
   /** Reloj inyectable: los tests necesitan una fecha estable. */
@@ -763,7 +767,7 @@ export async function buildCatalogPdfBytes(
   //
   // Cada URL conserva su posición, así que las fotos de un producto nunca se
   // mezclan con las de otro: el índice manda, no el orden de llegada.
-  const maxPorProducto = opciones.maxImagesPerProduct ?? 6;
+  const maxPorProducto = opciones.maxImagesPerProduct ?? 12;
   const plan: { producto: number; url: string }[] = [];
   lista.forEach((p, i) => {
     const urls = Array.isArray(p.images) ? p.images.filter((u) => typeof u === "string" && u.length > 0) : [];

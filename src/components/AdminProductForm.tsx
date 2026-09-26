@@ -113,6 +113,19 @@ function getStoragePathFromPublicUrl(url: string, bucket: string) {
   return url.substring(idx + marker.length);
 }
 
+/**
+ * Tope de la descripción comercial.
+ *
+ * Tiene que ser el MISMO que aplican las funciones SQL del ERP
+ * (`erp_agent_dispatch`, `erp_publish_catalog_draft`) y el agente de
+ * WhatsApp. Estaba en 2.000 cuando el resto ya había subido a 8.000, y el
+ * resultado fue silencioso y peor que un error: el navegador dejaba de
+ * aceptar teclas al llegar al tope y la ficha se guardaba a medias. Dos
+ * productos del catálogo quedaron con la descripción cortada a mitad de
+ * palabra.
+ */
+const MAX_DESCRIPCION = 8000;
+
 export default function AdminProductForm({
   selectedProduct,
   onSaved,
@@ -358,11 +371,11 @@ export default function AdminProductForm({
           onChange={(e) => handleChange("description", e.target.value)}
           placeholder="Ej. Equipo corporativo robusto en aluminio, ideal para universidad, oficina y programación básica."
           rows={4}
-          maxLength={2000}
+          maxLength={MAX_DESCRIPCION}
           className={`${input} resize-y`}
         />
         <p className="text-xs text-muted">
-          {form.description.length}/2000 · La ven el cliente en la web, el catálogo PDF y el asesor por WhatsApp.
+          {form.description.length}/{MAX_DESCRIPCION} · La ven el cliente en la web, el catálogo PDF y el asesor por WhatsApp.
         </p>
       </div>
 
