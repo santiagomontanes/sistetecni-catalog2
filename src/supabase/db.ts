@@ -30,6 +30,13 @@ function mapProduct(row: DbRow): Product {
     screen: String(row.screen ?? "N/A"),
     price: Number(row.price ?? 0),
     condition: String(row.condition ?? "No especificado"),
+    // P20.29 — color del modelo y colores realmente disponibles.
+    color: typeof row.color === "string" && row.color.trim() ? row.color.trim() : null,
+    coloresDisponibles: Array.isArray(row.colores_disponibles)
+      ? (row.colores_disponibles as unknown[])
+          .map((c) => (typeof c === "string" ? c.trim() : ""))
+          .filter((c): c is string => c.length > 0)
+      : [],
     stock: Number(row.stock ?? 0),
     images: Array.isArray(row.images) ? (row.images as string[]) : [],
     featured: Boolean(row.featured),
@@ -69,6 +76,13 @@ function mapProductListItem(row: DbRow): Product {
     screen: "",
     price: Number(row.price ?? 0),
     condition: String(row.condition ?? ""),
+    // P20.29 — color del modelo y colores realmente disponibles.
+    color: typeof row.color === "string" && row.color.trim() ? row.color.trim() : null,
+    coloresDisponibles: Array.isArray(row.colores_disponibles)
+      ? (row.colores_disponibles as unknown[])
+          .map((c) => (typeof c === "string" ? c.trim() : ""))
+          .filter((c): c is string => c.length > 0)
+      : [],
     stock: Number(row.stock ?? 0),
     images: allImages.length > 0 ? [allImages[0]] : [],
     featured: Boolean(row.featured),
@@ -347,6 +361,12 @@ function cleanProductPayload(data: Partial<ProductPayload>): Record<string, unkn
     ...(data.screen !== undefined ? { screen: data.screen } : {}),
     ...(data.price !== undefined ? { price: data.price } : {}),
     ...(data.condition !== undefined ? { condition: data.condition } : {}),
+    // P20.29 — color del modelo. Un campo vacío se guarda como NULL, no como
+    // cadena vacía: «sin especificar» es ausencia de dato, y además la base
+    // rechaza una cadena en blanco (products_color_not_blank).
+    ...(data.color !== undefined
+      ? { color: typeof data.color === "string" && data.color.trim() ? data.color.trim() : null }
+      : {}),
     ...(data.stock !== undefined ? { stock: data.stock } : {}),
     ...(data.images !== undefined ? { images: data.images } : {}),
     ...(data.featured !== undefined ? { featured: data.featured } : {}),

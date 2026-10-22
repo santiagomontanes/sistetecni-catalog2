@@ -30,6 +30,21 @@ export interface Product {
   // sigue construyendo Product sin estos campos y debe seguir compilando
   // sin cambios. Los repositorios nuevos de B2 (src/lib/repositories/)
   // sí los completan siempre (con el valor real o null, nunca undefined).
+  /**
+   * P20.29 — color declarado del MODELO. `null` = sin especificar: NUNCA se
+   * deduce del título ni de una foto.
+   *
+   * Lo que se le muestra al cliente no es este campo sino
+   * `coloresDisponibles`, que refleja las unidades que de verdad se pueden
+   * vender. Este es el valor por defecto de las unidades que no traen el suyo.
+   */
+  color?: string | null;
+  /**
+   * P20.29 — DERIVADO de las unidades `available` (lo mantiene un trigger,
+   * igual que el stock). Vacío = no hay color confirmado que ofrecer.
+   */
+  coloresDisponibles?: string[];
+
   cpuGeneration?: number | null;
   gpuType?: GpuType | null;
   gpuModel?: string | null;

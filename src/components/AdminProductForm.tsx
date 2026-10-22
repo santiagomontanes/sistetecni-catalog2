@@ -22,6 +22,8 @@ interface ProductFormState {
   screen: string;
   price: number;
   condition: string;
+  /** P20.29 — color del modelo. Cadena vacía = sin especificar. */
+  color: string;
   stock: number;
   featured: boolean;
   visibleWeb: boolean;
@@ -53,6 +55,7 @@ const initialState: ProductFormState = {
   screen: "",
   price: 0,
   condition: "Usado",
+  color: "",
   stock: 1,
   featured: false,
   visibleWeb: true,
@@ -77,6 +80,7 @@ function fromProduct(product: Product): ProductFormState {
     screen: product.screen ?? "",
     price: Number(product.price ?? 0),
     condition: product.condition ?? "Usado",
+    color: product.color ?? "",
     stock: Number(product.stock ?? 1),
     featured: Boolean(product.featured),
     visibleWeb: product.visibleWeb !== false,
@@ -125,6 +129,16 @@ function getStoragePathFromPublicUrl(url: string, bucket: string) {
  * palabra.
  */
 const MAX_DESCRIPCION = 8000;
+
+/**
+ * P20.29 — colores que más se repiten en el inventario, como atajo. NO es una
+ * lista cerrada: el campo admite texto libre, de modo que caben compuestos
+ * («Negro con gris») y cualquier otro que llegue. Dejarlo vacío significa
+ * «sin especificar», y es una respuesta válida: no se adivina un color.
+ */
+const COLORES_HABITUALES = [
+  "Negro", "Gris", "Plateado", "Blanco", "Azul", "Negro con gris", "Gris con plateado",
+];
 
 export default function AdminProductForm({
   selectedProduct,
@@ -336,6 +350,22 @@ export default function AdminProductForm({
           placeholder="Condición"
           className={input}
         />
+        {/* P20.29 — color del modelo. Texto libre con sugerencias: `datalist`
+            propone los habituales sin cerrar la lista, así que «Otro» no
+            necesita un control aparte. Vacío = sin especificar. */}
+        <input
+          list="colores-habituales"
+          value={form.color}
+          onChange={(e) => handleChange("color", e.target.value)}
+          placeholder="Color (opcional)"
+          maxLength={60}
+          className={input}
+        />
+        <datalist id="colores-habituales">
+          {COLORES_HABITUALES.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
         <input
           type="number"
           min={0}

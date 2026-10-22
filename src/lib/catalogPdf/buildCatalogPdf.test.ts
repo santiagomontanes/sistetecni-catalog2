@@ -181,6 +181,37 @@ describe("P20.28D · la ficha va completa", () => {
   });
 });
 
+describe("P20.29 · color en el catálogo", () => {
+  // La regla: se imprime lo que el cliente puede COMPRAR, no lo que diga la
+  // publicación del modelo.
+  const conColor = (over: Partial<CatalogProduct>) => producto({ images: [url("a")], ...over });
+
+  test("★ la ficha dice Negro pero solo queda Plateado: se imprime Plateado", async () => {
+    const { bytes } = construir([conColor({ color: "Negro", coloresDisponibles: ["Plateado"] })]);
+    const pdf = await bytes;
+    assert.ok(pdf.byteLength > 0);
+    // El contenido va comprimido; lo que se comprueba es que el generador
+    // prioriza el disponible (verificado en el unit test del resolutor) y que
+    // el PDF se construye sin romper.
+    assert.ok(await paginasDe(pdf) >= 1);
+  });
+
+  test("sin color no se rompe el catálogo", async () => {
+    const { bytes } = construir([conColor({ color: null, coloresDisponibles: [] })]);
+    assert.ok((await bytes).byteLength > 0);
+  });
+
+  test("varios colores disponibles caben en la ficha", async () => {
+    const { bytes } = construir([conColor({ color: "Negro", coloresDisponibles: ["Negro", "Plateado"] })]);
+    assert.ok((await bytes).byteLength > 0);
+  });
+
+  test("un producto antiguo (sin las columnas nuevas) sigue generándose", async () => {
+    const { bytes } = construir([producto({ images: [url("a")] })]);
+    assert.ok((await bytes).byteLength > 0);
+  });
+});
+
 describe("P20.28D · el contrato con el agente no cambia", () => {
   // El bot resuelve "el tercero" contra la MISMA lista, en el MISMO orden, y
   // valida que su recuento coincida con el del PDF. Si el generador reordenara

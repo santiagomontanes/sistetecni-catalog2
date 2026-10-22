@@ -67,6 +67,10 @@ export interface CatalogProduct {
   screen?: string | null;
   gpuModel?: string | null;
   condition?: string | null;
+  /** P20.29 — color declarado del modelo. null = sin especificar. */
+  color?: string | null;
+  /** P20.29 — colores de las unidades vendibles. Es lo que se imprime. */
+  coloresDisponibles?: string[];
   description?: string | null;
   price?: number | null;
   warrantyMonths?: number | null;
@@ -493,6 +497,13 @@ function drawFichaProducto(ctx: BuildContext, p: CatalogProduct, imagenes: (PDFI
   if (p.storage) specs.push(["Almacenamiento", p.storage]);
   if (p.screen) specs.push(["Pantalla", p.screen]);
   if (p.gpuModel) specs.push(["Gráficos", p.gpuModel]);
+  // P20.29 — se imprime el color de lo que se puede COMPRAR, no el de la
+  // publicación: si la ficha dice negro y solo queda una unidad plateada,
+  // imprimir "negro" sería ofrecer algo que no existe. Sin dato no se imprime
+  // la fila: «sin especificar» es ausencia, no un color.
+  const coloresReales = (p.coloresDisponibles ?? []).map((c) => c.trim()).filter(Boolean);
+  const color = coloresReales.length > 0 ? coloresReales.join(", ") : (p.color ?? "").trim();
+  if (color) specs.push(["Color", color]);
 
   const bloques = p.description ? clasificarDescripcion(p.description, nombre) : [];
   // Alto aproximado, solo para decidir el salto de página.

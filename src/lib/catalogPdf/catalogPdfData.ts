@@ -34,6 +34,8 @@ interface FilaCatalogo {
   screen: string | null;
   gpu_model: string | null;
   condition: string | null;
+  color: string | null;
+  colores_disponibles: string[] | null;
   descripcion: string | null;
   price: number | null;
   warranty_months: number | null;
@@ -41,7 +43,9 @@ interface FilaCatalogo {
 }
 
 const COLUMNAS =
-  "id,title,brand,model,cpu,ram,storage,screen,gpu_model,condition,descripcion,price,warranty_months,images";
+  "id,title,brand,model,cpu,ram,storage,screen,gpu_model,condition,descripcion,price,warranty_months,images," +
+  // P20.29 — color del modelo y los que de verdad hay disponibles.
+  "color,colores_disponibles";
 
 /**
  * Host del Storage de Supabase de ESTE proyecto — la única fuente de la que
@@ -105,6 +109,9 @@ export async function buildCatalogoPdfVigente(
     screen: row.screen,
     gpuModel: row.gpu_model,
     condition: row.condition,
+    // P20.29 — lo que se imprime es lo DISPONIBLE; el del modelo es el respaldo.
+    color: row.color,
+    coloresDisponibles: Array.isArray(row.colores_disponibles) ? row.colores_disponibles : [],
     // FUENTE ÚNICA: la misma columna `descripcion` que escribe WhatsApp y
     // que lee el bot y la web. El PDF no guarda ni deriva una copia propia.
     description: row.descripcion,

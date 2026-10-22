@@ -103,6 +103,18 @@ export default function ProductClient() {
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Spec label="Condición" value={product.condition} />
+              {/* P20.29 — el color que se muestra es el de las unidades que de
+                  verdad se pueden comprar. Si la publicación dice negro pero
+                  solo queda una plateada, aquí pone «Plateado». Sin dato
+                  confirmado se dice «Sin especificar», nunca se adivina. */}
+              <Spec
+                label="Color"
+                value={
+                  (product.coloresDisponibles ?? []).filter(Boolean).join(", ") ||
+                  (product.color ?? "").trim() ||
+                  "Sin especificar"
+                }
+              />
               <Spec label="Stock" value={String(product.stock)} />
               <Spec label="CPU" value={product.cpu} />
               <Spec label="RAM" value={`${product.ram} GB`} />
