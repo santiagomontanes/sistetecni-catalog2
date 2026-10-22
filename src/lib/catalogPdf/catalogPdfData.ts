@@ -42,10 +42,26 @@ interface FilaCatalogo {
   images: string[] | null;
 }
 
-const COLUMNAS =
-  "id,title,brand,model,cpu,ram,storage,screen,gpu_model,condition,descripcion,price,warranty_months,images," +
-  // P20.29 — color del modelo y los que de verdad hay disponibles.
-  "color,colores_disponibles";
+const COLUMNAS_BASE =
+  "id,title,brand,model,cpu,ram,storage,screen,gpu_model,condition,descripcion,price,warranty_months,images";
+
+/**
+ * P20.29 — color del modelo y los que de verdad hay disponibles.
+ *
+ * Van aparte porque la base puede no tenerlas todavía. Este catálogo es lo que
+ * el bot le manda al cliente para decidir una compra: si se despliega antes de
+ * que la migración llegue, pedir una columna inexistente dejaría al cliente
+ * SIN catálogo. Se piden, y si la base dice que no existen se repite sin
+ * ellas — el PDF sale igual, solo sin la fila "Color".
+ */
+const COLUMNAS_COLOR = "color,colores_disponibles";
+const COLUMNAS = `${COLUMNAS_BASE},${COLUMNAS_COLOR}`;
+
+/** ¿Es «esa columna no existe», y además habla del color? */
+function faltanColumnasDeColor(error: { code?: string; message?: string } | null): boolean {
+  if (error?.code !== "42703") return false;
+  return (error.message ?? "").toLowerCase().includes("color");
+}
 
 /**
  * Host del Storage de Supabase de ESTE proyecto — la única fuente de la que
@@ -86,13 +102,23 @@ export async function buildCatalogoPdfVigente(
 ): Promise<CatalogoPdfResultado> {
   const client = getAdminClient();
 
-  const { data, error } = await client
-    .from("products")
-    .select(COLUMNAS)
-    .eq("visible_web", true)
-    .gt("stock", 0)
-    .order("price", { ascending: true })
-    .limit(MAX_PRODUCTOS);
+  const consultar = (columnas: string) =>
+    client
+      .from("products")
+      .select(columnas)
+      .eq("visible_web", true)
+      .gt("stock", 0)
+      .order("price", { ascending: true })
+      .limit(MAX_PRODUCTOS);
+
+  let { data, error } = await consultar(COLUMNAS);
+
+  // La migración del color todavía no está: mejor un catálogo sin la fila
+  // "Color" que ningún catálogo. Cualquier otro error sigue siendo un error.
+  if (faltanColumnasDeColor(error)) {
+    console.warn("[catalogPdf] la base aún no tiene color/colores_disponibles; se genera sin esa fila");
+    ({ data, error } = await consultar(COLUMNAS_BASE));
+  }
 
   if (error) throw new Error(`CATALOG_PDF_QUERY_FAILED:${error.code ?? "unknown"}`);
 
