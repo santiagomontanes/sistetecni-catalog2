@@ -386,23 +386,63 @@ function cleanProductPayload(data: Partial<ProductPayload>): Record<string, unkn
   };
 }
 
+/**
+ * P20.29 — ¿el error es «la columna color no existe»?
+ *
+ * `42703` es `undefined_column` de PostgreSQL. Se exige además que el mensaje
+ * hable del color: cualquier otra columna ausente es un problema real y no
+ * debe disfrazarse de degradación.
+ */
+function faltaLaColumnaColor(error: { code?: string; message?: string } | null): boolean {
+  if (error?.code !== "42703") return false;
+  return (error.message ?? "").toLowerCase().includes("color");
+}
+
+/**
+ * El mismo payload, sin el color.
+ *
+ * El formulario de admin manda SIEMPRE el campo color (vacío cuenta como
+ * `null`), así que si el web se despliega antes de que la migración llegue a
+ * la base, guardar CUALQUIER producto fallaría — no solo el color: el
+ * administrador no podría editar nada. Se reintenta sin esa clave y se guarda
+ * el resto; el color se podrá poner cuando la migración entre.
+ */
+function sinColor(payload: Record<string, unknown>): Record<string, unknown> {
+  const resto = { ...payload };
+  delete resto.color;
+  return resto;
+}
+
 export async function createProduct(data: ProductPayload): Promise<string> {
   const payload = cleanProductPayload(data);
 
-  const { data: created, error } = await supabase
-    .from("products")
-    .insert(payload)
-    .select("id")
-    .single<{ id: string }>();
+  const insertar = (p: Record<string, unknown>) =>
+    supabase.from("products").insert(p).select("id").single<{ id: string }>();
 
-  if (error || !created) throw new Error(error.message);
+  let { data: created, error } = await insertar(payload);
+
+  if (faltaLaColumnaColor(error) && "color" in payload) {
+    console.warn("[db] la base aún no tiene products.color; el producto se crea sin color");
+    ({ data: created, error } = await insertar(sinColor(payload)));
+  }
+
+  if (error || !created) throw new Error(error?.message ?? "No se pudo crear el producto");
   return String(created.id);
 }
 
 export async function updateProduct(id: string, partial: Partial<ProductPayload>): Promise<void> {
   const payload = cleanProductPayload(partial);
 
-  const { error } = await supabase.from("products").update(payload).eq("id", id);
+  const actualizar = (p: Record<string, unknown>) =>
+    supabase.from("products").update(p).eq("id", id);
+
+  let { error } = await actualizar(payload);
+
+  if (faltaLaColumnaColor(error) && "color" in payload) {
+    console.warn("[db] la base aún no tiene products.color; se guarda el resto del producto");
+    ({ error } = await actualizar(sinColor(payload)));
+  }
+
   if (error) throw new Error(error.message);
 }
 
