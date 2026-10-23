@@ -382,3 +382,224 @@ export function crearCerrojoUnaVez(): CerrojoUnaVez {
     },
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// DIAGNÓSTICO — solo metadata segura, para entender por qué un número avanza
+// y otro no. Nada de esto toca el `code`, el token ni valores crudos de Meta.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Hitos de la cronología. Lista BLANCA a propósito: lo único que puede acabar
+ * en la traza son estas cadenas fijas, nunca texto que venga de Meta.
+ */
+export const HITOS_CRONOLOGIA = [
+  "SDK_LOADED",
+  "FB_INIT",
+  "LOGIN_OPENED",
+  "MESSAGE_RECEIVED",
+  "COEXISTENCE_FINISH",
+  "STANDARD_FINISH",
+  "CANCEL",
+  "ERROR",
+] as const;
+
+export type HitoCronologia = (typeof HITOS_CRONOLOGIA)[number];
+
+export interface EntradaCronologia {
+  hito: HitoCronologia;
+  /** ms desde el arranque del componente. Relativo, no una hora real. */
+  enMs: number;
+}
+
+export interface Cronologia {
+  /** Registra un hito si está en la lista blanca. Ignora cualquier otro. */
+  registrar(hito: string): void;
+  readonly entradas: readonly EntradaCronologia[];
+}
+
+const ES_HITO = (v: unknown): v is HitoCronologia =>
+  typeof v === "string" && (HITOS_CRONOLOGIA as readonly string[]).includes(v);
+
+/**
+ * Cronología append-only. El reloj se inyecta para que los tests sean
+ * deterministas. Cada hito solo se anota una vez (salvo MESSAGE_RECEIVED, que
+ * puede repetirse — Meta manda varios `postMessage`).
+ */
+export function crearCronologia(ahora: () => number = () => Date.now()): Cronologia {
+  const inicio = ahora();
+  const entradas: EntradaCronologia[] = [];
+  const repetibles = new Set<HitoCronologia>(["MESSAGE_RECEIVED"]);
+
+  return {
+    registrar(hito: string) {
+      if (!ES_HITO(hito)) return;
+      if (!repetibles.has(hito) && entradas.some((e) => e.hito === hito)) return;
+      entradas.push({ hito, enMs: Math.max(0, Math.round(ahora() - inicio)) });
+    },
+    get entradas() {
+      return entradas;
+    },
+  };
+}
+
+/** Hito de cronología que corresponde a un evento de Embedded Signup, o null. */
+export function hitoDeEvento(event: string): HitoCronologia | null {
+  switch (event) {
+    case EVENTOS_EMBEDDED_SIGNUP.FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING:
+      return "COEXISTENCE_FINISH";
+    case EVENTOS_EMBEDDED_SIGNUP.FINISH:
+    case EVENTOS_EMBEDDED_SIGNUP.FINISH_ONLY_WABA:
+      return "STANDARD_FINISH";
+    case EVENTOS_EMBEDDED_SIGNUP.CANCEL:
+      return "CANCEL";
+    case EVENTOS_EMBEDDED_SIGNUP.ERROR:
+      return "ERROR";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Claves de `data` cuyo NOMBRE (nunca su valor) se puede mostrar en el
+ * diagnóstico. Lista blanca: una clave nueva que Meta añada no aparece sola.
+ */
+export const CLAVES_DATA_CONOCIDAS = [
+  "waba_id",
+  "phone_number_id",
+  "business_id",
+  "current_step",
+  "error_message",
+  "error_id",
+  "session_id",
+  "phase",
+] as const;
+
+export interface DescriptorEvento {
+  originPermitido: boolean;
+  /** Origin recibido, SOLO si está en la lista de confianza; si no, null. */
+  origin: string | null;
+  type: string | null;
+  event: string | null;
+  /** NOMBRES de claves presentes en `data`, filtrados por lista blanca. */
+  dataKeys: string[];
+  /** `current_step` — saneado (mayúsculas/guiones, acotado). */
+  currentStep: string | null;
+}
+
+/**
+ * Describe un `MessageEvent` de forma SEGURA para el panel de diagnóstico.
+ *
+ * A diferencia de `interpretarMensajeEmbeddedSignup` (que solo mira los
+ * eventos que sabemos procesar), esto describe CUALQUIER mensaje de un origin
+ * de Meta —incluidos `event` desconocidos y pasos intermedios— para poder
+ * comparar en qué punto se queda el 311 frente al número que sí funciona.
+ * Nunca expone un valor arbitrario: solo booleanos, el `type`/`event` (que son
+ * vocabulario de Meta, no datos), NOMBRES de clave y el `current_step` saneado.
+ */
+export function describirEventoParaDiagnostico(rawData: unknown, origin: unknown): DescriptorEvento {
+  const originPermitido = esOrigenConfiable(origin);
+
+  let payload: unknown = rawData;
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = null;
+    }
+  }
+  const obj = esObjeto(payload) ? payload : {};
+  const data = esObjeto(obj.data) ? obj.data : {};
+
+  const dataKeys = Object.keys(data)
+    .filter((k) => (CLAVES_DATA_CONOCIDAS as readonly string[]).includes(k))
+    .sort();
+  const otras = Object.keys(data).length - dataKeys.length;
+  if (otras > 0) dataKeys.push(`otras:${otras}`);
+
+  // `type` y `event` son vocabulario cerrado de Meta; aun así se acotan.
+  const acotar = (v: unknown): string | null =>
+    typeof v === "string" ? v.replace(/[^A-Za-z0-9_]/g, "").slice(0, 48) || null : null;
+
+  return {
+    originPermitido,
+    origin: originPermitido ? String(origin) : null,
+    type: acotar(obj.type),
+    event: acotar(obj.event),
+    dataKeys,
+    currentStep: sanearPaso((data as Record<string, unknown>).current_step),
+  };
+}
+
+/** CONFIG ID parcialmente enmascarado para el panel. `123456789012` → `1234…9012`. */
+export function enmascararConfigId(id: unknown): string {
+  const s = typeof id === "string" ? id.trim() : "";
+  if (s.length === 0) return "(ausente)";
+  if (s.length <= 8) return `${s.slice(0, 2)}…`;
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Traza de intento — para comparar A (número que funciona) vs B (el 311)
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface TrazaIntento {
+  /** Etiqueta libre que pone el operador ("A: número prueba", "B: 311"). */
+  etiqueta: string;
+  timestamp: string;
+  /** Resultado global observado en el navegador. */
+  resultado:
+    | "en-curso"
+    | "coexistence-finish"
+    | "standard-finish"
+    | "cancel"
+    | "error"
+    | "verificado"
+    | "error-servidor";
+  ultimoEvento: string | null;
+  currentStep: string | null;
+  wabaIdPresente: boolean;
+  phoneNumberIdPresente: boolean;
+  fbLoginCodeRecibido: boolean;
+  /** Código de error de Meta si el evento ERROR lo trae y es un identificador. */
+  errorIdMeta: string | null;
+  /** Código interno del servidor si el confirm falló. */
+  codigoServidor: string | null;
+  origin: string | null;
+  featureType: string;
+  sessionInfoVersion: string;
+  hitos: HitoCronologia[];
+}
+
+/**
+ * Compara dos trazas y devuelve SOLO los campos en los que divergen —es decir,
+ * el paso exacto en el que el 311 se comporta distinto al número que funciona.
+ */
+export function diffTrazas(
+  a: TrazaIntento | null,
+  b: TrazaIntento | null
+): Array<{ campo: string; a: unknown; b: unknown }> {
+  if (!a || !b) return [];
+  const campos: Array<keyof TrazaIntento> = [
+    "resultado",
+    "ultimoEvento",
+    "currentStep",
+    "wabaIdPresente",
+    "phoneNumberIdPresente",
+    "fbLoginCodeRecibido",
+    "errorIdMeta",
+    "codigoServidor",
+    "featureType",
+    "sessionInfoVersion",
+  ];
+  const salida: Array<{ campo: string; a: unknown; b: unknown }> = [];
+  for (const c of campos) {
+    if (JSON.stringify(a[c]) !== JSON.stringify(b[c])) salida.push({ campo: c, a: a[c], b: b[c] });
+  }
+  // Divergencia de hitos: el primer hito que aparece en uno y no en el otro.
+  const setA = new Set(a.hitos);
+  const setB = new Set(b.hitos);
+  const soloA = a.hitos.filter((h) => !setB.has(h));
+  const soloB = b.hitos.filter((h) => !setA.has(h));
+  if (soloA.length || soloB.length) salida.push({ campo: "hitos", a: soloA, b: soloB });
+  return salida;
+}

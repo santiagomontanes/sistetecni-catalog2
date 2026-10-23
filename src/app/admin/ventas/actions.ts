@@ -64,6 +64,7 @@ export async function searchProducts(payload: { accessToken: unknown; query: unk
 }
 
 interface SellableUnitRow {
+  commercial_price_cop?: number | string | null;
   id: string;
   product_id: string;
   unit_code: string;
@@ -93,7 +94,7 @@ export async function listAvailableUnits(payload: {
     const { data, error } = await client
       .from("product_units")
       .select(
-        "id,product_id,unit_code,serial_number,status,battery_health_percent,storage_health_percent,spec_overrides,reservation_customer_name,reservation_customer_phone,reservation_expires_at"
+        "*"
       )
       .eq("product_id", parsed.data)
       .in("status", ["available", "reserved"])
@@ -114,6 +115,7 @@ export async function listAvailableUnits(payload: {
           batteryHealthPercent: unit.battery_health_percent,
           storageHealthPercent: unit.storage_health_percent,
           specOverrides: unit.spec_overrides ?? {},
+          commercialPriceCop: unit.commercial_price_cop == null ? null : Number(unit.commercial_price_cop),
           reservationCustomerName: unit.reservation_customer_name,
           reservationCustomerPhone: unit.reservation_customer_phone,
           reservationExpiresAt: unit.reservation_expires_at,

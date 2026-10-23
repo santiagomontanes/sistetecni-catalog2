@@ -9,7 +9,7 @@ import { RepositoryError } from "./errors";
 
 export interface AppendInventoryMovementInput {
   unitId: string;
-  productId: string;
+  productId: string | null;
   movementType: InventoryMovementType;
   fromStatus?: ProductUnitStatus | null;
   toStatus?: ProductUnitStatus | null;
@@ -34,7 +34,7 @@ const MOVEMENT_COLUMNS =
 interface MovementRow {
   id: string;
   unit_id: string;
-  product_id: string;
+  product_id: string | null;
   movement_type: InventoryMovementType;
   from_status: ProductUnitStatus | null;
   to_status: ProductUnitStatus | null;

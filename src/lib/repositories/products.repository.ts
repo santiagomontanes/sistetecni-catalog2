@@ -25,15 +25,12 @@ export interface ProductsRepository {
   search(query: string, limit?: number): Promise<Product[]>;
 }
 
-const SELECT_COLUMNS =
-  "id,title,brand,model,cpu,ram,storage,screen,price,condition,stock,images,featured,visible_web,created_at," +
-  "cpu_generation,gpu_type,gpu_model,touch_screen,screen_size_inches,storage_gb," +
-  // P20.21A — FUENTE ÚNICA de la descripción comercial y de la garantía.
-  // `descripcion` es el nombre histórico de la columna (español); el
-  // dominio la expone como `description`.
-  "descripcion,warranty_months";
+// El mapper sigue siendo una lista explícita. `*` permite leer indicadores
+// aditivos sin que un servidor anterior falle por una columna todavía ausente.
+const SELECT_COLUMNS = "*";
 
 interface ProductRow {
+  finishes_enabled?: boolean;
   id: string;
   title: string;
   brand: string | null;
@@ -61,6 +58,7 @@ interface ProductRow {
 
 function mapRow(row: ProductRow): Product {
   return {
+    finishesEnabled: row.finishes_enabled === true,
     id: row.id,
     title: row.title,
     brand: row.brand ?? "",

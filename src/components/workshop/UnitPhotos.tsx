@@ -1,0 +1,11 @@
+"use client";
+/* eslint-disable @next/next/no-img-element -- Evidencia privada con URL temporal: sin caché ni derivados Next. */
+import {useCallback,useEffect,useState} from "react";
+import {supabase} from "@/supabase/client";
+export default function UnitPhotos({unitId,onSaved}:{unitId:string;onSaved?:()=>void}){
+ const [photos,setPhotos]=useState<{id:string;url:string}[]>([]),[status,setStatus]=useState(""),[busy,setBusy]=useState(false);
+ const load=useCallback(async()=>{const {data}=await supabase.auth.getSession();const r=await fetch(`/api/admin/workshop/photos?unit=${unitId}`,{headers:{Authorization:`Bearer ${data.session?.access_token}`},cache:"no-store"});if(!r.ok)throw new Error("No se pudieron cargar las fotos.");setPhotos((await r.json()).photos);},[unitId]);
+ useEffect(()=>{void load().catch(e=>setStatus(e.message));const timer=setInterval(()=>void load().catch(()=>setStatus("Sin conexión. Reintentando…")),15000);return()=>clearInterval(timer);},[load]);
+ async function upload(file:File){setBusy(true);setStatus("Guardando foto…");try{const {data}=await supabase.auth.getSession();const body=new FormData();body.set("unit",unitId);body.set("file",file);const r=await fetch("/api/admin/workshop/photos",{method:"POST",headers:{Authorization:`Bearer ${data.session?.access_token}`},body});const result=await r.json();if(!r.ok)throw new Error(result.error);await load();onSaved?.();setStatus("Foto guardada en almacenamiento privado.");}catch(e){setStatus(e instanceof Error?e.message:"Error al guardar.");}finally{setBusy(false);}}
+ return <section className="rounded-xl border border-border p-3"><h3 className="font-semibold">Fotos internas de la unidad</h3><label className="my-2 block text-sm">Tomar foto o seleccionar archivo (máximo 5 MB)<input disabled={busy} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)void upload(f);e.target.value="";}} className="mt-1 block max-w-full"/></label><p role="status" className="text-sm">{status}</p><div className="mt-3 grid grid-cols-3 gap-2">{photos.map(p=><a key={p.id} href={p.url} target="_blank" rel="noreferrer">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={p.url} alt="Evidencia interna de la unidad" className="aspect-square w-full rounded object-cover"/></a>)}</div></section>;
+}

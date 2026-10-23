@@ -18,7 +18,7 @@ export interface AdminInventoryUnitDTO {
   unitCode: string;
   serialNumber: string | null;
   status: ProductUnitStatus;
-  productId: string;
+  productId: string | null;
   productTitle: string;
   productBrand: string;
   productModel: string;

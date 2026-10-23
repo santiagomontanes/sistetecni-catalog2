@@ -1,0 +1,179 @@
+import { test, expect, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+// Fixture ESM exclusivamente local, sin credenciales ni entornos remotos.
+import { appUrl, baseUrl, anonKey, serviceKey, testPassword } from "../../scripts/operational/browser-env.mjs";
+
+const email = `workshop-${randomUUID()}@local.invalid`;
+let token: string;
+async function json(path: string, method: string, body: unknown, access = serviceKey) {
+  const response = await fetch(`${baseUrl}${path}`, { method, headers: { apikey: anonKey, Authorization: `Bearer ${access}`, "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(body) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${JSON.stringify(data)}`);
+  return data;
+}
+async function command(action: string, payload: unknown) { return json("/rest/v1/rpc/erp_workshop_command", "POST", { p_action: action, p_payload: payload, p_key: randomUUID() }, token); }
+async function login(page: Page) {
+  await page.goto(`${appUrl}/admin/login`);
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(testPassword);
+  await page.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/?$/, { timeout: 30000 });
+  await page.goto(`${appUrl}/admin/taller`);
+  await expect(page.getByRole("heading", { name: "Taller operativo", exact: true })).toBeVisible();
+}
+test.beforeAll(async () => {
+  if (!/^http:\/\/127\.0\.0\.1:/.test(baseUrl) || !/^http:\/\/127\.0\.0\.1:/.test(appUrl)) throw new Error("E2E taller admite únicamente servicios loopback sintéticos");
+  const user = await json("/auth/v1/admin/users", "POST", { email, password: testPassword, email_confirm: true });
+  await json("/rest/v1/profiles", "POST", { id: user.id, email, is_admin: true, erp_role: "admin", active: true });
+  const session = await json("/auth/v1/token?grant_type=password", "POST", { email, password: testPassword }, anonKey);
+  token = session.access_token;
+  await command("configure", { enabled: true });
+});
+
+test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidencia original", async ({ page, browser }) => {
+  test.setTimeout(120000);
+  const destination=await command("location",{code:`DEST-${randomUUID().slice(0,6).toUpperCase()}`,name:"Destino sintético móvil"});
+  await login(page);
+  await page.getByText("Etiquetas QR y ubicaciones", { exact: true }).click();
+  const addLocation = page.locator("form").filter({ has: page.getByPlaceholder("Código único: EST-01") });
+  const code = `E2E-${randomUUID().slice(0, 6).toUpperCase()}`;
+  await addLocation.getByPlaceholder("Código único: EST-01").fill(code);
+  await addLocation.getByPlaceholder("Nombre", { exact: true }).fill("Recepción sintética E2E");
+  await addLocation.getByRole("button", { name: "Agregar ubicación", exact: true }).click();
+  await expect(page.locator(`option`).filter({ hasText: `${code} · Recepción sintética E2E` }).first()).toBeAttached();
+  await page.locator('input[name="count"]').fill("1");
+  await page.getByRole("button", { name: "Generar lote imprimible" }).click();
+  await expect(page.locator(".qr-label svg")).toHaveCount(1);
+  const qr = await page.locator(".qr-label strong").innerText();
+  expect(qr).toMatch(/^STQ-[A-F0-9]{12}$/);
+  await page.getByText(/Celular y estación ·/).click();
+  await page.getByRole("button", { name: "Generar código en computador" }).click();
+  const pair = page.locator("details").filter({ hasText: "Inicia sesión con tu cuenta en ambos dispositivos" });
+  await expect(pair.locator("strong")).toBeVisible();
+  const pairingCode = await pair.locator("strong").innerText();
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const mobile = await mobileContext.newPage();
+  try {
+    await login(mobile);
+    await mobile.getByText(/Celular y estación ·/).click();
+    await mobile.getByLabel("Código temporal").fill(pairingCode);
+    await mobile.getByRole("button", { name: "Vincular este celular" }).click();
+    await expect(mobile.getByText("Conectado · sincronizado", { exact: true })).toBeVisible({ timeout: 15000 });
+    await page.getByLabel("Código QR", { exact: true }).fill(qr);
+    await page.getByRole("button", { name: "Abrir QR", exact: true }).click();
+    const receipt = page.locator("form").filter({ has: page.getByRole("heading", { name: `Recepción · ${qr}` }) });
+    await expect(receipt).toBeVisible();
+    await receipt.getByLabel("Marca", { exact: true }).fill("Marca sintética");
+    await receipt.getByLabel("Modelo", { exact: true }).fill("Recepción E2E");
+    await receipt.getByLabel(/^Ubicación física/).selectOption({ label: `${code} · Recepción sintética E2E` });
+    await receipt.getByRole("button", { name: "Agregar RAM", exact: true }).click();
+    await receipt.getByLabel("Capacidad GB", { exact: true }).fill("1");
+    await receipt.getByLabel("Generación RAM", { exact: true }).selectOption("DDR3");
+    await receipt.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/taller\?unit=[a-f0-9-]+$/, { timeout: 30000 });
+    const unitId = new URL(page.url()).searchParams.get("unit");
+    await expect(mobile).toHaveURL(new RegExp(`unit=${unitId}`), { timeout: 20000 });
+    await expect(page.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
+    await expect(mobile.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
+    const png=await mobile.screenshot();
+    await mobile.getByLabel(/Tomar foto o seleccionar archivo/).setInputFiles({name:"evidencia-sintetica.png",mimeType:"image/png",buffer:png});
+    await expect(mobile.getByText("Foto guardada en almacenamiento privado.",{exact:true})).toBeVisible();
+    await expect(page.getByAltText("Evidencia interna de la unidad")).toBeVisible({timeout:25000});
+    await page.getByLabel(/^Trasladar a/).selectOption(destination.id);
+    await page.getByPlaceholder("Motivo del traslado").fill("Traslado sintético E2E");
+    await page.getByRole("button",{name:"Guardar movimiento",exact:true}).click();
+    await expect(page.locator('p[role="alert"]')).toHaveCount(0);
+    await page.getByText("Evidencia original y correcciones de recepción", { exact: true }).click();
+    await expect(page.getByText("Instantánea original", { exact: false }).first()).toBeVisible();
+    const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: unitId }, token);
+    expect(server.receipts[0].snapshot.components[0].capacityGb).toBe(1);
+    expect(server.components.find((c: { installed_in_unit_id: string }) => c.installed_in_unit_id === unitId)).toBeTruthy();
+    expect(server.unit.location_id).toBe(destination.id);
+    expect(server.events.some((e:{event_type:string})=>e.event_type==="move")).toBe(true);
+    // Una edición local no se reemplaza por la actualización del celular.
+    const sourceId=server.locations.find((l:{code:string})=>l.code===code).id;
+    await page.getByLabel(/^Trasladar a/).selectOption(sourceId);
+    await page.getByPlaceholder("Motivo del traslado").fill("Borrador local que debe conservarse");
+    await mobile.waitForTimeout(6000);
+    await mobile.getByLabel(/^Trasladar a/).selectOption(sourceId);
+    await mobile.getByPlaceholder("Motivo del traslado").fill("Movimiento simultáneo desde celular");
+    await mobile.getByRole("button",{name:"Guardar movimiento",exact:true}).click();
+    await expect(page.getByText("Hay cambios de otra sesión. Guarde para detectar conflictos o recargue.",{exact:true})).toBeVisible({timeout:15000});
+    await expect(page.getByPlaceholder("Motivo del traslado")).toHaveValue("Borrador local que debe conservarse");
+    await page.getByRole("button",{name:"Guardar movimiento",exact:true}).click();
+    await expect(page.locator('p[role="alert"]')).toContainText("Otra sesión modificó");
+    page.once("dialog",dialog=>dialog.accept());await page.getByRole("button",{name:"Recargar ficha",exact:true}).click();
+    await expect(page.getByPlaceholder("Motivo del traslado")).toHaveValue("");
+    await page.getByRole("button", { name: "Revocar vínculo", exact: true }).click();
+    await expect(pair.getByText("Vínculo revocado", { exact: true })).toBeVisible();
+  } finally { await mobileContext.close(); }
+});
+
+test("reutiliza STU recibido y registra atributos completos de cargador suelto",async({page})=>{
+ const location=await command("location",{code:`ATTR-${randomUUID().slice(0,7).toUpperCase()}`,name:"Atributos sintéticos"});
+ const product=await json("/rest/v1/products","POST",{title:"TEST recepción compra existente",price:700000});
+ const existing=await json("/rest/v1/rpc/erp_receive_product_unit","POST",{p_product_id:product[0].id,p_serial_number:null,p_acquisition_cost_cop:200000,p_battery_health_percent:null,p_storage_health_percent:null,p_spec_overrides:{},p_notes:"Unidad sintética existente"},token);
+ const labels=await command("qr_batch",{count:1});await login(page);
+ await page.getByLabel("Código QR",{exact:true}).fill(labels.labels[0].code);await page.getByRole("button",{name:"Abrir QR",exact:true}).click();
+ await page.getByLabel("STU de unidad ya recibida en Compras (opcional)",{exact:true}).fill(existing[0].unit_code);
+ await page.getByLabel(/^Ubicación física/).selectOption(location.id);
+ await page.getByRole("button",{name:"Registrar y asignar QR",exact:true}).click();
+ await expect(page).toHaveURL(new RegExp(`unit=${existing[0].unit_id}`));
+ await page.getByText("Configuración actual verificada (independiente de la recepción)",{exact:true}).click();
+ await page.getByLabel("Interfaz de almacenamiento compatible SATA",{exact:true}).check();
+ await page.getByLabel("Interfaz de almacenamiento compatible NVMe",{exact:true}).check();
+ await page.getByLabel("Voltaje de cargador compatible verificado",{exact:true}).fill("19.5");
+ await page.getByLabel("Conector de cargador compatible verificado",{exact:true}).fill("TEST-5.5x2.5");
+ await page.getByPlaceholder("Cómo se verificó / motivo",{exact:true}).fill("Atributos confirmados sintéticamente para verificar persistencia UI");
+ await page.getByRole("button",{name:"Guardar configuración verificada",exact:true}).click();
+ await expect(page.locator('p[role="alert"]')).toHaveCount(0);
+ await page.getByText("Registrar repuesto suelto",{exact:true}).click();
+ await page.getByLabel("Tipo repuesto").selectOption("charger");
+ const connector="TEST-"+randomUUID().slice(0,8);await page.getByPlaceholder("Conector",{exact:true}).fill(connector);
+ await page.getByLabel("Voltaje V del cargador").fill("19.5");
+ await page.getByLabel("Corriente A del cargador").fill("3.33");
+ await page.getByLabel("Potencia W del cargador").fill("65");
+ await page.getByLabel("Ubicación repuesto").selectOption(location.id);
+ await page.getByRole("button",{name:"Registrar repuesto",exact:true}).click();
+ await expect.poll(async()=>{const result=await json("/rest/v1/rpc/erp_workshop_components","POST",{p_query:connector,p_offset:0},token);return result.items.some((c:{component_attributes:{voltage:number;current:number;watts:number}})=>c.component_attributes.voltage===19.5&&c.component_attributes.current===3.33&&c.component_attributes.watts===65);}).toBe(true);
+ const server=await json("/rest/v1/rpc/erp_workshop_read","POST",{p_unit_id:existing[0].unit_id},token);
+ expect(server.unit.acquisition_cost_cop).toBe(200000);expect(server.receipts[0].snapshot.unitCode).toBe(existing[0].unit_code);
+ expect(server.unit.spec_overrides.storageInterfaces).toEqual(["SATA","NVMe"]);expect(server.unit.spec_overrides.chargerVoltage).toBe(19.5);expect(server.unit.spec_overrides.chargerConnector).toBe("TEST-5.5x2.5");
+});
+
+test("recepción persistida: controles incompletos impiden disponibilidad y retiro es idempotente", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco técnico E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 1 }] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  await expect(page.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
+  page.on("dialog", dialog => dialog.accept());
+  await page.getByLabel("Fase de trabajo").selectOption("ready");
+  await page.getByRole("button", { name: "Cambiar fase", exact: true }).click();
+  await expect(page.locator('p[role="alert"]')).toContainText("Asocie primero el producto");
+  const remove = page.locator("form").filter({ has: page.getByRole("button", { name: "Retirar", exact: true }) });
+  await remove.getByLabel("Destino componente").selectOption(location.id);
+  await remove.getByLabel("Estado componente retirado").selectOption("functional");
+  await remove.getByPlaceholder("Motivo de retiro").fill("Sustitución de prueba E2E");
+  await remove.getByRole("button", { name: "Retirar", exact: true }).click();
+  await expect(page.getByText("RAM actual: 0 GB", { exact: true })).toBeVisible();
+  const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token);
+  expect(server.receipts[0].snapshot.components[0].capacityGb).toBe(1);
+  expect(server.events.filter((e: { event_type: string }) => e.event_type === "component_move")).toHaveLength(1);
+});
+
+test("regresión ERP: inventario y rentabilidad admiten unidad sin producto comercial", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `REG-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Recepción desconocida E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "fair", costCop: "250000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/inventario`);
+  await expect(page.getByText("Sin producto comercial asociado", { exact: true }).first()).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText(received.unitCode, { exact: true }).first()).toBeVisible();
+  await page.goto(`${appUrl}/admin/rentabilidad/unidad/${received.unitId}`);
+  await expect(page.getByRole("heading", { name: received.unitCode, exact: true })).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText("Unidad no encontrada.", { exact: true })).toHaveCount(0);
+});

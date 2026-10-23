@@ -37,7 +37,7 @@ const UNIT_COLUMNS =
 
 interface ProductUnitRow {
   id: string;
-  product_id: string;
+  product_id: string | null;
   unit_code: string;
   serial_number: string | null;
   status: ProductUnitStatus;

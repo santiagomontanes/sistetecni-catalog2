@@ -179,6 +179,9 @@ export function evaluateCandidate(
   candidate: ProductCandidate,
   requirements: CustomerRequirements
 ): MatchResult | null {
+  // El personalizador histórico cotiza un producto base, sin elegir unidad/acabado.
+  // Un producto activado por acabados requiere esa selección en su ficha pública.
+  if (candidate.product.finishesEnabled) return null;
   const fixed = checkFixedCharacteristics(candidate.product, requirements);
   const ram = evaluateRam(candidate, requirements.ramMinGb);
   const storage = evaluateStorage(candidate, requirements.storageMinGb);

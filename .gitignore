@@ -28,3 +28,11 @@ supabase/.branches/
 .supabase-cli-prod.local
 .supabase-cli-staging.local
 .supabase-cli-*.local
+.vercel
+.env*
+
+# Artefactos locales de pruebas (no contienen datos de producción).
+.tmp-test/
+test-results/
+playwright-report/
+.operational-pilot/

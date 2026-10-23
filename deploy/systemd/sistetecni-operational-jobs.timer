@@ -1,0 +1,12 @@
+[Unit]
+Description=SISTETECNI jobs cada cinco minutos, Bogotá
+
+[Timer]
+OnCalendar=*-*-* *:00/5:00 America/Bogota
+Persistent=true
+RandomizedDelaySec=15s
+AccuracySec=1s
+Unit=sistetecni-operational-jobs.service
+
+[Install]
+WantedBy=timers.target

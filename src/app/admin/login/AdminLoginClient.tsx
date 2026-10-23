@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAdmin, signIn } from '@/supabase/auth';
+import { hasErpPanelAccess, signIn } from '@/supabase/auth';
 
 function toFriendlyError(message: string): string {
   const msg = message.toLowerCase();
@@ -28,6 +28,9 @@ export default function AdminLoginClient() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Evita submit HTML nativo antes de hidratar en una carga inicial lenta.
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setReady(true); }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -37,9 +40,9 @@ export default function AdminLoginClient() {
     try {
       await signIn(email, password);
 
-      const ok = await isAdmin();
+      const ok = await hasErpPanelAccess();
       if (!ok) {
-        setError('Tu usuario no tiene permisos de administrador.');
+        setError('Tu usuario no tiene acceso activo al ERP.');
         return;
       }
 
@@ -54,12 +57,14 @@ export default function AdminLoginClient() {
 
   return (
     <section className="mx-auto max-w-md space-y-4">
-      <h1 className="text-3xl font-bold text-slate-900">Ingreso de administrador</h1>
+      <h1 className="text-3xl font-bold text-slate-900">Ingreso al ERP</h1>
       <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-6">
         <div>
           <label className="mb-1 block text-sm text-slate-700">Correo</label>
           <input
             type="email"
+            disabled={!ready || loading}
+            autoComplete="username"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -72,6 +77,8 @@ export default function AdminLoginClient() {
           <label className="mb-1 block text-sm text-slate-700">Contraseña</label>
           <input
             type="password"
+            disabled={!ready || loading}
+            autoComplete="current-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -83,7 +90,7 @@ export default function AdminLoginClient() {
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <button
-          disabled={loading}
+          disabled={!ready || loading}
           className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
           {loading ? 'Ingresando...' : 'Iniciar sesión'}

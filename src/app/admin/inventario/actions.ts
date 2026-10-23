@@ -99,7 +99,8 @@ async function loadStockMetaMany(client: SupabaseClient, productIds: string[]): 
   }]));
 }
 
-async function loadStockMetaOne(client: SupabaseClient, productId: string): Promise<StockMeta | null> {
+async function loadStockMetaOne(client: SupabaseClient, productId: string | null): Promise<StockMeta | null> {
+  if (!productId) return null;
   const all = await loadStockMetaMany(client, [productId]);
   return all.get(productId) ?? null;
 }
@@ -154,7 +155,7 @@ function unitDTO(
     serialNumber: unit.serialNumber,
     status: unit.status,
     productId: unit.productId,
-    productTitle: product?.title ?? "Producto no disponible",
+    productTitle: product?.title ?? (unit.productId ? "Producto no disponible" : "Sin producto comercial asociado"),
     productBrand: product?.brand ?? "",
     productModel: product?.model ?? "",
     webStock: stock?.stock ?? product?.stock ?? 0,
@@ -177,7 +178,7 @@ function unitDTO(
 
 async function buildUnitDTO(client: SupabaseClient, unit: ProductUnit): Promise<AdminInventoryUnitDTO> {
   const [product, stock, operational] = await Promise.all([
-    createProductsRepository(client).findById(unit.productId),
+    unit.productId ? createProductsRepository(client).findById(unit.productId) : Promise.resolve(null),
     loadStockMetaOne(client, unit.productId),
     loadOperationalMetaOne(client, unit.id),
   ]);
@@ -190,7 +191,7 @@ export async function listInventory(payload: { accessToken: unknown; limit?: unk
     if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
 
     const units = await createProductUnitsRepository(client).listRecent(parsed.data.limit);
-    const productIds = [...new Set(units.map((unit) => unit.productId))];
+    const productIds = [...new Set(units.map((unit) => unit.productId).filter((id): id is string => id !== null))];
     const [products, stockMeta, operationalMeta] = await Promise.all([
       createProductsRepository(client).findManyByIds(productIds),
       loadStockMetaMany(client, productIds),
@@ -202,8 +203,8 @@ export async function listInventory(payload: { accessToken: unknown; limit?: unk
       data: {
         items: units.map((unit) => unitDTO(
           unit,
-          byId.get(unit.productId),
-          stockMeta.get(unit.productId),
+          unit.productId ? byId.get(unit.productId) : undefined,
+          unit.productId ? stockMeta.get(unit.productId) : undefined,
           operationalMeta.get(unit.id)
         )),
       },

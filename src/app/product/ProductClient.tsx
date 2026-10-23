@@ -8,6 +8,7 @@ import ProductGallery from "@/components/ProductGallery";
 import IncludesSection from "@/components/IncludesSection";
 import { getProductById } from "@/supabase/db";
 import type { Product } from "@/types/product";
+import FinishedProduct from "@/components/FinishedProduct";
 
 
 
@@ -81,6 +82,7 @@ export default function ProductClient() {
     );
   if (error) return <p className="text-sm text-red-400">{error}</p>;
   if (!product) return <p className="text-sm text-muted">Sin información de producto.</p>;
+  if (product.finishesEnabled) return <FinishedProduct product={product} />;
 
   return (
     <section className="space-y-10">

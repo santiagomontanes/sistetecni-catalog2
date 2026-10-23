@@ -1,0 +1,174 @@
+{
+  "recordedAt": "2026-10-23T19:20:32.216Z",
+  "scope": "synthetic-local-only",
+  "productionChanged": false,
+  "realMessagesSent": 0,
+  "physicalDevicesVerified": false,
+  "permanentSchedulersInstalled": false,
+  "checks": {
+    "unit": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-unit-final.log",
+      "sha256": "0b43db7bf1a5b0ea81c804b10e6fe03d5fa38289ce9a4718f78b97d1a7598a7e",
+      "passed": 514,
+      "failed": 0
+    },
+    "environment": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-env-review.log",
+      "sha256": "fac14344b464a54a26bead93846dc78859fd8e4ea3c1025aebfab8fc0e7d4187",
+      "passed": 17,
+      "failed": 0
+    },
+    "postgres": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-operational-reviewed-final.log",
+      "sha256": "1aab9ef98e336162044700b40dd333686b3c345fd994fad3233a8ac77fc46a00",
+      "passed": 47,
+      "failed": 0,
+      "additionalSqlAssertions": 25,
+      "additionalConcurrencyScenarios": 4
+    },
+    "browser": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-e2e-reviewed-final.log",
+      "sha256": "ab379e4085b9556582454b4475a48b29ff5cce4e60e6b415266183395bb984a2",
+      "passed": 11,
+      "failed": 0,
+      "physicalCamera": false
+    },
+    "bot": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-bot-final.log",
+      "sha256": "e03b243aba2d6caf7a2891d7f9ad6eeefb72e2b6c8a5dd648c9c618942615b99",
+      "passed": 2776,
+      "failed": 0
+    },
+    "crossRepositoryHttp": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-crossrepo-reviewed-final.log",
+      "sha256": "537efe9bf709839cd5e54ca8a218143861e62f8477b450cb5488684302a194ea",
+      "passed": 4,
+      "failed": 0
+    },
+    "types": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-types-reviewed.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "lint": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-lint-reviewed.log",
+      "sha256": "62b745bb435e95ae4c64bef09859092507a969b86ea331b1ca1f5a197097b5bd",
+      "preexistingImageWarnings": 9
+    },
+    "build": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-build-review-final.log",
+      "sha256": "ecb698aee056af1fe8bdf56efdbefe1cb5d4034a7124542bba53a07729e018f4"
+    },
+    "scheduler": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-scheduler-reviewed.log",
+      "sha256": "edbfbef459511f7d90465c6aa118edfe37f20ccad1b97ec72cbb812f61e0f996",
+      "details": {
+        "installedTemporarily": true,
+        "scope": "loopback-synthetic",
+        "unit": "sistetecni-operational-test-a820cf80",
+        "runs": 2,
+        "lastSuccessAt": "2026-10-23T19:12:30.921Z",
+        "shipping": {
+          "prepared": 0,
+          "notificationsCreated": 0,
+          "messagesSent": 0
+        },
+        "retention": {
+          "examined": 0,
+          "deleted": 0,
+          "failed": 0,
+          "batches": 1,
+          "limited": false
+        },
+        "messagesSent": 0,
+        "stateDirectory": "/tmp/sistetecni-operational-timer-aKmKIg/state",
+        "permanentTimersInstalled": false,
+        "stoppedAfterVerification": true
+      }
+    },
+    "pilotHttps": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-pilot-https-proof.log",
+      "sha256": "74d6b64481dff31a4eb1cb5ea85c30f04fbcc21232639de41ae2dd6e1fa81541",
+      "details": {
+        "scope": "local-synthetic-only",
+        "httpsTrustedInProcess": true,
+        "auth": true,
+        "rest": true,
+        "storage": true,
+        "serverApi": true,
+        "physicalDevicesVerified": false,
+        "systemTrustModified": false
+      }
+    },
+    "backup": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-backup-reviewed-final.log",
+      "sha256": "872137d878ad76acf2df5665e958ded84b3f7d887ad161d84e2bb3dd0877379c",
+      "details": {
+        "backupDirectory": "/tmp/sistetecni-operational-backup-dwUgFN",
+        "scope": "local-synthetic-operational",
+        "productionBackup": false,
+        "databases": [
+          "erp_test",
+          "erp_browser"
+        ],
+        "sourceArchives": [
+          "erp",
+          "bot"
+        ],
+        "storage": true
+      }
+    },
+    "restore": {
+      "result": "passed",
+      "log": "/tmp/sistetecni-restore-reviewed-final.log",
+      "sha256": "331a774ec3123f5fc1c58a258cd3a7d0eea4d3e9dc28505b02559884d42becf4",
+      "details": {
+        "scope": "local-synthetic-operational",
+        "productionTouched": false,
+        "restored": [
+          {
+            "source": "erp_test",
+            "restoredDatabase": "erp_restore_erp_test_61adfcd2",
+            "tablesVerified": 19
+          },
+          {
+            "source": "erp_browser",
+            "restoredDatabase": "erp_restore_erp_browser_29fcd9f5",
+            "tablesVerified": 19
+          }
+        ],
+        "storageRestoredTo": "/tmp/sistetecni-operational-storage-restore-VqbwuG",
+        "archiveEntries": 93,
+        "sourceArchivesVerified": true
+      }
+    }
+  },
+  "durableLocalBackup": {
+    "path": "/home/sistetecni/respaldo-erp-operativo-20261023-2D4Qg1/snapshot",
+    "sourceSnapshotAt": "2026-10-23T19:17:17.388Z",
+    "files": {
+      "erp_test.dump": "c987f862fc21e37b123b2b79ac9e07adf89520d7491ef93dd2a704cf20804dfa",
+      "erp_browser.dump": "de2ca37e14982a70cbfc1eaf636b375034e7496ccb60bc777e04a66b2a4dd914",
+      "storage.tar": "9c4d4efe53a977d3247ae0045ac4b25e19ef5cc1122dcb8b21539b485984cf18",
+      "erp-source.tar": "729fb007177c4b9cc55441d2b2d091633e9cef6712412d2fb6a3e402d98380bf",
+      "bot-source.tar": "a02b5b7e9e110c9597ba61a27347abc473801e3d0305ff577b1f4ab40aa38d1b"
+    },
+    "productionBackup": false
+  },
+  "limits": [
+    "No fiscal integration existed; internal receipts only.",
+    "Real Meta template/recipients and physical devices require activation/access.",
+    "Synthetic .next must never be deployed."
+  ]
+}

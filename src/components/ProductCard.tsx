@@ -78,7 +78,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         </h3>
 
         {/* Spec chips */}
-        {(product.ram || product.storage) && (
+        {!product.finishesEnabled && (product.ram || product.storage) && (
           <div className="flex flex-wrap gap-1.5">
             {product.ram ? (
               <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
@@ -103,14 +103,14 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
             HTML se escapa y jamás se ejecuta.
             Sin descripción NO se pinta ningún placeholder: un "N/A"
             ensucia la tarjeta y no aporta nada. */}
-        {product.description ? (
+        {product.description && !product.finishesEnabled ? (
           <p className="line-clamp-3 text-xs leading-relaxed text-muted">
             {product.description}
           </p>
         ) : null}
 
         {/* Price */}
-        <p className="text-xl font-bold text-primary">{formatCOP(price)}</p>
+        <p className="text-xl font-bold text-primary">{product.finishesEnabled ? "Ver acabados y precios" : formatCOP(price)}</p>
 
         {/* Hover CTA */}
         <div className="pt-1">

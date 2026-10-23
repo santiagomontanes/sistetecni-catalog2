@@ -2,7 +2,7 @@ import type { ProductUnitStatus } from "@/types/erp";
 
 export type CostEntryKind = "cost" | "reversal";
 export type CostCategory = "upgrade" | "repair" | "spare_part" | "labor" | "transport" | "after_sales" | "sale_fee" | "accessory" | "other";
-export type ProfitabilityCostingStatus = "complete" | "missing_acquisition_cost" | "manual_items_review";
+export type ProfitabilityCostingStatus = "complete" | "missing_acquisition_cost" | "manual_items_review" | "transport_review";
 
 export interface AdminCostEntryDTO {
   id:string;
@@ -23,6 +23,7 @@ export interface AdminCostEntryDTO {
 
 export interface AdminProfitabilityUnitRefDTO { unitId:string; unitCode:string; serialNumber:string|null; }
 export interface AdminProfitabilitySaleDTO {
+  allocatedTransportExpensesCop?:number;
   saleId:string;
   saleNumber:string;
   createdAt:string|null;
@@ -56,11 +57,12 @@ export interface AdminProfitabilitySummaryDTO {
 export interface AdminProfitabilityDashboardDTO { summary:AdminProfitabilitySummaryDTO; sales:AdminProfitabilitySaleDTO[]; }
 
 export interface AdminUnitProfitabilityDTO {
+  transportReviewRequired?:boolean;
   unitId:string;
   unitCode:string;
   serialNumber:string|null;
   status:ProductUnitStatus;
-  productId:string;
+  productId:string|null;
   productName:string;
   acquisitionCostCop:number|null;
   purchaseId:string|null;

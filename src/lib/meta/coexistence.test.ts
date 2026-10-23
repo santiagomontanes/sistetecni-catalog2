@@ -22,9 +22,17 @@ import {
   extraerCodigoFbLogin,
   crearAcumuladorPiezas,
   crearCerrojoUnaVez,
+  crearCronologia,
+  describirEventoParaDiagnostico,
+  diffTrazas,
+  enmascararConfigId,
+  hitoDeEvento,
+  HITOS_CRONOLOGIA,
+  CLAVES_DATA_CONOCIDAS,
   ErrorConfigCoexistence,
   EXITO_COEXISTENCE,
   FEATURE_TYPE_COEXISTENCE,
+  type TrazaIntento,
 } from "./coexistence";
 
 const CODE_FALSO = "AQD-authorization-code-de-prueba-que-no-vale-nada-1234567890";
@@ -333,4 +341,193 @@ test("cerrojo: 10 clics seguidos → un solo true", () => {
   const c = crearCerrojoUnaVez();
   const trues = Array.from({ length: 10 }, () => c.intentar()).filter(Boolean);
   assert.equal(trues.length, 1);
+});
+
+// ─────────────────────────────────────────────────────────────
+// DIAGNÓSTICO — captura segura de eventos y cronología
+// ─────────────────────────────────────────────────────────────
+
+
+test("featureType es EXACTAMENTE el de Coexistence y nunca uno estándar", () => {
+  assert.equal(FEATURE_TYPE_COEXISTENCE, "whatsapp_business_app_onboarding");
+  for (const estandar of ["", "onboarding", "whatsapp_business_onboarding", "new_number"]) {
+    assert.notEqual(FEATURE_TYPE_COEXISTENCE, estandar);
+  }
+  // No hay más de una forma de construir los parámetros: `construirParametrosFbLogin`
+  // es la única, y siempre devuelve el featureType de Coexistence.
+  const p = construirParametrosFbLogin("123456789012");
+  assert.equal(p.extras.featureType, "whatsapp_business_app_onboarding");
+  assert.equal(p.extras.sessionInfoVersion, "3");
+  assert.equal(p.response_type, "code");
+  assert.equal(p.override_default_response_type, true);
+});
+
+test("hitoDeEvento: Coexistence vs onboarding estándar vs cancel/error", () => {
+  assert.equal(hitoDeEvento("FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"), "COEXISTENCE_FINISH");
+  assert.equal(hitoDeEvento("FINISH"), "STANDARD_FINISH");
+  assert.equal(hitoDeEvento("FINISH_ONLY_WABA"), "STANDARD_FINISH");
+  assert.equal(hitoDeEvento("CANCEL"), "CANCEL");
+  assert.equal(hitoDeEvento("ERROR"), "ERROR");
+  assert.equal(hitoDeEvento("ALGO_RARO"), null);
+});
+
+test("cronología: solo hitos de la lista blanca, dedup salvo MESSAGE_RECEIVED", () => {
+  let t = 0;
+  const c = crearCronologia(() => t);
+  c.registrar("SDK_LOADED");
+  t = 10;
+  c.registrar("FB_INIT");
+  t = 20;
+  c.registrar("SDK_LOADED"); // dup → se ignora
+  c.registrar("HITO_INVENTADO"); // fuera de lista blanca → se ignora
+  t = 30;
+  c.registrar("MESSAGE_RECEIVED");
+  t = 40;
+  c.registrar("MESSAGE_RECEIVED"); // repetible
+
+  assert.deepEqual(
+    c.entradas.map((e) => e.hito),
+    ["SDK_LOADED", "FB_INIT", "MESSAGE_RECEIVED", "MESSAGE_RECEIVED"]
+  );
+  assert.deepEqual(
+    c.entradas.map((e) => e.enMs),
+    [0, 10, 30, 40]
+  );
+  for (const e of c.entradas) assert.ok((HITOS_CRONOLOGIA as readonly string[]).includes(e.hito));
+});
+
+test("describirEventoParaDiagnostico: origin no confiable → sin datos, originPermitido=false", () => {
+  const d = describirEventoParaDiagnostico(
+    { type: "WA_EMBEDDED_SIGNUP", event: "FINISH", data: { waba_id: "1" } },
+    "https://evil.example"
+  );
+  assert.equal(d.originPermitido, false);
+  assert.equal(d.origin, null);
+});
+
+test("describirEventoParaDiagnostico: solo NOMBRES de clave conocidas + recuento del resto", () => {
+  const d = describirEventoParaDiagnostico(
+    {
+      type: "WA_EMBEDDED_SIGNUP",
+      event: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING",
+      data: {
+        waba_id: "102290129340398",
+        phone_number_id: "106540352242922",
+        current_step: "WABA_SELECTION",
+        secreto_inventado: "valor-que-no-debe-salir",
+        otra_cosa: "tampoco",
+      },
+    },
+    "https://www.facebook.com"
+  );
+  assert.equal(d.originPermitido, true);
+  assert.equal(d.origin, "https://www.facebook.com");
+  assert.equal(d.type, "WA_EMBEDDED_SIGNUP");
+  assert.equal(d.event, "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING");
+  assert.deepEqual(d.dataKeys, ["current_step", "phone_number_id", "waba_id", "otras:2"]);
+  assert.equal(d.currentStep, "WABA_SELECTION");
+
+  const s = JSON.stringify(d);
+  assert.ok(!s.includes("valor-que-no-debe-salir"));
+  assert.ok(!s.includes("tampoco"));
+});
+
+test("describirEventoParaDiagnostico: ERROR con error_message NO filtra el texto de Meta", () => {
+  const d = describirEventoParaDiagnostico(
+    {
+      type: "WA_EMBEDDED_SIGNUP",
+      event: "ERROR",
+      data: { error_message: "<script>alert('meta dice esto libremente')</script>", error_id: "2494064" },
+    },
+    "https://web.facebook.com"
+  );
+  assert.equal(d.event, "ERROR");
+  // error_message y error_id están en la lista blanca de NOMBRES; sus VALORES no salen.
+  assert.deepEqual(d.dataKeys, ["error_id", "error_message"]);
+  const s = JSON.stringify(d);
+  assert.ok(!s.includes("alert"));
+  assert.ok(!s.includes("2494064"), "ni el propio código de error como valor");
+  assert.ok(!s.includes("script"));
+});
+
+test("describirEventoParaDiagnostico: string JSON y basura no rompen", () => {
+  const d = describirEventoParaDiagnostico(
+    JSON.stringify({ type: "WA_EMBEDDED_SIGNUP", event: "CANCEL", data: { current_step: "x" } }),
+    "https://www.facebook.com"
+  );
+  assert.equal(d.event, "CANCEL");
+  for (const basura of [null, 42, "{no json", [], undefined]) {
+    const r = describirEventoParaDiagnostico(basura, "https://www.facebook.com");
+    assert.equal(r.originPermitido, true);
+    assert.equal(r.event, null);
+    assert.deepEqual(r.dataKeys, []);
+  }
+});
+
+test("CLAVES_DATA_CONOCIDAS es una lista blanca (incluye los identificadores esperados)", () => {
+  for (const k of ["waba_id", "phone_number_id", "business_id", "current_step"]) {
+    assert.ok((CLAVES_DATA_CONOCIDAS as readonly string[]).includes(k));
+  }
+});
+
+test("enmascararConfigId no revela el valor entero", () => {
+  assert.equal(enmascararConfigId("123456789012345"), "1234…2345");
+  assert.equal(enmascararConfigId(""), "(ausente)");
+  assert.equal(enmascararConfigId(null), "(ausente)");
+  assert.equal(enmascararConfigId("1234567"), "12…");
+});
+
+// ─────────────────────────────────────────────────────────────
+// diffTrazas — en qué paso divergen A (funciona) y B (311)
+// ─────────────────────────────────────────────────────────────
+
+const trazaBase = (over: Partial<TrazaIntento> = {}): TrazaIntento => ({
+  etiqueta: "A",
+  timestamp: "2026-09-10T00:00:00.000Z",
+  resultado: "verificado",
+  ultimoEvento: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING",
+  currentStep: null,
+  wabaIdPresente: true,
+  phoneNumberIdPresente: true,
+  fbLoginCodeRecibido: true,
+  errorIdMeta: null,
+  codigoServidor: null,
+  origin: "https://www.facebook.com",
+  featureType: "whatsapp_business_app_onboarding",
+  sessionInfoVersion: "3",
+  hitos: ["SDK_LOADED", "FB_INIT", "LOGIN_OPENED", "MESSAGE_RECEIVED", "COEXISTENCE_FINISH"],
+  ...over,
+});
+
+test("diffTrazas: A completa vs B que se queda en ERROR con #2494064", () => {
+  const a = trazaBase({ etiqueta: "A" });
+  const b = trazaBase({
+    etiqueta: "B",
+    resultado: "error",
+    ultimoEvento: "ERROR",
+    wabaIdPresente: false,
+    phoneNumberIdPresente: false,
+    fbLoginCodeRecibido: false,
+    errorIdMeta: "2494064",
+    hitos: ["SDK_LOADED", "FB_INIT", "LOGIN_OPENED", "MESSAGE_RECEIVED", "ERROR"],
+  });
+  const filas = diffTrazas(a, b);
+  const campos = filas.map((f) => f.campo);
+  assert.ok(campos.includes("resultado"));
+  assert.ok(campos.includes("ultimoEvento"));
+  assert.ok(campos.includes("errorIdMeta"));
+  assert.ok(campos.includes("wabaIdPresente"));
+  assert.ok(campos.includes("hitos"));
+  const hitosDiff = filas.find((f) => f.campo === "hitos");
+  assert.deepEqual(hitosDiff?.a, ["COEXISTENCE_FINISH"]);
+  assert.deepEqual(hitosDiff?.b, ["ERROR"]);
+});
+
+test("diffTrazas: dos trazas idénticas → sin divergencias", () => {
+  assert.deepEqual(diffTrazas(trazaBase(), trazaBase({ etiqueta: "B" })), []);
+});
+
+test("diffTrazas: si falta una traza → array vacío (no revienta)", () => {
+  assert.deepEqual(diffTrazas(null, trazaBase()), []);
+  assert.deepEqual(diffTrazas(trazaBase(), null), []);
 });

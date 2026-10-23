@@ -21,6 +21,7 @@ export interface Product {
   // históricos. Cuando erpStockEnabled=true, `stock` deja de ser manual y
   // representa exactamente las product_units con status=available.
   erpStockEnabled?: boolean;
+  finishesEnabled?: boolean;
   erpStockSyncedAt?: Date | null;
 
   // Columnas del personalizador (Fase 2B) — confirmadas en el esquema real

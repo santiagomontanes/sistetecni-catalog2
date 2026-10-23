@@ -247,6 +247,8 @@ export default function AdminInventarioPage() {
   const productStockSummaries = useMemo<ProductStockSummary[]>(() => {
     const byProduct = new Map<string, ProductStockSummary>();
     for (const unit of items) {
+      // Recepciones sin catálogo y repuestos no tienen un stock comercial que activar.
+      if (!unit.productId) continue;
       const current = byProduct.get(unit.productId);
       if (current) {
         current.totalUnits += 1;

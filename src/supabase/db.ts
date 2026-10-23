@@ -20,6 +20,7 @@ function toDate(value: unknown): Date | null {
 
 function mapProduct(row: DbRow): Product {
   return {
+    finishesEnabled: row.finishes_enabled === true,
     id: String(row.id),
     title: String(row.title ?? "Producto sin título"),
     brand: String(row.brand ?? "Sin marca"),
@@ -66,6 +67,7 @@ function mapProduct(row: DbRow): Product {
 function mapProductListItem(row: DbRow): Product {
   const allImages = Array.isArray(row.images) ? (row.images as string[]) : [];
   return {
+    finishesEnabled: row.finishes_enabled === true,
     id: String(row.id),
     title: String(row.title ?? "Producto sin título"),
     brand: String(row.brand ?? "Sin marca"),
@@ -268,9 +270,10 @@ export async function getProductsList(options?: ListOptions): Promise<ProductPag
   const pageSize = options?.pageSize ?? 12;
   const offset = options?.offset ?? 0;
 
+  const query = (columns: string) => {
   let q = supabase
     .from("products")
-    .select(LIST_COLUMNS, { count: "exact" })
+    .select(columns, { count: "exact" })
     .order("created_at", { ascending: false });
 
   q = applyProductFilters(q, options);
@@ -281,7 +284,12 @@ export async function getProductsList(options?: ListOptions): Promise<ProductPag
     q = q.range(offset, offset + pageSize - 1);
   }
 
-  const { data, error, count } = await q;
+  return q;
+  };
+  let result = await query(LIST_COLUMNS + ",finishes_enabled");
+  // Compatible con despliegues que aún no aplicaron la migración de acabados.
+  if (result.error?.code === "42703") result = await query(LIST_COLUMNS);
+  const { data, error, count } = result;
   if (error || !data) return { items: [], total: 0, hasMore: false };
 
   const items = asRowArray(data).map(mapProductListItem);

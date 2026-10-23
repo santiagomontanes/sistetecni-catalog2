@@ -53,7 +53,8 @@ export const PRODUCT_UNIT_STATUSES: readonly ProductUnitStatus[] = [
 
 export interface ProductUnit {
   id: string;
-  productId: string;
+  /** Recepción de taller y componentes pueden no tener producto comercial aún. */
+  productId: string | null;
   unitCode: string;
   serialNumber: string | null;
   status: ProductUnitStatus;
@@ -104,7 +105,7 @@ export type ErpChannel = "web" | "whatsapp" | "api" | "system" | "migration";
 export interface InventoryMovement {
   id: string;
   unitId: string;
-  productId: string;
+  productId: string | null;
   movementType: InventoryMovementType;
   fromStatus: ProductUnitStatus | null;
   toStatus: ProductUnitStatus | null;

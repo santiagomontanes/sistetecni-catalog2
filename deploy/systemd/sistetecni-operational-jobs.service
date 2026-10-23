@@ -1,0 +1,15 @@
+[Unit]
+Description=SISTETECNI recordatorios y conservación de evidencias
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/proyectos/sistetecni-catalog2
+EnvironmentFile=%h/.config/sistetecni/operational-jobs.env
+StateDirectory=sistetecni-operational-jobs
+Environment=ERP_JOBS_STATE_DIR=%S/sistetecni-operational-jobs
+ExecStart=/usr/bin/flock -n %S/sistetecni-operational-jobs/runner.lock /usr/bin/env node scripts/operational/run-jobs.mjs --run --allow-remote
+TimeoutStartSec=15min
+UMask=0077
+NoNewPrivileges=true
+

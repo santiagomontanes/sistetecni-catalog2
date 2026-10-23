@@ -159,10 +159,10 @@ export default function NuevaVentaPage() {
         unitCode: unit.unitCode,
         serialNumber: unit.serialNumber,
         unitStatus: unit.status,
-        title: selectedProduct.title,
+        title: [selectedProduct.title,unit.specOverrides.finish].filter(Boolean).join(" · "),
         image: selectedProduct.image,
         description: selectedProduct.description,
-        unitPriceCop: selectedProduct.price,
+        unitPriceCop: unit.commercialPriceCop ?? selectedProduct.price,
         quantity: 1,
       },
     ]);
@@ -322,6 +322,7 @@ export default function NuevaVentaPage() {
                     <button type="button" key={unit.id} onClick={() => addCatalogUnit(unit)} className="w-full rounded-xl border border-border bg-white p-4 text-left transition hover:border-primary">
                       <div className="flex items-start justify-between gap-3"><div><p className="font-mono text-sm font-bold text-primary">{unit.unitCode}</p><p className="text-sm font-medium text-text">Serial: {unit.serialNumber ?? "Sin serial"}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${reserved ? "bg-violet-50 text-violet-700" : "bg-green-50 text-green-700"}`}>{reserved ? "Reservado" : "Disponible"}</span></div>
                       {unitSpecs(unit) ? <p className="mt-2 text-xs text-muted">{unitSpecs(unit)}</p> : null}
+                      {unit.commercialPriceCop != null && <p className="mt-2 text-sm font-semibold">{String(unit.specOverrides.finish ?? "Acabado validado")} · {formatCOP(unit.commercialPriceCop)}</p>}
                       {reserved ? <div className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800"><p className="font-semibold">Para: {unit.reservationCustomerName ?? "Cliente"}</p>{unit.reservationCustomerPhone ? <p>Celular: {unit.reservationCustomerPhone}</p> : null}{unit.reservationExpiresAt ? <p>Vence: {formatReservationExpiry(unit.reservationExpiresAt)}</p> : null}</div> : null}
                     </button>
                   );

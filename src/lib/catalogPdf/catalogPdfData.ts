@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getAdminClient } from "../../supabase/admin";
 import { buildCatalogPdfBytes, type CatalogProduct } from "./buildCatalogPdf";
+import {storageDescription,type FinishOption} from "../operations/finishes";
 
 /**
  * Selección de productos y generación del catálogo PDF (P20.21C).
@@ -24,6 +25,7 @@ import { buildCatalogPdfBytes, type CatalogProduct } from "./buildCatalogPdf";
 const MAX_PRODUCTOS = 200;
 
 interface FilaCatalogo {
+  finishes_enabled?: boolean;
   id: string;
   title: string | null;
   brand: string | null;
@@ -111,7 +113,8 @@ export async function buildCatalogoPdfVigente(
       .order("price", { ascending: true })
       .limit(MAX_PRODUCTOS);
 
-  let { data, error } = await consultar(COLUMNAS);
+  let { data, error } = await consultar(`${COLUMNAS},finishes_enabled`);
+  if(error?.code === "42703" && error.message.includes("finishes_enabled")) ({data,error}=await consultar(COLUMNAS));
 
   // La migración del color todavía no está: mejor un catálogo sin la fila
   // "Color" que ningún catálogo. Cualquier otro error sigue siendo un error.
@@ -124,7 +127,7 @@ export async function buildCatalogoPdfVigente(
 
   const filas = (data ?? []) as unknown as FilaCatalogo[];
 
-  const productos: CatalogProduct[] = filas.map((row) => ({
+  const productsByModel: CatalogProduct[] = filas.map((row) => ({
     id: row.id,
     title: row.title ?? "",
     brand: row.brand,
@@ -145,6 +148,19 @@ export async function buildCatalogoPdfVigente(
     warrantyMonths: row.warranty_months,
     images: row.images,
   }));
+  const productos:CatalogProduct[]=[];
+  for(const [index,row] of filas.entries()){
+    const base=productsByModel[index];
+    if(!row.finishes_enabled){productos.push(base);continue;}
+    const result=await client.rpc("catalog_finish_options",{p_product:row.id});
+    if(result.error)throw new Error("CATALOG_FINISH_QUERY_FAILED");
+    for(const option of (result.data?.options??[]) as FinishOption[]){
+      productos.push({...base,title:`${base.title} · ${option.name}`,cpu:option.configuration.cpu,
+        ram:option.configuration.ramGb,storage:storageDescription(option.configuration.storage),screen:option.configuration.screen,
+        gpuModel:null,condition:null,description:null,color:option.baseColor,coloresDisponibles:[option.name],price:Number(option.priceCop),
+        images:option.imagePaths.map(path=>client.storage.from("catalog-finishes").getPublicUrl(path).data.publicUrl)});
+    }
+  }
 
   const pdfBytes = await buildCatalogPdfBytes(productos, {
     generatedAt: opciones.generatedAt,

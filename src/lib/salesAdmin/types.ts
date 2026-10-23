@@ -66,6 +66,7 @@ export interface AdminProductSearchItemDTO {
 }
 
 export interface AdminAvailableUnitDTO {
+  commercialPriceCop?: number | null;
   id: string;
   productId: string;
   unitCode: string;

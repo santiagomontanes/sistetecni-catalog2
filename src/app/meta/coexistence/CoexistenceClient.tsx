@@ -32,18 +32,64 @@ import {
   construirParametrosFbLogin,
   crearAcumuladorPiezas,
   crearCerrojoUnaVez,
+  crearCronologia,
+  describirEventoParaDiagnostico,
+  diffTrazas,
   esOrigenConfiable,
   extraerCodigoFbLogin,
+  hitoDeEvento,
   interpretarMensajeEmbeddedSignup,
   ErrorConfigCoexistence,
   EXITO_COEXISTENCE,
+  FEATURE_TYPE_COEXISTENCE,
   type AcumuladorPiezas,
   type CandidatosConexion,
   type CerrojoUnaVez,
   type ClaseEvento,
+  type Cronologia,
+  type DescriptorEvento,
+  type HitoCronologia,
   type ResultadoEmbeddedSignup,
+  type TrazaIntento,
 } from "@/lib/meta/coexistence";
 import { callCoexistenceConfirm, type VerificadoConfirm } from "@/lib/callCoexistenceConfirm";
+
+/** Metadata de diagnóstico calculada en el servidor (sin secretos). */
+export interface DiagnosticoServidor {
+  appIdPublicoPresente: boolean;
+  appIdServidorPresente: boolean;
+  appIdPublicoCoincideConServer: boolean | null;
+  appIdEnmascarado: string;
+  configIdPresente: boolean;
+  configIdEnmascarado: string;
+  graphApiVersion: string;
+  oauthRedirectPresente: boolean;
+  appSecretPresente: boolean;
+}
+
+const CLAVE_TRAZAS = "meta_coexistence_trazas_v1";
+const MAX_TRAZAS = 6;
+
+function leerTrazas(): TrazaIntento[] {
+  try {
+    const crudo = window.localStorage.getItem(CLAVE_TRAZAS);
+    const arr = crudo ? JSON.parse(crudo) : [];
+    return Array.isArray(arr) ? (arr as TrazaIntento[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function guardarTraza(traza: TrazaIntento): TrazaIntento[] {
+  const previas = leerTrazas().filter((t) => t.etiqueta !== traza.etiqueta);
+  const siguiente = [traza, ...previas].slice(0, MAX_TRAZAS);
+  try {
+    window.localStorage.setItem(CLAVE_TRAZAS, JSON.stringify(siguiente));
+  } catch {
+    /* modo incógnito / almacenamiento bloqueado: el diagnóstico sigue en pantalla */
+  }
+  return siguiente;
+}
 
 // Lecturas ESTÁTICAS Y LITERALES de process.env — la única forma que el bundler
 // de Next inlinea en el cliente (ver src/components/EnvironmentBanner.tsx).
@@ -108,15 +154,23 @@ const MENSAJE_ERROR_SERVIDOR: Record<string, string> = {
 /** Códigos por los que el `code` está gastado y hay que relanzar el asistente. */
 const CODIGO_VENCIDO = new Set(["INTERCAMBIO_FALLIDO", "CODE_INVALIDO"]);
 
-export default function CoexistenceClient() {
+function safeParse(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+export default function CoexistenceClient({ diagnosticoServidor }: { diagnosticoServidor: DiagnosticoServidor }) {
   return (
     <ProtectedAdmin>
-      <CoexistenceInner />
+      <CoexistenceInner diagnosticoServidor={diagnosticoServidor} />
     </ProtectedAdmin>
   );
 }
 
-function CoexistenceInner() {
+function CoexistenceInner({ diagnosticoServidor }: { diagnosticoServidor: DiagnosticoServidor }) {
   const [estadoSdk, setEstadoSdk] = useState<EstadoSdk>("cargando");
   const [fase, setFase] = useState<Fase>("sdk");
   const [eventos, setEventos] = useState<EventoRegistrado[]>([]);
@@ -127,9 +181,32 @@ function CoexistenceInner() {
   const [verificado, setVerificado] = useState<VerificadoConfirm | null>(null);
   const [codigoError, setCodigoError] = useState<string | null>(null);
 
+  // Diagnóstico
+  const [hitos, setHitos] = useState<HitoCronologia[]>([]);
+  const [ultimoDescriptor, setUltimoDescriptor] = useState<DescriptorEvento | null>(null);
+  const [etiquetaTraza, setEtiquetaTraza] = useState("A");
+  const [trazas, setTrazas] = useState<TrazaIntento[]>([]);
+  const [fbInitOk, setFbInitOk] = useState(false);
+
   const contador = useRef(0);
   const accRef = useRef<AcumuladorPiezas | null>(null);
   const cerrojoRef = useRef<CerrojoUnaVez | null>(null);
+  const cronoRef = useRef<Cronologia | null>(null);
+  const codigoRecibidoRef = useRef(false);
+  const ultimoEventoRef = useRef<string | null>(null);
+  const errorIdMetaRef = useRef<string | null>(null);
+
+  const obtenerCrono = useCallback((): Cronologia => {
+    if (!cronoRef.current) cronoRef.current = crearCronologia();
+    return cronoRef.current;
+  }, []);
+  const anotar = useCallback(
+    (hito: HitoCronologia) => {
+      obtenerCrono().registrar(hito);
+      setHitos([...obtenerCrono().entradas.map((e) => e.hito)]);
+    },
+    [obtenerCrono]
+  );
 
   const configCompleta = Boolean(APP_ID && CONFIG_ID);
 
@@ -143,12 +220,44 @@ function CoexistenceInner() {
     return cerrojoRef.current;
   }, []);
 
+  // Trazas guardadas (comparación A vs B). Solo en el navegador.
+  useEffect(() => {
+    setTrazas(leerTrazas());
+  }, []);
+
   // ── Escucha de postMessage de Embedded Signup ───────────────────────────
   useEffect(() => {
     function onMessage(event: MessageEvent) {
+      // DIAGNÓSTICO: se describe TODO mensaje de un origin de Meta —incluso
+      // eventos que no sabemos procesar— para poder comparar en qué paso se
+      // queda el 311. Solo metadata segura: booleanos, `type`/`event` y
+      // NOMBRES de clave; jamás un valor arbitrario.
+      const descriptor = describirEventoParaDiagnostico(event.data, event.origin);
+      if (descriptor.originPermitido) {
+        setUltimoDescriptor(descriptor);
+        anotar("MESSAGE_RECEIVED");
+        if (descriptor.event) ultimoEventoRef.current = descriptor.event;
+        const hito = descriptor.event ? hitoDeEvento(descriptor.event) : null;
+        if (hito) anotar(hito);
+      }
+
       if (!esOrigenConfiable(event.origin)) return;
       const resultado = interpretarMensajeEmbeddedSignup(event.data);
       if (!resultado) return;
+
+      // `error_id` solo si es un identificador numérico (los códigos de Meta lo son).
+      if (resultado.event === "ERROR") {
+        const raw =
+          typeof event.data === "string"
+            ? safeParse(event.data)
+            : event.data;
+        const errId =
+          raw && typeof raw === "object" && "data" in raw && raw.data && typeof raw.data === "object"
+            ? (raw.data as Record<string, unknown>).error_id
+            : undefined;
+        errorIdMetaRef.current =
+          typeof errId === "string" && /^\d{1,20}$/.test(errId) ? errId : null;
+      }
 
       contador.current += 1;
       setEventos((previos) => [
@@ -165,10 +274,11 @@ function CoexistenceInner() {
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [obtenerAcc]);
+  }, [obtenerAcc, anotar]);
 
   // ── Inicialización del SDK ──────────────────────────────────────────────
   const inicializarSdk = useCallback(() => {
+    anotar("SDK_LOADED");
     if (!window.FB || !APP_ID) {
       setEstadoSdk("error");
       return;
@@ -176,10 +286,12 @@ function CoexistenceInner() {
     try {
       window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: false, version: GRAPH_VERSION });
       setEstadoSdk("listo");
+      setFbInitOk(true);
+      anotar("FB_INIT");
     } catch {
       setEstadoSdk("error");
     }
-  }, []);
+  }, [anotar]);
 
   // ── Lanzar Embedded Signup ─────────────────────────────────────────────
   const conectar = useCallback(() => {
@@ -209,6 +321,10 @@ function CoexistenceInner() {
     }
 
     setFase("abierto");
+    anotar("LOGIN_OPENED");
+    ultimoEventoRef.current = null;
+    errorIdMetaRef.current = null;
+    codigoRecibidoRef.current = false;
 
     window.FB.login((response) => {
       // El `code` vive SOLO en esta variable local y en el acumulador. No se
@@ -216,6 +332,7 @@ function CoexistenceInner() {
       const code = extraerCodigoFbLogin(response);
       if (code) {
         obtenerAcc().registrarCodigo(code);
+        codigoRecibidoRef.current = true;
         setTieneCodigo(true);
         setMensajeCallback("Meta devolvió un código de autorización.");
       } else {
@@ -224,7 +341,50 @@ function CoexistenceInner() {
         );
       }
     }, params);
-  }, [estadoSdk, obtenerAcc, obtenerCerrojo]);
+  }, [estadoSdk, obtenerAcc, obtenerCerrojo, anotar]);
+
+  // ── Guardar la traza del intento actual (comparación A vs B) ───────────
+  const construirTraza = useCallback(
+    (etiqueta: string): TrazaIntento => {
+      const cand = obtenerAcc().candidatos;
+      const ev = ultimoEventoRef.current;
+      const resultado: TrazaIntento["resultado"] =
+        fase === "verificado"
+          ? "verificado"
+          : fase === "error-servidor"
+            ? "error-servidor"
+            : ev === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
+              ? "coexistence-finish"
+              : ev === "FINISH" || ev === "FINISH_ONLY_WABA"
+                ? "standard-finish"
+                : ev === "CANCEL"
+                  ? "cancel"
+                  : ev === "ERROR"
+                    ? "error"
+                    : "en-curso";
+      return {
+        etiqueta,
+        timestamp: new Date().toISOString(),
+        resultado,
+        ultimoEvento: ev,
+        currentStep: ultimoDescriptor?.currentStep ?? null,
+        wabaIdPresente: Boolean(cand?.wabaId),
+        phoneNumberIdPresente: Boolean(cand?.phoneNumberId),
+        fbLoginCodeRecibido: codigoRecibidoRef.current,
+        errorIdMeta: errorIdMetaRef.current,
+        codigoServidor: codigoError,
+        origin: ultimoDescriptor?.origin ?? null,
+        featureType: FEATURE_TYPE_COEXISTENCE,
+        sessionInfoVersion: "3",
+        hitos: obtenerCrono().entradas.map((e) => e.hito),
+      };
+    },
+    [fase, codigoError, ultimoDescriptor, obtenerAcc, obtenerCrono]
+  );
+
+  const guardarTrazaActual = useCallback(() => {
+    setTrazas(guardarTraza(construirTraza(etiquetaTraza.trim() || "A")));
+  }, [construirTraza, etiquetaTraza]);
 
   // ── Verificar y conectar (UNA operación explícita) ─────────────────────
   const verificarYConectar = useCallback(async () => {
@@ -501,6 +661,111 @@ function CoexistenceInner() {
           )}
         </section>
 
+        {/* Diagnóstico técnico */}
+        <details className="mt-8 rounded-2xl border border-border bg-surface p-6 text-sm">
+          <summary className="cursor-pointer text-base font-semibold text-text">Diagnóstico técnico</summary>
+          <p className="mt-2 text-xs text-muted">
+            Solo metadata segura. Nunca aparecen aquí el code, el access token, el App Secret, el{" "}
+            <span className="font-mono">authResponse</span> completo, cookies ni la sesión.
+          </p>
+
+          <h3 className="mt-4 text-sm font-semibold text-text">Configuración</h3>
+          <dl className="mt-2">
+            <FilaDl etiqueta="APP ID público (FB.init)" valor={diagnosticoServidor.appIdEnmascarado} />
+            <FilaDl
+              etiqueta="APP ID público = APP ID servidor"
+              valor={
+                diagnosticoServidor.appIdPublicoCoincideConServer === null
+                  ? "no demostrable (falta uno de los dos)"
+                  : diagnosticoServidor.appIdPublicoCoincideConServer
+                    ? "Sí"
+                    : "NO — el popup y el exchange usan apps distintas"
+              }
+            />
+            <FilaDl etiqueta="CONFIG ID presente" valor={diagnosticoServidor.configIdPresente ? "Sí" : "NO"} />
+            <FilaDl etiqueta="CONFIG ID (parcial)" valor={diagnosticoServidor.configIdEnmascarado} />
+            <FilaDl etiqueta="META_APP_SECRET presente (servidor)" valor={diagnosticoServidor.appSecretPresente ? "Sí" : "NO"} />
+            <FilaDl etiqueta="META_OAUTH_REDIRECT_URI presente" valor={diagnosticoServidor.oauthRedirectPresente ? "Sí" : "NO"} />
+            <FilaDl etiqueta="Graph version (SDK)" valor={GRAPH_VERSION} />
+          </dl>
+
+          <h3 className="mt-4 text-sm font-semibold text-text">Runtime</h3>
+          <dl className="mt-2">
+            <FilaDl etiqueta="origin actual" valor={typeof window !== "undefined" ? window.location.origin : "—"} />
+            <FilaDl etiqueta="SDK cargado" valor={estadoSdk === "listo" ? "Sí" : estadoSdk} />
+            <FilaDl etiqueta="FB.init completado" valor={fbInitOk ? "Sí" : "No"} />
+            <FilaDl etiqueta="featureType usado" valor={FEATURE_TYPE_COEXISTENCE} />
+            <FilaDl etiqueta="sessionInfoVersion" valor="3" />
+          </dl>
+
+          <h3 className="mt-4 text-sm font-semibold text-text">Cronología</h3>
+          {hitos.length === 0 ? (
+            <p className="mt-2 text-xs text-muted">(sin hitos todavía)</p>
+          ) : (
+            <ol className="mt-2 space-y-1 font-mono text-xs text-text">
+              {obtenerCrono().entradas.map((e, i) => (
+                <li key={i}>
+                  {String(e.enMs).padStart(6, " ")} ms · {e.hito}
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <h3 className="mt-4 text-sm font-semibold text-text">Último evento de Meta</h3>
+          {ultimoDescriptor ? (
+            <dl className="mt-2">
+              <FilaDl etiqueta="origin permitido" valor={ultimoDescriptor.originPermitido ? "Sí" : "No"} />
+              <FilaDl etiqueta="origin" valor={ultimoDescriptor.origin ?? "—"} />
+              <FilaDl etiqueta="type" valor={ultimoDescriptor.type ?? "—"} />
+              <FilaDl etiqueta="event" valor={ultimoDescriptor.event ?? "—"} />
+              <FilaDl etiqueta="dataKeys" valor={ultimoDescriptor.dataKeys.join(", ") || "—"} />
+              <FilaDl etiqueta="current_step" valor={ultimoDescriptor.currentStep ?? "—"} />
+            </dl>
+          ) : (
+            <p className="mt-2 text-xs text-muted">(no se ha recibido ningún evento de un origin de Meta)</p>
+          )}
+
+          <h3 className="mt-4 text-sm font-semibold text-text">Comparar intentos (A vs B)</h3>
+          <p className="mt-1 text-xs text-muted">
+            Ejecuta el flujo con el número que funciona, guarda como <strong>A</strong>. Repite con el
+            311, guarda como <strong>B</strong>. La tabla muestra en qué campo divergen. Las trazas se
+            guardan solo en este navegador (localStorage), sin teléfonos completos ni secretos.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="text-xs text-muted">
+              etiqueta:{" "}
+              <input
+                value={etiquetaTraza}
+                onChange={(e) => setEtiquetaTraza(e.target.value.slice(0, 24))}
+                className="w-24 rounded border border-border bg-white px-2 py-1 font-mono text-xs text-text"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={guardarTrazaActual}
+              className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white"
+            >
+              Guardar traza del intento actual
+            </button>
+          </div>
+
+          {trazas.length > 0 ? (
+            <ul className="mt-3 space-y-1 text-xs">
+              {trazas.map((t) => (
+                <li key={t.etiqueta} className="font-mono text-muted">
+                  <span className="text-text">{t.etiqueta}</span> · {t.resultado} · evento={t.ultimoEvento ?? "—"} ·
+                  step={t.currentStep ?? "—"} · code={t.fbLoginCodeRecibido ? "sí" : "no"} · waba=
+                  {t.wabaIdPresente ? "sí" : "no"} · pnid={t.phoneNumberIdPresente ? "sí" : "no"}
+                  {t.errorIdMeta ? ` · errorId=${t.errorIdMeta}` : ""}
+                  {t.codigoServidor ? ` · servidor=${t.codigoServidor}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <DiffTrazas trazas={trazas} />
+        </details>
+
         {/* Qué NO hace esta fase */}
         <section className="mt-8 rounded-2xl border border-border bg-surface p-6 text-sm text-muted">
           <h2 className="text-base font-semibold text-text">Qué NO hace esta fase</h2>
@@ -517,6 +782,50 @@ function CoexistenceInner() {
         </section>
       </article>
     </>
+  );
+}
+
+function DiffTrazas({ trazas }: { trazas: TrazaIntento[] }) {
+  const a = trazas.find((t) => t.etiqueta === "A") ?? null;
+  const b = trazas.find((t) => t.etiqueta === "B") ?? null;
+  if (!a || !b) {
+    return (
+      <p className="mt-3 text-xs text-muted">
+        Guarda una traza con etiqueta <span className="font-mono">A</span> y otra con{" "}
+        <span className="font-mono">B</span> para ver el diff.
+      </p>
+    );
+  }
+  const filas = diffTrazas(a, b);
+  return (
+    <div className="mt-3 overflow-x-auto rounded-xl border border-border">
+      <table className="w-full min-w-[28rem] text-left text-xs">
+        <thead className="bg-surface text-muted">
+          <tr>
+            <th className="px-3 py-2">campo que diverge</th>
+            <th className="px-3 py-2">A</th>
+            <th className="px-3 py-2">B (311)</th>
+          </tr>
+        </thead>
+        <tbody className="font-mono text-text">
+          {filas.length === 0 ? (
+            <tr>
+              <td className="px-3 py-2 text-muted" colSpan={3}>
+                A y B coinciden en los campos comparados.
+              </td>
+            </tr>
+          ) : (
+            filas.map((f) => (
+              <tr key={f.campo} className="border-t border-border">
+                <td className="px-3 py-2">{f.campo}</td>
+                <td className="px-3 py-2 break-all">{JSON.stringify(f.a)}</td>
+                <td className="px-3 py-2 break-all">{JSON.stringify(f.b)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

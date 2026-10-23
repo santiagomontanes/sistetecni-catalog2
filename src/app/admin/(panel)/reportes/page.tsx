@@ -5,6 +5,7 @@ import { callAdminAction } from "@/lib/callAdminAction";
 import { getBusinessReport } from "@/app/admin/reportes/actions";
 import { formatCOP } from "@/lib/personalizadorUi";
 import type { BusinessReportDTO } from "@/lib/adminPhase2/types";
+import OperationalReport from "@/components/workshop/OperationalReport";
 
 function dateOffset(days: number) {
   const date = new Date();
@@ -79,11 +80,12 @@ export default function ReportesPage() {
 
       {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
 
+      <OperationalReport from={from} to={to} />
       {data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Card label="Ventas" value={formatCOP(data.salesRevenueCop)} sub={`${data.salesCount} ventas · ${data.unitsSold} STU`} />
-            <Card label="Resultado conocido" value={formatCOP(data.knownNetResultCop)} sub="Ventas - compra STU - extras - gastos" />
+            <Card label="Resultado conocido" value={formatCOP(data.knownNetResultCop)} sub="Ventas − compra STU − costos/gastos registrados, incluido transporte reconocido. Revise conceptos provisionales; no es efectivo recibido." />
             <Card label="Gastos operativos" value={formatCOP(data.operatingExpensesCop)} sub={`${formatCOP(data.cashOutCop)} salidas de flujo`} />
             <Card label="Inventario valorizado" value={formatCOP(data.inventoryAcquisitionValueCop)} sub="Costo de adquisición no vendido/retirado" />
             <Card label="Compras" value={formatCOP(data.purchasesCop)} sub={`${data.purchaseCount} lotes`} />
