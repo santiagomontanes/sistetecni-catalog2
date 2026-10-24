@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { WorkshopLocation } from "@/lib/workshop/types";
+import { locationChoices } from "@/lib/workshop/locations";
 const inputClass = "w-full rounded border px-3 py-2";
 interface Part { kind: "ram" | "storage" | "charger"; capacityGb?: number | null; generation?: "DDR2" | "DDR3" | "DDR3L" | "DDR4" | "DDR5"; formFactor?: string; technology?: "HDD" | "SSD"; interface?: "SATA" | "NVMe" | "IDE" | "SAS" | "unknown"; connector?: string; voltage?: number | null; current?: number | null; watts?: number | null }
 export default function ReceptionForm({ qr, locations, disabled, onReceive }: { qr: string; locations: WorkshopLocation[]; disabled: boolean; onReceive: (payload: Record<string, unknown>) => Promise<void> }) {
@@ -22,7 +23,7 @@ export default function ReceptionForm({ qr, locations, disabled, onReceive }: { 
       {[["powers","Prende"],["video","Da video"]].map(([name,label]) => <label key={name}>{label}<select name={name} defaultValue="unchecked" className={inputClass}><option value="unchecked">Sin comprobar</option><option value="yes">Sí</option><option value="no">No</option></select></label>)}
       <label>Batería aparente (provisional)<input name="battery" className={inputClass} /></label>
       <label>Cargador recibido<select name="charger" defaultValue="unchecked" className={inputClass}><option value="unchecked">Sin comprobar</option><option value="yes">Sí</option><option value="no">No</option><option value="not_applicable">No aplica</option></select></label>
-      <label>Ubicación física<select name="location" required className={inputClass}><option value="">Seleccione</option>{locations.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</select></label>
+      <label>Ubicación física<select name="location" required className={inputClass}><option value="">Seleccione</option>{locationChoices(locations).map(l => <option key={l.id} value={l.id}>{l.path}</option>)}</select></label>
       <div className="sm:col-span-2 space-y-2"><p>Componentes recibidos instalados (no disponibles como repuesto)</p>{parts.map((part, i) => <div key={i} className="flex flex-wrap gap-2 rounded border p-2">
         <span>{part.kind === "ram" ? "RAM" : part.kind === "storage" ? "Disco" : "Cargador"} #{i + 1}</span>
         {part.kind !== "charger" && <input aria-label="Capacidad GB" className="w-32 rounded border p-2" type="number" min="0.1" step="0.1" placeholder="GB desconocidos" onChange={e => update(i, { capacityGb: e.target.value ? Number(e.target.value) : null })} />}

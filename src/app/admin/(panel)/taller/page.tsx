@@ -9,6 +9,7 @@ import type { WorkshopData, WorkshopUnit } from "@/lib/workshop/types";
 import CameraScanner from "./CameraScanner";
 import LabelsPanel from "./LabelsPanel";
 import LocationsPanel from "./LocationsPanel";
+import { findLocation, locationChoices, locationPath } from "@/lib/workshop/locations";
 import ReceptionForm from "./ReceptionForm";
 import StationLink from "@/components/workshop/StationLink";
 import UnitPhotos from "@/components/workshop/UnitPhotos";
@@ -66,9 +67,9 @@ export default function WorkshopPage() {
   const componentChoices = componentResults ?? data?.components.filter(c => !c.installed_in_unit_id) ?? [];
   const versioned = (extra: Record<string, unknown>) => ({ unitId: unit?.id, version: unit?.row_version, ...extra });
   const locations = data?.locations ?? [];
-  const locationName = (id: string | null) => locations.find(l => l.id === id)?.code ?? "Sin ubicación";
+  const locationName = (id: string | null) => (id && locationPath(locations, id)) || "Sin ubicación";
   const componentLabel = (c: WorkshopUnit) => `${c.unit_code} · ${c.asset_kind} ${c.component_attributes.capacityGb ?? "?"} GB · ${c.component_attributes.generation ?? c.component_attributes.interface ?? ""} · ${c.component_condition}`;
-  const locationOptions = <><option value="">Seleccione ubicación</option>{locations.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</>;
+  const locationOptions = <><option value="">Seleccione ubicación</option>{locationChoices(locations).map(l => <option key={l.id} value={l.id}>{l.path}</option>)}</>;
   return <div className="space-y-5" onChange={() => { dirty.current = true; setStatus("Cambios sin guardar"); }}>
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Taller operativo</h1><p className="text-sm text-slate-600" role="status">{status}</p></div><button className={button} onClick={() => { if (!dirty.current || window.confirm("Descartar campos sin guardar y recuperar la versión del servidor?")) { dirty.current = false; void load(true); } }}>Recargar ficha</button></div>
     {error && <p role="alert" className="rounded bg-red-50 p-3 text-red-800">{error}</p>}
@@ -109,7 +110,7 @@ export default function WorkshopPage() {
         const direction = e.after_data.direction === "install" ? "remove" : "install";
         const reason = window.prompt(`Reversar movimiento ${component.unit_code}. Motivo obligatorio:`)?.trim(); if (!reason) return;
         let locationId: string | undefined;
-        if (direction === "remove") { const code = window.prompt("Código de ubicación activa donde quedará el componente:")?.trim().toUpperCase(); locationId = locations.find(l => l.active && l.code === code)?.id; if (!locationId) { setError("Seleccione un código de ubicación activo existente."); return; } }
+        if (direction === "remove") { const typed = window.prompt("¿En qué ubicación quedará el componente? Escriba el lugar completo, por ejemplo: Mueble A › Estante 1")?.trim() ?? ""; const place = findLocation(locations, typed); locationId = place?.active ? place.id : undefined; if (!locationId) { setError("No encontré esa ubicación activa. Escríbala como aparece en la lista, por ejemplo: Mueble A › Estante 1."); return; } }
         void command("component_move", versioned({ componentId: component.id, componentVersion: component.row_version, direction, ...(locationId ? { locationId } : {}), condition: "untested", reason, reversalOf: e.id }));
       }}>Reversar con historial</button>}</div>)}</details>
     </section>}

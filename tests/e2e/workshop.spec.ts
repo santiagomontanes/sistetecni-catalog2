@@ -36,14 +36,24 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
   const destination=await command("location",{code:`DEST-${randomUUID().slice(0,6).toUpperCase()}`,name:"Destino sintético móvil"});
   await login(page);
   await page.getByText("Preparar taller: etiquetas QR y ubicaciones", { exact: true }).click();
-  const code = `E2E-${randomUUID().slice(0, 6).toUpperCase()}`;
-  await page.getByLabel("Nombre de la ubicación").fill("Recepción sintética E2E");
-  await page.getByLabel(/Código interno/).fill(code);
-  await page.getByRole("button", { name: "Crear ubicación", exact: true }).click();
-  await expect(page.locator(`option`).filter({ hasText: `${code} · Recepción sintética E2E` }).first()).toBeAttached();
-  // Código sugerido automáticamente a partir del nombre cuando no se escribe uno.
-  await page.getByLabel("Nombre de la ubicación").fill("Estante de prueba ñandú");
-  await expect(page.getByText("Se guardará como ESTANTE-DE-PRUEBA-NANDU")).toBeVisible();
+  // Ubicación y sub-posición libres: «Mueble X» con «Estante 1» dentro, sin códigos a la vista.
+  const furniture = `Mueble ${randomUUID().slice(0, 4).toUpperCase()}`;
+  const placeLabel = `${furniture} › Estante 1`;
+  await page.getByLabel("Ubicación", { exact: true }).fill(furniture);
+  await page.getByLabel(/Sub-posición/).fill("Estante 1");
+  await expect(page.getByText(`Se creará «${furniture}» y dentro «Estante 1».`)).toBeVisible();
+  await page.getByRole("button", { name: "Guardar ubicación", exact: true }).click();
+  await expect(page.locator("option").filter({ hasText: placeLabel }).first()).toBeAttached();
+  await expect(page.locator("option").filter({ hasText: /^Mueble [A-F0-9]{4}$/ }).first()).toBeAttached();
+  // Segunda sub-posición en la misma ubicación existente: no la duplica.
+  await page.getByLabel("Ubicación", { exact: true }).fill(furniture);
+  await page.getByLabel(/Sub-posición/).fill("Estante 2");
+  await expect(page.getByText(`Se agregará «Estante 2» dentro de «${furniture}».`)).toBeVisible();
+  await page.getByRole("button", { name: "Guardar ubicación", exact: true }).click();
+  await expect(page.locator("option").filter({ hasText: `${furniture} › Estante 2` }).first()).toBeAttached();
+  await page.getByLabel("Ubicación", { exact: true }).fill(furniture);
+  await page.getByLabel(/Sub-posición/).fill("estante 1");
+  await expect(page.getByText("Esa sub-posición ya existe.")).toBeVisible();
   await page.getByLabel("¿Cuántos equipos llegaron?").fill("1");
   await page.getByRole("button", { name: /Generar 1 QR y ver PDF/ }).click();
   const summary = page.locator("p").filter({ hasText: /STU-\d{6,} a STU-\d{6,}/ }).first();
@@ -76,7 +86,7 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     await expect(receipt).toBeVisible();
     await receipt.getByLabel("Marca", { exact: true }).fill("Marca sintética");
     await receipt.getByLabel("Modelo", { exact: true }).fill("Recepción E2E");
-    await receipt.getByLabel(/^Ubicación física/).selectOption({ label: `${code} · Recepción sintética E2E` });
+    await receipt.getByLabel(/^Ubicación física/).selectOption({ label: placeLabel });
     await receipt.getByRole("button", { name: "Agregar RAM", exact: true }).click();
     await receipt.getByLabel("Capacidad GB", { exact: true }).fill("1");
     await receipt.getByLabel("Generación RAM", { exact: true }).selectOption("DDR3");
@@ -102,7 +112,7 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     expect(server.unit.location_id).toBe(destination.id);
     expect(server.events.some((e:{event_type:string})=>e.event_type==="move")).toBe(true);
     // Una edición local no se reemplaza por la actualización del celular.
-    const sourceId=server.locations.find((l:{code:string})=>l.code===code).id;
+    const sourceId=server.locations.find((l:{name:string;parent_id:string|null})=>l.name==="Estante 1"&&server.locations.some((p:{id:string;name:string})=>p.id===l.parent_id&&p.name===furniture)).id;
     await page.getByLabel(/^Trasladar a/).selectOption(sourceId);
     await page.getByPlaceholder("Motivo del traslado").fill("Borrador local que debe conservarse");
     await mobile.waitForTimeout(6000);
