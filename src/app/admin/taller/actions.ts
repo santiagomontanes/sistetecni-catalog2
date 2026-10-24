@@ -1,9 +1,10 @@
 "use server";
 
-import QRCode from "qrcode";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireErpPermission } from "@/lib/erpAuth/auth";
 import { validateWorkshopCommand } from "@/lib/workshop/validation";
+import { buildLabelsPdf } from "@/lib/workshop/labelsPdf";
 import type { WorkshopData, WorkshopResult, WorkshopUnit } from "@/lib/workshop/types";
 
 const messages: Record<string, string> = {
@@ -56,13 +57,50 @@ export async function commandWorkshop(input: { accessToken: unknown; action: str
     return { ok: true, data: data as Record<string, unknown> };
   } catch (error) { return failure(error); }
 }
-export async function renderWorkshopLabels(input: { accessToken: unknown; codes: string[] }): Promise<WorkshopResult<{ code: string; svg: string }[]>> {
+const labelSize = z.enum(["small", "medium", "large"]);
+export interface LabelBatch { batchId: string; createdAt: string; total: number; free: number; assigned: number; void: number; first: string; last: string }
+export interface LabelsPdfResult { pdfBase64: string; batchId: string; count: number; first: string; last: string }
+async function pdfForCodes(codes: string[], size: z.infer<typeof labelSize>, batchId: string): Promise<LabelsPdfResult> {
+  const sorted = [...codes].sort();
+  const title = `Etiquetas SISTETECNI ${new Date().toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}`;
+  const bytes = await buildLabelsPdf(sorted, size, title);
+  return { pdfBase64: Buffer.from(bytes).toString("base64"), batchId, count: sorted.length, first: sorted[0], last: sorted[sorted.length - 1] };
+}
+// Reserva N números STU y devuelve el PDF para imprimir. Si el PDF fallara, el lote queda
+// registrado y se puede reimprimir desde «Lotes anteriores»; los STU no se pierden.
+export async function createWorkshopLabelsPdf(input: { accessToken: unknown; count: number; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
-    await requireErpPermission(input.accessToken, "inventory.read");
-    const codes = z.array(z.string().regex(/^STU-\d{6,}$/)).max(200).parse(input.codes);
-    // Solo identidad, sin PII ni servicios de QR externos; escáner autenticado resuelve el código.
-    const result = await Promise.all(codes.map(async code => ({ code, svg: await QRCode.toString(code, { type: "svg", errorCorrectionLevel: "M", margin: 3, width: 160 }) })));
-    return { ok: true, data: result };
+    const { client } = await requireErpPermission(input.accessToken, "inventory.manage");
+    const parsed = z.object({ count: z.number().int().min(1).max(200), size: labelSize }).parse(input);
+    const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: parsed.count }, p_key: randomUUID() });
+    if (error) throw new Error(error.message);
+    const batch = data as { batchId: string; labels: { code: string }[] };
+    return { ok: true, data: await pdfForCodes(batch.labels.map(l => l.code), parsed.size, batch.batchId) };
+  } catch (error) { return failure(error); }
+}
+export async function reprintWorkshopLabelsPdf(input: { accessToken: unknown; batchId: string; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
+  try {
+    const { client } = await requireErpPermission(input.accessToken, "inventory.read");
+    const parsed = z.object({ batchId: z.string().uuid(), size: labelSize }).parse(input);
+    const { data, error } = await client.from("workshop_qr_labels").select("code").eq("batch_id", parsed.batchId).eq("state", "free").order("code").limit(200);
+    if (error) throw new Error(error.message);
+    if (!data?.length) return { ok: false, error: "labels_none_free", message: "Este lote ya no tiene etiquetas libres para imprimir." };
+    return { ok: true, data: await pdfForCodes(data.map(l => l.code as string), parsed.size, parsed.batchId) };
+  } catch (error) { return failure(error); }
+}
+export async function listWorkshopLabelBatches(input: { accessToken: unknown }): Promise<WorkshopResult<LabelBatch[]>> {
+  try {
+    const { client } = await requireErpPermission(input.accessToken, "inventory.read");
+    const { data, error } = await client.from("workshop_qr_labels").select("batch_id,code,state,created_at").order("created_at", { ascending: false }).limit(2000);
+    if (error) throw new Error(error.message);
+    const batches = new Map<string, LabelBatch>();
+    for (const row of data ?? []) {
+      const b = batches.get(row.batch_id) ?? { batchId: row.batch_id, createdAt: row.created_at, total: 0, free: 0, assigned: 0, void: 0, first: row.code, last: row.code };
+      b.total++; if (row.state === "free") b.free++; else if (row.state === "assigned") b.assigned++; else b.void++;
+      if (row.code < b.first) b.first = row.code; if (row.code > b.last) b.last = row.code;
+      batches.set(row.batch_id, b);
+    }
+    return { ok: true, data: [...batches.values()].slice(0, 12) };
   } catch (error) { return failure(error); }
 }
 

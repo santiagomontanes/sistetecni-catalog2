@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 // Fixture ESM exclusivamente local, sin credenciales ni entornos remotos.
@@ -34,18 +35,28 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
   test.setTimeout(120000);
   const destination=await command("location",{code:`DEST-${randomUUID().slice(0,6).toUpperCase()}`,name:"Destino sintético móvil"});
   await login(page);
-  await page.getByText("Etiquetas QR y ubicaciones", { exact: true }).click();
-  const addLocation = page.locator("form").filter({ has: page.getByPlaceholder("Código único: EST-01") });
+  await page.getByText("Preparar taller: etiquetas QR y ubicaciones", { exact: true }).click();
   const code = `E2E-${randomUUID().slice(0, 6).toUpperCase()}`;
-  await addLocation.getByPlaceholder("Código único: EST-01").fill(code);
-  await addLocation.getByPlaceholder("Nombre", { exact: true }).fill("Recepción sintética E2E");
-  await addLocation.getByRole("button", { name: "Agregar ubicación", exact: true }).click();
+  await page.getByLabel("Nombre de la ubicación").fill("Recepción sintética E2E");
+  await page.getByLabel(/Código interno/).fill(code);
+  await page.getByRole("button", { name: "Crear ubicación", exact: true }).click();
   await expect(page.locator(`option`).filter({ hasText: `${code} · Recepción sintética E2E` }).first()).toBeAttached();
-  await page.locator('input[name="count"]').fill("1");
-  await page.getByRole("button", { name: "Generar lote imprimible" }).click();
-  await expect(page.locator(".qr-label svg")).toHaveCount(1);
-  const qr = await page.locator(".qr-label strong").innerText();
+  // Código sugerido automáticamente a partir del nombre cuando no se escribe uno.
+  await page.getByLabel("Nombre de la ubicación").fill("Estante de prueba ñandú");
+  await expect(page.getByText("Se guardará como ESTANTE-DE-PRUEBA-NANDU")).toBeVisible();
+  await page.getByLabel("¿Cuántos equipos llegaron?").fill("1");
+  await page.getByRole("button", { name: /Generar 1 QR y ver PDF/ }).click();
+  const summary = page.locator("p").filter({ hasText: /STU-\d{6,} a STU-\d{6,}/ }).first();
+  await expect(summary).toBeVisible();
+  const qr = (await summary.innerText()).match(/STU-\d{6,}/)![0];
   expect(qr).toMatch(/^STU-\d{6,}$/);
+  await expect(page.getByTitle("Vista previa de etiquetas")).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Descargar PDF" }).click()]);
+  const pdfBytes = readFileSync((await download.path())!);
+  expect(pdfBytes.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(pdfBytes.length).toBeGreaterThan(1500);
+  await page.locator("summary").filter({ hasText: /Lotes anteriores \(/ }).click();
+  await expect(page.getByRole("button", { name: "Reimprimir libres" }).first()).toBeEnabled();
   await page.getByText(/Celular y estación ·/).click();
   await page.getByRole("button", { name: "Generar código en computador" }).click();
   const pair = page.locator("details").filter({ hasText: "Inicia sesión con tu cuenta en ambos dispositivos" });

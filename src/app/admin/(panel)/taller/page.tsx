@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { callAdminAction } from "@/lib/callAdminAction";
-import { commandWorkshop, readWorkshop, renderWorkshopLabels, searchWorkshopComponents } from "@/app/admin/taller/actions";
+import { commandWorkshop, readWorkshop, searchWorkshopComponents } from "@/app/admin/taller/actions";
 import { parseQr } from "@/lib/workshop/validation";
 import type { WorkshopData, WorkshopUnit } from "@/lib/workshop/types";
 import CameraScanner from "./CameraScanner";
+import LabelsPanel from "./LabelsPanel";
+import LocationsPanel from "./LocationsPanel";
 import ReceptionForm from "./ReceptionForm";
 import StationLink from "@/components/workshop/StationLink";
 import UnitPhotos from "@/components/workshop/UnitPhotos";
@@ -19,7 +21,7 @@ export default function WorkshopPage() {
   const [data, setData] = useState<WorkshopData | null>(null);
   const [unitId, setUnitId] = useState<string>(); const [search, setSearch] = useState(""); const [offset, setOffset] = useState(0);
   const [qr, setQr] = useState(""); const [status, setStatus] = useState("Conectando…"); const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false); const [labels, setLabels] = useState<{ code: string; svg: string }[]>([]);
+  const [busy, setBusy] = useState(false);
   const [formEpoch,setFormEpoch]=useState(0);
   const [componentQuery, setComponentQuery] = useState(""); const [componentOffset, setComponentOffset] = useState(0);
   const [componentResults, setComponentResults] = useState<WorkshopUnit[] | null>(null);
@@ -68,7 +70,6 @@ export default function WorkshopPage() {
   const componentLabel = (c: WorkshopUnit) => `${c.unit_code} · ${c.asset_kind} ${c.component_attributes.capacityGb ?? "?"} GB · ${c.component_attributes.generation ?? c.component_attributes.interface ?? ""} · ${c.component_condition}`;
   const locationOptions = <><option value="">Seleccione ubicación</option>{locations.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.code} · {l.name}</option>)}</>;
   return <div className="space-y-5" onChange={() => { dirty.current = true; setStatus("Cambios sin guardar"); }}>
-    <style>{`@media print { body * { visibility:hidden } #workshop-labels,#workshop-labels * { visibility:visible } #workshop-labels { position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);gap:8mm } .qr-label { break-inside:avoid;text-align:center } }`}</style>
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Taller operativo</h1><p className="text-sm text-slate-600" role="status">{status}</p></div><button className={button} onClick={() => { if (!dirty.current || window.confirm("Descartar campos sin guardar y recuperar la versión del servidor?")) { dirty.current = false; void load(true); } }}>Recargar ficha</button></div>
     {error && <p role="alert" className="rounded bg-red-50 p-3 text-red-800">{error}</p>}
     {data && !data.enabled && <div className="rounded border border-amber-300 bg-amber-50 p-4"><p>El módulo está desactivado. Los datos existentes siguen disponibles.</p><button disabled={busy} className={button} onClick={() => { if (window.confirm("Activar el taller en este entorno después de verificar migraciones y pruebas?")) void command("configure", { enabled: true }); }}>Activar taller (solo administrador)</button></div>}
@@ -77,13 +78,11 @@ export default function WorkshopPage() {
     {qr && data?.qr?.state === "void" && <p className="rounded bg-red-50 p-3">Etiqueta anulada. No puede reutilizarse.</p>}
     {qr && data && !data.qr && <p className="rounded bg-amber-50 p-3">No existe esta etiqueta. Compruebe el código impreso.</p>}
     {qr && data?.qr?.state === "free" && <ReceptionForm qr={qr} locations={locations} disabled={busy || !data.enabled} onReceive={async payload => { const result = await command("receive", payload); if (typeof result?.unitId === "string") selectUnit(result.unitId); }} />}
-    <details className="rounded border bg-white p-4"><summary>Etiquetas QR y ubicaciones</summary><div className="mt-4 grid gap-5 md:grid-cols-2">
-      <form onSubmit={e => { e.preventDefault(); const count = Number(new FormData(e.currentTarget).get("count")); void (async () => { const result = await command("qr_batch", { count }); if (!result?.labels) return; const rendered = await callAdminAction(renderWorkshopLabels, { codes: (result.labels as { code: string }[]).map(l => l.code) }); if (rendered.ok) setLabels(rendered.data); else setError(rendered.message); })(); }}><label>Cantidad QR libres<input type="number" name="count" min="1" max="200" defaultValue="20" className={field} /></label><button disabled={busy || !data?.enabled} className={button}>Generar lote imprimible</button></form>
-      <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); void command("location", { code: String(fd.get("code")).toUpperCase(), name: String(fd.get("name")), ...(fd.get("parent") ? { parentId: fd.get("parent") } : {}) }); }} className="space-y-2"><p>Agregar ubicación</p><input name="code" placeholder="Código único: EST-01" required className={field} /><input name="name" placeholder="Nombre" required className={field} /><select name="parent" className={field}>{locationOptions}</select><button disabled={busy || !data?.enabled} className={button}>Agregar ubicación</button></form>
-      <div>{locations.map(l => <div key={l.id} className="flex justify-between gap-2 py-1"><span>{l.code} · {l.name} {l.active ? "" : "(inactiva)"}</span><button disabled={busy || !data?.enabled} className="text-sm underline" onClick={() => void command("location", { id: l.id, active: !l.active })}>{l.active ? "Desactivar" : "Activar"}</button></div>)}</div>
-      <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); if (window.confirm("Anular definitivamente esta etiqueta libre?")) void command("qr_void", { code: String(fd.get("code")).trim().toUpperCase(), reason: String(fd.get("reason")) }); }} className="space-y-2"><input name="code" placeholder="QR libre para anular" required className={field} /><input name="reason" placeholder="Motivo de anulación" minLength={3} required className={field} /><button disabled={busy || !data?.enabled} className={button}>Anular etiqueta</button></form>
+    <details className="rounded border bg-white p-4" open={!!data && data.locations.length === 0}><summary className="cursor-pointer font-medium">Preparar taller: etiquetas QR y ubicaciones</summary><div className="mt-4 space-y-5">
+      <LabelsPanel enabled={!!data?.enabled} hasLocations={locations.length > 0} />
+      <LocationsPanel locations={locations} disabled={busy || !data?.enabled} command={command} />
+      <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); if (window.confirm("¿Anular definitivamente esta etiqueta libre? Ese número STU no se podrá reutilizar.")) void command("qr_void", { code: String(fd.get("code")).trim().toUpperCase(), reason: String(fd.get("reason")) }); }} className="space-y-2 rounded border bg-white p-4"><h2 className="text-lg font-semibold">3. Anular una etiqueta libre</h2><p className="text-sm text-slate-600">Si una etiqueta se dañó o se perdió antes de pegarla, anúlela con su código STU.</p><input name="code" placeholder="STU-000126" required className={field} /><input name="reason" placeholder="Motivo (ej: etiqueta dañada)" minLength={3} required className={field} /><button disabled={busy || !data?.enabled} className={button}>Anular etiqueta</button></form>
     </div></details>
-    {labels.length > 0 && <><button onClick={() => window.print()} className={button}>Imprimir {labels.length} etiquetas</button><div id="workshop-labels" className="grid grid-cols-2 gap-4 md:grid-cols-5">{labels.map(l => <div key={l.code} className="qr-label rounded border bg-white p-2"><div dangerouslySetInnerHTML={{ __html: l.svg }} /><strong className="text-sm">{l.code}</strong></div>)}</div></>}
     {unit && <section className="space-y-4 rounded border bg-white p-4" key={`${unit.id}:${formEpoch}`}>
       <div><h2 className="text-xl font-bold">{unit.unit_code} · {unit.serial_number ?? "Serial desconocido"}</h2><p>{phaseLabels[unit.workshop_phase ?? ""] ?? "Sin fase"} · {locationName(unit.location_id)} · Estado comercial: {unit.status} · Versión {unit.row_version}</p><p>RAM actual: {String(unit.spec_overrides.ramGb ?? "Desconocida")} GB</p></div>
       <div onChange={e => e.stopPropagation()}><UnitPhotos unitId={unit.id} onSaved={() => void load()} /></div>
