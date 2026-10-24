@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseQr, receiptSchema, validateWorkshopCommand } from "./validation";
 test("QR admite texto o URL sin extraer datos sensibles", () => {
-  assert.equal(parseQr("STQ-A01234567890"), "STQ-A01234567890");
-  assert.equal(parseQr("https://erp.invalid/admin/taller?qr=STQ-A01234567890"), "STQ-A01234567890");
+  assert.equal(parseQr("STU-000123"), "STU-000123");
+  assert.equal(parseQr("https://erp.invalid/admin/taller?qr=STU-000123"), "STU-000123");
   assert.equal(parseQr("javascript:alert(1)"), null);
   assert.equal(parseQr("STU-123"), null);
 });

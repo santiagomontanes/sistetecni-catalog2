@@ -14,6 +14,7 @@ Notas:
 - Las ramas no están empujadas a ningún remoto ni fusionadas a `main`; hacerlo es decisión del usuario.
 - `tsconfig.tsbuildinfo` queda fuera del commit (artefacto de compilación regenerado).
 - El `.next` local es un banco sintético con URLs loopback: **no es desplegable**.
+- QR = STU: la etiqueta impresa es el código interno `STU-NNNNNN` de la unidad (migración `20261024010000`); no hay un segundo identificador.
 - Ledger: el costo de transporte y los descuentos se vinculan, no borran salidas de caja (venta 700.000, costo 30.000 una vez, entrada 670.000 una vez).
 
 ## 2. Pasos manuales del piloto físico
@@ -43,7 +44,7 @@ Guía completa: [piloto-operativo.md](piloto-operativo.md). Resumen de lo que so
 
 ## 3. Activar los cron jobs (systemd timers) en producción
 
-Hacerlo **solo cuando decidas activar**, y después de: respaldo recuperable, migraciones `20261023010000`…`080000` aplicadas en orden con autorización, y recarga de esquema PostgREST (`NOTIFY pgrst, 'reload schema'`). Detalle: [operacion-activacion.md](operacion-activacion.md), [jobs-operativos.md](jobs-operativos.md).
+Hacerlo **solo cuando decidas activar**, y después de: respaldo recuperable, migraciones `20261023010000`…`080000` y `20261024010000` aplicadas en orden con autorización, y recarga de esquema PostgREST (`NOTIFY pgrst, 'reload schema'`). Detalle: [operacion-activacion.md](operacion-activacion.md), [jobs-operativos.md](jobs-operativos.md).
 
 ### 3.1 Jobs del ERP (preparación de recordatorios + retención de selfies)
 

@@ -45,7 +45,7 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
   await page.getByRole("button", { name: "Generar lote imprimible" }).click();
   await expect(page.locator(".qr-label svg")).toHaveCount(1);
   const qr = await page.locator(".qr-label strong").innerText();
-  expect(qr).toMatch(/^STQ-[A-F0-9]{12}$/);
+  expect(qr).toMatch(/^STU-\d{6,}$/);
   await page.getByText(/Celular y estación ·/).click();
   await page.getByRole("button", { name: "Generar código en computador" }).click();
   const pair = page.locator("details").filter({ hasText: "Inicia sesión con tu cuenta en ambos dispositivos" });

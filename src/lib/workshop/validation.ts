@@ -26,9 +26,9 @@ const unitVersion = { unitId: uuid, version: z.number().int().nonnegative() };
 const reason = z.string().trim().min(3).max(1000);
 const schemas = {
   configure: z.object({ enabled: z.boolean() }), qr_batch: z.object({ count: z.number().int().min(1).max(200) }),
-  qr_void: z.object({ code: z.string().regex(/^STQ-[A-F0-9]{12}$/), reason }),
+  qr_void: z.object({ code: z.string().regex(/^STU-\d{6,}$/), reason }),
   location: z.union([z.object({ code: z.string().trim().regex(/^[A-Z0-9_-]{1,32}$/), name: z.string().trim().min(1).max(120), parentId: uuid.optional() }), z.object({ id: uuid, active: z.boolean() })]),
-  receive: z.object({ qrCode: z.string().regex(/^STQ-[A-F0-9]{12}$/), existingUnitId: z.union([uuid,z.string().regex(/^STU-\d{6,}$/)]).optional(), productId: uuid.optional(), locationId: uuid, costCop: money, condition: z.enum(["good", "fair", "bad"]), snapshot: receiptSchema }),
+  receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/), existingUnitId: z.union([uuid,z.string().regex(/^STU-\d{6,}$/)]).optional(), productId: uuid.optional(), locationId: uuid, costCop: money, condition: z.enum(["good", "fair", "bad"]), snapshot: receiptSchema }),
   component_receive: z.object({ kind: z.enum(["ram", "storage", "charger"]), locationId: uuid, costCop: money, componentCondition: z.enum(["untested", "functional", "defective"]), snapshot: componentSchema }),
   move: z.object({ ...unitVersion, locationId: uuid, reason }),
   phase: z.object({ ...unitVersion, phase: z.enum(["reception", "diagnosis", "technical", "aesthetic", "final_check", "ready", "warehouse"]), reason: reason.optional() }),
@@ -48,6 +48,6 @@ export function validateWorkshopCommand(action: string, payload: unknown) {
 }
 export function parseQr(value: string): string | null {
   const trimmed = value.trim();
-  if (/^STQ-[A-F0-9]{12}$/i.test(trimmed)) return trimmed.toUpperCase();
-  try { const url = new URL(trimmed); const qr = url.searchParams.get("qr"); return qr && /^STQ-[A-F0-9]{12}$/i.test(qr) ? qr.toUpperCase() : null; } catch { return null; }
+  if (/^STU-\d{6,}$/i.test(trimmed)) return trimmed.toUpperCase();
+  try { const url = new URL(trimmed); const qr = url.searchParams.get("qr"); return qr && /^STU-\d{6,}$/i.test(qr) ? qr.toUpperCase() : null; } catch { return null; }
 }

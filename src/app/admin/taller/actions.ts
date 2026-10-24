@@ -59,7 +59,7 @@ export async function commandWorkshop(input: { accessToken: unknown; action: str
 export async function renderWorkshopLabels(input: { accessToken: unknown; codes: string[] }): Promise<WorkshopResult<{ code: string; svg: string }[]>> {
   try {
     await requireErpPermission(input.accessToken, "inventory.read");
-    const codes = z.array(z.string().regex(/^STQ-[A-F0-9]{12}$/)).max(200).parse(input.codes);
+    const codes = z.array(z.string().regex(/^STU-\d{6,}$/)).max(200).parse(input.codes);
     // Solo identidad, sin PII ni servicios de QR externos; escáner autenticado resuelve el código.
     const result = await Promise.all(codes.map(async code => ({ code, svg: await QRCode.toString(code, { type: "svg", errorCorrectionLevel: "M", margin: 3, width: 160 }) })));
     return { ok: true, data: result };

@@ -36,6 +36,10 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       const win = outcomes.find(x => x.status === "fulfilled"); computer = win.value.unitId;
       assert.equal((await db.query("select count(*) from public.workshop_qr_labels where code=$1 and unit_id=$2", [qr, computer])).rows[0].count, "1");
       assert.equal((await unit(db, computer)).spec_overrides.ramGb, 1);
+      // QR = STU: la unidad nace con el mismo código impreso, sin un segundo identificador.
+      assert.match(qr, /^STU-\d{6,}$/);
+      assert.equal((await unit(db, computer)).unit_code, qr);
+      assert.equal((await db.query("select count(distinct code) from public.workshop_qr_labels where batch_id=(select batch_id from public.workshop_qr_labels where code=$1)", [qr])).rows[0].count, "4");
       assert.equal((await db.query("select count(*) from public.product_units where installed_in_unit_id=$1", [computer])).rows[0].count, "1");
     });
     await t.test("recepción es inmutable; dos lecturas autorizadas recuperan el mismo STU", async () => {

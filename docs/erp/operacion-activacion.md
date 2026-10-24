@@ -10,7 +10,7 @@ Guías operativas y contratos: [taller](taller.md), [envíos y bot](envios.md), 
 
 ## Migraciones revisables
 
-Aplicar en orden las **ocho** migraciones nuevas `20261023010000` a `20261023080000`, después de verificar el historial del entorno y un respaldo recuperable. No reaplicar a producción las baselines ni las migraciones históricas: sus instrucciones tienen advertencias específicas. Todas las nuevas migraciones son transaccionales; sus reaplicaciones locales preservan registros y flags ya configurados.
+Aplicar en orden las **nueve** migraciones nuevas `20261023010000` a `20261023080000` y `20261024010000`, después de verificar el historial del entorno y un respaldo recuperable. No reaplicar a producción las baselines ni las migraciones históricas: sus instrucciones tienen advertencias específicas. Todas las nuevas migraciones son transaccionales; sus reaplicaciones locales preservan registros y flags ya configurados.
 
 1. Taller: tablas de evidencia, ubicaciones y QR; campos aditivos y `product_id` nullable en unidades/movimientos para recepción desconocida.
 2. Envíos y conciliación: saldos, jobs y guardas de caja.
@@ -20,6 +20,7 @@ Aplicar en orden las **ocho** migraciones nuevas `20261023010000` a `20261023080
 6. Reportes operativos, exclusión del inventario valorizado de piezas instaladas en equipos vendidos/retirados y serialización explícita del stock por producto. Se conserva la función de reporte original como implementación interna, sin cambiar costos históricos. La propuesta antigua en `migraciones-en-espera` no se modificó ni se aplicó como migración histórica.
 7. `20261023070000_shipping_transport_costs.sql`: conceptos de transporte, costo reconocido una vez, diferencias/credito de consignación, adopción de gasto anticipado o CST existente; wrapper autorizado del reverso sin cambiar el algoritmo anterior.
 8. `20261023080000_shipping_bot_notifications.sql`: acciones auxiliares del bot, notificaciones privadas, entregas persistentes y revisión de intento incierto. Mantiene dispatcher y comandos anteriores del agente.
+9. `20261024010000_workshop_qr_is_stu.sql`: **el QR impreso es el STU**. Generar un lote reserva N números de `product_unit_code_seq` y la unidad recibida nace con ese mismo `unit_code`; ya no existe un segundo código (STQ). Etiquetas anuladas o sin usar dejan huecos en la numeración. Si se recibe sobre una unidad ya registrada en Compras se conserva su STU original y la etiqueta queda como alias.
 
 Antes de activar, refrescar el caché de esquema de PostgREST mediante el procedimiento autorizado del hosting (`NOTIFY pgrst, 'reload schema'`). No se solicita ninguna actualización de framework ni de dependencias ajenas al alcance.
 
@@ -115,7 +116,7 @@ Antes de activar un destino, su operador autorizado debe:
 1. Registrar commit/patch exactos de ambos repositorios y versión del esquema aplicada. Comparar el diff completo con los cambios previos del usuario. Pausar productores financieros durante el corte o usar backup/PITR consistente del proveedor.
 2. Crear respaldo recuperable de PostgreSQL **incluyendo Auth, ledger y auditoría**, metadatos de Storage y objetos de los buckets privados/públicos; configuración/certificados secretos cifrados por separado; estado durable del bot. Registrar fecha, hashes, destino y responsable, sin publicar secretos.
 3. Restaurarlo en un entorno separado autorizado, comprobar login de cuenta de ensayo, unidades/ventas/costos/caja, evidencia de archivos y referencias, sin activar emisores ni jobs de pago. Un dump no probado no basta.
-4. Mantener flags apagados. Aplicar únicamente migraciones pendientes010000→020000→030000→040000→050000→060000→070000→080000, cada archivo transaccional completo. Verificar versiones registradas y recargar esquema PostgREST. Revisar permisos y buckets. No aplicar baselines ni `migraciones-en-espera` por asociación de nombre.
+4. Mantener flags apagados. Aplicar únicamente migraciones pendientes010000→020000→030000→040000→050000→060000→070000→080000→`20261024010000`, cada archivo transaccional completo. Verificar versiones registradas y recargar esquema PostgREST. Revisar permisos y buckets. No aplicar baselines ni `migraciones-en-espera` por asociación de nombre.
 5. Compilar desde fuente con **variables verificadas del destino**, probar y después activar por módulo/estación. No copiar `.next` local, builds del piloto ni URLs127.0.0.1 a hosting.
 
 Si falla una migración, su transacción revierte; no continuar con la siguiente hasta identificar el error. Si falla la aplicación después de escrituras, apagar flags y detener el emisor, conservar guardas/tablas/ledger, recuperar la versión de código compatible y revisar operaciones en curso. Correcciones financieras usan reversos auditados. Reinstalar un dump completo encima de datos nuevos perdería movimientos posteriores: sólo recuperar el destino mediante el procedimiento autorizado con reconciliación/PITR, BD y Storage coordinados y productores detenidos. Nunca tratar un DROP de tablas como reverso de caja. Mantener el limpiador de selfies durante la recuperación y conservar `sending/uncertain` para revisar el resultado del proveedor.
