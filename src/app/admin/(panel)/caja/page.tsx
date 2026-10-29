@@ -94,6 +94,14 @@ export default function CajaPage() {
     [movements]
   );
 
+  const byOrigin = useMemo(
+    () => ORIGINS.map((origin) => {
+      const rows = movements.filter((movement) => originOf(movement) === origin);
+      return { origin, count: rows.length, total: rows.reduce((sum, movement) => sum + movement.amountCop, 0) };
+    }).filter((row) => row.count > 0),
+    [movements]
+  );
+
   const openSession = async () => {
     const amount = Number(prompt("Efectivo inicial en caja (COP):", "0"));
     if (!Number.isInteger(amount) || amount < 0) return;
@@ -284,22 +292,25 @@ export default function CajaPage() {
         {METHODS.map((method) => <Card key={method} label={method} value={formatCOP(Number(totals[method] ?? 0))} />)}
       </div>
 
+      {byOrigin.length > 0 ? <div className="space-y-2"><p className="text-xs font-semibold uppercase text-muted">De dónde viene el dinero (últimos {movements.length} movimientos)</p><div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">{byOrigin.map((row) => <Card key={row.origin} label={`${row.origin} · ${row.count}`} value={formatCOP(row.total)} />)}</div></div> : null}
+
       {busy === "load" ? <p className="text-sm text-muted">Actualizando caja...</p> : null}
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-surface text-left text-xs text-muted">
-            <tr><th className="p-3">Movimiento</th><th>Método</th><th>Descripción</th><th className="text-right">Valor</th><th /></tr>
+            <tr><th className="p-3">Movimiento</th><th>Origen</th><th>Método</th><th>Descripción</th><th className="text-right">Valor</th><th /></tr>
           </thead>
           <tbody>
             {movements.map((movement) => (
               <tr key={movement.id} className="border-t border-border">
                 <td className="p-3 font-mono text-xs">{movement.movementNumber}</td>
+                <td className="text-xs text-muted">{originOf(movement)}</td>
                 <td>{movement.paymentMethod}</td>
                 <td>{movement.description}</td>
                 <td className={`text-right font-semibold ${movement.amountCop < 0 ? "text-red-600" : "text-green-700"}`}>{formatCOP(movement.amountCop)}</td>
                 <td className="px-3 text-right">
-                  {!['sale', 'expense', 'reversal'].includes(movement.movementType) && !movement.reversalOfId ? (
+                  {!['sale', 'expense', 'reversal'].includes(movement.movementType) && !movement.reversalOfId && !["Licencias de software", "Consignaciones de transportadora"].includes(originOf(movement)) ? (
                     <button onClick={() => void reverse(movement)} disabled={mutationDisabled} className="text-xs font-semibold text-red-600 disabled:opacity-50">Reversar</button>
                   ) : null}
                 </td>
@@ -310,6 +321,18 @@ export default function CajaPage() {
       </div>
     </div>
   );
+}
+
+
+const ORIGINS = ["Ventas", "Consignaciones de transportadora", "Licencias de software", "Compras", "Gastos", "Reversos", "Otros movimientos"] as const;
+function originOf(m: { movementType: string; description: string }): (typeof ORIGINS)[number] {
+  if (m.movementType === "sale") return "Ventas";
+  if (m.movementType === "expense") return "Gastos";
+  if (m.movementType === "purchase_payment") return "Compras";
+  if (m.movementType === "reversal") return "Reversos";
+  if (m.description.startsWith("Licencia ")) return "Licencias de software";
+  if (m.description.startsWith("Recaudo transportadora")) return "Consignaciones de transportadora";
+  return "Otros movimientos";
 }
 
 function Card({ label, value }: { label: string; value: string }) {

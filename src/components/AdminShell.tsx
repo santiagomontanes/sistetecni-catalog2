@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
   { href: "/admin/proveedores", label: "Proveedores", icon: "🏢", exact: false, permission: "purchases.read" },
   { href: "/admin/compras", label: "Compras", icon: "🛒", exact: false, permission: "purchases.read" },
   { href: "/admin/remates", label: "Ingreso de remate", icon: "📥", exact: false, permission: "users.manage" },
+  { href: "/admin/licencias", label: "Licencias de software", icon: "🔑", exact: false, permission: "sales.read" },
   { href: "/admin/inventario", label: "Inventario", icon: "🏷️", exact: false, permission: "inventory.read" },
   { href: "/admin/taller", label: "Taller y recepción", icon: "🔧", exact: false, permission: "inventory.read" },
   { href: "/admin/envios", label: "Envíos y recaudos", icon: "🚚", exact: false, permission: "sales.read" },
