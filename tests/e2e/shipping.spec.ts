@@ -62,6 +62,12 @@ test("envío web, guía, entrega y consignación persisten con Auth/PostgREST re
   const rows = await rpc(operator.client, "erp_shipping_command", { p_action: "list", p_arguments: { carrier }, p_request_id: null });
   expect(rows.items).toHaveLength(1);
   expect(rows.items[0]).toMatchObject({ guide, status: "delivered", collection_status: "reconciled", received_cop: "670000", balance_cop: "0" });
+  await page.getByRole("button", { name: "Recaudos", exact: true }).click();
+  await expect(page.getByText(/Consignación registrada · comprobantes de envío/)).toBeVisible();
+  await expect(page.getByRole("button", { name: `Comprobante guía ${guide}` })).toBeVisible();
+  const receipt = await page.request.get(`/api/admin/shipments/${rows.items[0].id}/receipt`, { headers: { Authorization: `Bearer ${operator.token}` } });
+  expect(receipt.status()).toBe(200); expect(receipt.headers()["content-type"]).toBe("application/pdf");
+  expect((await receipt.body()).subarray(0, 5).toString()).toBe("%PDF-");
   const deposit = await localAdmin.from("erp_shipping_deposits").select("id,cash_movement_id").eq("reference", reference).single();
   if (deposit.error) throw deposit.error;
   const cash = await localAdmin.from("cash_movements").select("amount_cop,movement_type").eq("id", deposit.data.cash_movement_id).single();

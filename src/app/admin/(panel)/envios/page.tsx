@@ -7,6 +7,7 @@ import { shippingAction } from "@/app/admin/envios/actions";
 import type { Shipment, ShippingAction } from "@/lib/shipping/contracts";
 import { COLLECTION_STATUS_LABELS, SHIPMENT_STATUS_LABELS, type MatchSearch } from "@/lib/shipping/domain";
 import { getErpProfile } from "@/supabase/auth";
+import { supabase } from "@/supabase/client";
 import { roleHasPermission, type ErpRole } from "@/lib/erpAuth/types";
 import ShippingTransport,{TransportFields} from "@/components/workshop/ShippingTransport";
 import ShippingNotifications from "@/components/workshop/ShippingNotifications";
@@ -40,6 +41,7 @@ export default function ShippingPage() {
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [matches, setMatches] = useState<MatchSearch | null>(null);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
+  const [receipts, setReceipts] = useState<{ id: string; guide: string }[]>([]);
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
@@ -76,6 +78,17 @@ export default function ShippingPage() {
   const openDetail = async (id: string) => {
     setDeductionValue("0");
     try { setSelected(await read("detail", { id }) as unknown as Shipment); } catch (e) { setError((e as Error).message); }
+  };
+  const openReceipt = async (id: string) => {
+    setError("");
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) throw new Error("Tu sesión expiró. Ingresa nuevamente.");
+      const response = await fetch(`/api/admin/shipments/${id}/receipt`, { cache: "no-store", headers: { Authorization: `Bearer ${data.session.access_token}` } });
+      if (response.status === 409) throw new Error("Este envío aún tiene saldo por consignar. El comprobante se genera cuando la consignación cubre el neto esperado.");
+      if (!response.ok) throw new Error("No se pudo generar el comprobante.");
+      window.open(URL.createObjectURL(await response.blob()), "_blank", "noopener");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "No se pudo generar el comprobante."); }
   };
   const mutate = async (action: ShippingAction, args: Record<string, unknown>) => {
     if (busy) return false;
@@ -164,7 +177,7 @@ export default function ShippingPage() {
         <div className="flex justify-between gap-3"><div><h2 className="font-semibold">{selected.sale_number} · {selected.recipient_name}</h2><p className="text-sm">{SHIPMENT_STATUS_LABELS[selected.status]} · Recaudo: {COLLECTION_STATUS_LABELS[selected.collection_status]}</p></div><button className={secondaryClass} onClick={() => setSelected(null)}>Cerrar ficha</button></div>
         <p className="text-sm">{selected.recipient_document} · {selected.recipient_phone}<br/>{selected.city}, {selected.department} · {selected.office_pickup ? "Oficina: " : ""}{selected.address}<br/>{selected.carrier} · Guía: <span className="font-mono">{selected.guide ?? "Pendiente"}</span></p>
         <p className="text-sm">Unidades: {selected.units.map((u) => u.unit_code).join(", ")}<br/>Venta: <Cop value={selected.sale_value_cop}/> · Por cobrar al cliente: <Cop value={selected.collect_cop}/><br/>Flete: <Cop value={selected.freight_cop}/> · Descuentos de la transportadora: <Cop value={selected.deductions_cop}/><br/>Neto esperado: <Cop value={selected.expected_net_cop}/> · Recibido: <Cop value={selected.received_cop}/> · Saldo: <Cop value={selected.balance_cop}/></p>
-        <Link className="text-sm text-primary underline" href={`/admin/ventas/${selected.sale_id}`}>Ver comprobante interno existente</Link>
+        <Link className="text-sm text-primary underline" href={`/admin/ventas/${selected.sale_id}`}>Ver comprobante interno existente</Link>{selected.status === "delivered" && selected.balance_cop === "0" && selected.received_cop !== "0" && <button type="button" className="ml-3 text-sm text-primary underline" onClick={() => void openReceipt(selected.id)}>Comprobante del envío (valor consignado)</button>}
         <ShippingTransport key={selected.id} shipment={selected} canEdit={canEditCosts} canReadCash={canCash} busy={busy} mutate={mutate}/>
         {canManage && settings?.enabled && <>
           {selected.status === "pending_guide" && selected.payment_mode === "cod" && <form className="grid gap-3 rounded-xl border border-primary/30 bg-surface/40 p-4 sm:grid-cols-2" onSubmit={(e) => {
@@ -221,6 +234,7 @@ export default function ShippingPage() {
         <Field label="Entrega hasta"><input className={inputClass} type="date" name="to"/></Field>
         <button className={buttonClass} disabled={busy}>Buscar combinaciones exactas</button>
       </form>
+      {receipts.length > 0 && <section className="space-y-2 rounded-2xl border border-emerald-300 bg-emerald-50 p-5"><h2 className="font-semibold text-emerald-900">Consignación registrada · comprobantes de envío</h2><p className="text-sm text-emerald-900">En cada comprobante el equipo aparece por el <strong>valor real consignado</strong> y la diferencia con la venta figura como costo de envío y comisión de la transportadora. Es un comprobante interno, no una factura DIAN.</p><div className="flex flex-wrap gap-2">{receipts.map((r) => <button key={r.id} type="button" className={buttonClass} onClick={() => void openReceipt(r.id)}>Comprobante guía {r.guide}</button>)}<button type="button" className="text-sm underline" onClick={() => setReceipts([])}>Ocultar</button></div></section>}
       {matches && <section className="space-y-3"><p className="text-sm">{matches.matches.length} coincidencia(s) exacta(s). Ninguna se aplica automáticamente.{matches.limited && " La búsqueda fue limitada; acota fechas, guía o transportadora para revisar más candidatos."}</p>{matches.matches.map((m, i) => <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-3" key={i}><p className="text-sm">Guías: {m.shipments.map((s) => s.guide).join(", ")} · <Cop value={m.sumCop}/><span className="block text-muted">Equivale probablemente a: {m.shipments.map((s) => unitsText(s.id)).join(" · ")}</span></p>{canReconcile && <button className={secondaryClass} onClick={() => setAllocations(m.shipments.map((s) => ({ shipmentId: s.id, version: s.version, amountCop: s.balance_cop })))}>Seleccionar para revisar</button>}</div>)}</section>}
       <h2 className="font-semibold">Saldos pendientes y abonos parciales</h2>
       <p className="text-sm text-muted">Se muestran hasta 100 saldos. El buscador permite acotar el conjunto. Para un abono, selecciona la guía y escribe el importe realmente consignado.</p>
@@ -230,7 +244,7 @@ export default function ShippingPage() {
         {allocation && <><Field label="Abono COP"><input className={`${inputClass} max-w-44`} inputMode="numeric" pattern="[0-9]+" value={allocation.amountCop} onChange={(e) => setAllocations(allocations.map((a) => a.shipmentId === s.id ? { ...a, amountCop: e.target.value } : a))}/></Field><label className="text-xs"><input type="checkbox" checked={Boolean(allocation.finalSettlement)} onChange={e=>setAllocations(allocations.map(a=>a.shipmentId===s.id?{...a,finalSettlement:e.target.checked}:a))}/> Esta es la liquidación final de la guía; registrar la diferencia sin causa como pendiente de revisión.</label></>}
       </div>; })}</div>
       {!pending.length && <p className="text-sm text-muted">No hay recaudos pendientes de envíos entregados.</p>}
-      {canReconcile && allocations.length > 0 && <form className="grid gap-3 rounded-2xl border border-primary/30 bg-white p-5 sm:grid-cols-2" onSubmit={(e) => { const v = formValues(e); if (window.confirm(`Confirmar consignación de ${allocationTotal} COP para ${allocations.length} guía(s), cuenta ${v.account}, referencia ${v.reference}? Se registra una sola entrada en caja.`)) void mutate("reconcile", { amountCop: allocationTotal, depositedOn: v.depositedOn, account: v.account, reference: v.reference, evidence: v.evidence, allocations, confirmed: true }); }}>
+      {canReconcile && allocations.length > 0 && <form className="grid gap-3 rounded-2xl border border-primary/30 bg-white p-5 sm:grid-cols-2" onSubmit={(e) => { const v = formValues(e); if (window.confirm(`Confirmar consignación de ${allocationTotal} COP para ${allocations.length} guía(s), cuenta ${v.account}, referencia ${v.reference}? Se registra una sola entrada en caja.`)) { const used = allocations.map((a) => ({ id: a.shipmentId, guide: pending.find((p) => p.id === a.shipmentId)?.guide ?? a.shipmentId.slice(0, 8) })); void mutate("reconcile", { amountCop: allocationTotal, depositedOn: v.depositedOn, account: v.account, reference: v.reference, evidence: v.evidence, allocations, confirmed: true }).then((ok) => { if (ok) setReceipts(used); }); } }}>
         <p className="text-sm sm:col-span-2">Selección por confirmar: {allocations.length} envío(s) · Importe a registrar <strong><Cop value={allocationTotal}/></strong><span className="block text-muted">Al confirmar se dan por cobrados: {allocations.map((a) => unitsText(a.shipmentId)).join(" · ")}</span></p>
         <Field label="Fecha de consignación"><input className={inputClass} required type="date" name="depositedOn"/></Field>
         <Field label="Cuenta receptora"><input className={inputClass} required name="account" maxLength={160}/></Field>
