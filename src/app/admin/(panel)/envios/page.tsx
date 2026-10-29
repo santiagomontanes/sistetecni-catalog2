@@ -41,6 +41,7 @@ export default function ShippingPage() {
   const [matches, setMatches] = useState<MatchSearch | null>(null);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [status, setStatus] = useState("");
+  const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,9 +60,9 @@ export default function ShippingPage() {
     return response.data;
   }, []);
   const refreshList = useCallback(async () => {
-    const [list, configuration] = await Promise.all([read("list", { offset, limit: 30, ...(status ? { status } : {}) }), read("settings")]);
+    const [list, configuration] = await Promise.all([read("list", { offset, limit: 30, ...(status ? { status } : {}), ...(query.trim() ? { search: query.trim() } : {}) }), read("settings")]);
     setItems(list.items as Shipment[]); setHasMore(Boolean(list.hasMore)); setSettings(configuration as typeof settings);
-  }, [read, status, offset]);
+  }, [read, status, offset, query]);
   const refreshCollections = useCallback(async () => {
     const [list, payments, totals] = await Promise.all([read("pending_collections", { limit: 100 }), read("deposits"), read("metrics")]);
     setPending(list.items as Shipment[]); setDeposits(payments.items as Deposit[]); setMetrics(totals);
@@ -120,11 +121,28 @@ export default function ShippingPage() {
 
     {tab === "shipments" && <>
       <div className="flex flex-wrap gap-3"><select aria-label="Estado del envío" className={`${inputClass} max-w-xs`} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}><option value="">Todos los estados</option>{Object.entries(SHIPMENT_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><button className={secondaryClass} onClick={() => void refreshList().catch((e: Error) => setError(e.message))}>Actualizar</button>{canManage && <button className={buttonClass} disabled={!settings?.enabled || busy} onClick={() => void startCreate()}>Nuevo envío</button>}</div>
+      <div className="flex flex-wrap gap-2"><input aria-label="Buscar envío" className={`${inputClass} max-w-md`} placeholder="Buscar envío: STU-27, guía, cliente o cédula" value={query} onChange={(e) => { setQuery(e.target.value); setOffset(0); }} maxLength={100}/>{query && <button className={secondaryClass} onClick={() => setQuery("")}>Limpiar</button>}</div>
       {showCreate && <section className="space-y-4 rounded-2xl border border-border bg-white p-5">
-        <h2 className="font-semibold">Crear envío de una venta existente</h2>
+        <div><h2 className="font-semibold">Nuevo envío</h2><p className="text-sm text-muted">Escribe el STU del computador y los datos que te mandó el cliente. Se crea el envío (contraentrega) y luego le registras la guía. El equipo debe estar disponible con su producto y precio de la Fase 3.</p></div>
+        <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
+          const v = formValues(e); void mutate("quick_create", { stu: v.stu, name: v.name, document: v.document, phone: v.phone, city: v.city, department: v.department, officePickup: v.officePickup === "on", address: v.address, carrier: v.carrier, ...(v.priceCop ? { priceCop: v.priceCop } : {}), ...(v.notes ? { notes: v.notes } : {}) }).then((ok) => { if (ok) setShowCreate(false); });
+        }}>
+          <Field label="STU del computador"><input className={`${inputClass} font-mono`} required name="stu" placeholder="STU-000027" maxLength={60}/></Field>
+          <Field label="Valor de venta COP (déjalo vacío para usar el precio de la Fase 3)"><input className={inputClass} name="priceCop" inputMode="numeric" pattern="[0-9]+" placeholder="450000"/></Field>
+          <Field label="Nombre del cliente"><input className={inputClass} required name="name" maxLength={160}/></Field>
+          <Field label="Cédula"><input className={inputClass} required name="document" maxLength={40}/></Field>
+          <Field label="Celular"><input className={inputClass} required name="phone" maxLength={30}/></Field>
+          <Field label="Ciudad"><input className={inputClass} required name="city" maxLength={100}/></Field>
+          <Field label="Departamento"><input className={inputClass} required name="department" maxLength={100}/></Field>
+          <Field label="Dirección o sede de recogida"><input className={inputClass} required name="address" maxLength={300}/></Field>
+          <label className="text-sm"><input name="officePickup" type="checkbox"/> Recogida en oficina</label>
+          <Field label="Transportadora"><input className={inputClass} required name="carrier" defaultValue="Interrapidísimo" maxLength={100}/></Field>
+          <Field label="Observaciones"><textarea className={inputClass} name="notes" maxLength={4000}/></Field>
+          <div className="flex gap-2 sm:col-span-2"><button className={buttonClass} disabled={busy}>Crear envío</button><button type="button" className={secondaryClass} onClick={() => setShowCreate(false)}>Cerrar</button></div>
+        </form>
+        <details><summary className="cursor-pointer text-sm font-semibold">Usar una venta que ya creé en Ventas</summary><div className="mt-3 space-y-3">
         <form className="flex gap-2" onSubmit={(e) => { const a = formValues(e); void read("sales", a.search ? { search: a.search } : {}).then((r) => setSales(r.items as Sale[])).catch((x: Error) => setError(x.message)); }}><input className={inputClass} name="search" placeholder="Buscar comprobante o cliente" maxLength={100}/><button className={secondaryClass}>Buscar</button></form>
         <Field label="Venta"><select aria-label="Venta" className={inputClass} value={saleId} onChange={(e) => setSaleId(e.target.value)}><option value="">Seleccionar venta</option>{sales.map((s) => <option value={s.id} key={s.id}>{s.sale_number} · {s.customer_name} · {s.total_cop} COP</option>)}</select></Field>
-        {!sales.length && <p className="text-sm text-muted">No hay ventas elegibles. Crea primero la venta con sus unidades físicas.</p>}
         {pickedSale && <form key={pickedSale.id} className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
           const v = formValues(e); void mutate("create", { saleId: pickedSale.id, name: v.name, document: v.document, phone: v.phone, city: v.city, department: v.department, officePickup: v.officePickup === "on", address: v.address, carrier: v.carrier, paymentMode: pickedSale.payment_status === "pagado" ? "prepaid" : "cod", collectCop: pickedSale.payment_status === "pagado" ? "0" : pickedSale.total_cop, notes: v.notes }).then((ok) => { if (ok) { setShowCreate(false); setSaleId(""); } });
         }}>
@@ -137,9 +155,10 @@ export default function ShippingPage() {
           <label className="text-sm"><input name="officePickup" type="checkbox"/> Recogida en oficina</label>
           <Field label="Transportadora"><input className={inputClass} required name="carrier" defaultValue="Interrapidísimo" maxLength={100}/></Field>
           <Field label="Observaciones"><textarea className={inputClass} name="notes" maxLength={4000}/></Field>
-          <p className="text-sm">{pickedSale.payment_status === "pagado" ? "Prepagado · por cobrar: $0" : "Contraentrega · por cobrar: "}{pickedSale.payment_status !== "pagado" && <Cop value={pickedSale.total_cop}/>}<br/>Incluye todas las unidades de esta venta. Las ventas con abonos previos requieren revisión de caja.</p>
-          <div className="flex gap-2"><button className={buttonClass} disabled={busy}>Crear envío</button><button type="button" className={secondaryClass} onClick={() => setShowCreate(false)}>Cerrar</button></div>
+          <p className="text-sm">{pickedSale.payment_status === "pagado" ? "Prepagado · por cobrar: $0" : "Contraentrega · por cobrar: "}{pickedSale.payment_status !== "pagado" && <Cop value={pickedSale.total_cop}/>}</p>
+          <div className="flex gap-2"><button className={buttonClass} disabled={busy}>Crear envío de esta venta</button></div>
         </form>}
+        </div></details>
       </section>}
       {selected && <section className="space-y-4 rounded-2xl border border-primary/30 bg-white p-5">
         <div className="flex justify-between gap-3"><div><h2 className="font-semibold">{selected.sale_number} · {selected.recipient_name}</h2><p className="text-sm">{SHIPMENT_STATUS_LABELS[selected.status]} · Recaudo: {COLLECTION_STATUS_LABELS[selected.collection_status]}</p></div><button className={secondaryClass} onClick={() => setSelected(null)}>Cerrar ficha</button></div>
@@ -148,7 +167,19 @@ export default function ShippingPage() {
         <Link className="text-sm text-primary underline" href={`/admin/ventas/${selected.sale_id}`}>Ver comprobante interno existente</Link>
         <ShippingTransport key={selected.id} shipment={selected} canEdit={canEditCosts} canReadCash={canCash} busy={busy} mutate={mutate}/>
         {canManage && settings?.enabled && <>
-          {selected.status === "pending_guide" && <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { const v = formValues(e); void mutate("guide", { id: selected.id, version: selected.version, guide: v.guide, freightCop: v.freightCop, deductionsCop: v.deductionsCop, deductionReason: v.deductionReason,transport:guideTransportFromFields(v) }); }}>
+          {selected.status === "pending_guide" && selected.payment_mode === "cod" && <form className="grid gap-3 rounded-xl border border-primary/30 bg-surface/40 p-4 sm:grid-cols-2" onSubmit={(e) => {
+            const v = formValues(e); const withheld = BigInt(selected.collect_cop) - BigInt(v.netCop || "0");
+            if (withheld < BigInt(0)) { setError("El valor que te llega no puede superar el valor de venta."); return; }
+            void mutate("guide", { id: selected.id, version: selected.version, guide: v.guide, freightCop: withheld.toString(), deductionsCop: "0", transport: [{ code: "freight", kind: "freight", description: "Comisión y envío descontados por la transportadora", amountCop: withheld.toString(), costBearer: "sistetecni", settlement: "withheld", provisional: false, customerChargeCop: "0", customerChargeMode: "none" }] });
+          }}>
+            <p className="text-sm sm:col-span-2"><strong>Registrar la guía</strong> · Valor por el que va: <strong><Cop value={selected.collect_cop}/></strong> (lo que paga el cliente).</p>
+            <Field label="Guía (conserva ceros iniciales)"><input className={inputClass} name="guide" required maxLength={100}/></Field>
+            <Field label="Valor que te llegará a la cuenta por la consignación de la transportadora (COP)"><input className={inputClass} name="netCop" inputMode="numeric" pattern="[0-9]+" required placeholder="390000"/></Field>
+            <p className="text-xs text-muted sm:col-span-2">La diferencia con el valor de venta se toma como lo que la transportadora descuenta (comisión + envío) y cuenta como costo de transporte tuyo. Si necesitas separar conceptos o cambiar quién paga, usa el formulario detallado de abajo.</p>
+            <button className={buttonClass} disabled={busy}>Guardar guía y valor a consignar</button>
+          </form>}
+          {selected.status === "pending_guide" && <details><summary className="cursor-pointer text-sm font-semibold">Registro detallado de guía y transporte (avanzado)</summary><div className="mt-3">
+          <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { const v = formValues(e); void mutate("guide", { id: selected.id, version: selected.version, guide: v.guide, freightCop: v.freightCop, deductionsCop: v.deductionsCop, deductionReason: v.deductionReason,transport:guideTransportFromFields(v) }); }}>
             <Field label="Guía (conserva ceros iniciales)"><input className={inputClass} name="guide" required maxLength={100}/></Field>
             <Field label="Flete exacto COP"><input className={inputClass} name="freightCop" inputMode="numeric" pattern="[0-9]+" required/></Field>
             <Field label="Otros conceptos de transportadora COP"><input className={inputClass} name="deductionsCop" inputMode="numeric" pattern="[0-9]+" defaultValue="0" required onChange={e=>setDeductionValue(e.target.value)}/></Field>
@@ -156,7 +187,7 @@ export default function ShippingPage() {
             <TransportFields prefix="freight" label="Flete" shipmentId={selected.id} allowReferences={canCash}/>
             {/^\d+$/.test(deductionValue)&&BigInt(deductionValue)>0&&<TransportFields prefix="deduction" label="Otros conceptos" shipmentId={selected.id} allowReferences={canCash}/>}
             <button className={buttonClass} disabled={busy}>Registrar guía y flete</button>
-          </form>}
+          </form></div></details>}
           {selected.status === "ready" && <button className={buttonClass} disabled={busy} onClick={() => { if (window.confirm(`Registrar despacho de la guía ${selected.guide}?`)) void mutate("dispatch", { id: selected.id, version: selected.version }); }}>Registrar despacho</button>}
           {["dispatched", "incident"].includes(selected.status) && <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => { const v = formValues(e); if (window.confirm(`Confirmar entrega de ${selected.guide} y neto esperado ${v.expectedNetCop} COP? Esto no registra dinero recibido.`)) void mutate("deliver", { id: selected.id, version: selected.version, deliveredAt: new Date(`${v.deliveredAt}-05:00`).toISOString(), expectedNetCop: v.expectedNetCop, evidence: v.evidence }); }}>
             <Field label="Fecha y hora de entrega (Bogotá)"><input className={inputClass} type="datetime-local" step="1" name="deliveredAt" required/></Field>

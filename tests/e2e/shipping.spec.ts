@@ -9,31 +9,31 @@ test("envío web, guía, entrega y consignación persisten con Auth/PostgREST re
   if (product.error) throw product.error;
   const unit = await operator.client.from("product_units").insert({ product_id: product.data.id, unit_code: `SHIP-E2E-${randomUUID()}`, status: "available", acquisition_cost_cop: 40000 }).select("id").single();
   if (unit.error) throw unit.error;
-  const saleId = await rpc(operator.client, "erp_create_sale_with_units", {
-    p_customer_id: null, p_customer_name: "Cliente FICTICIO E2E", p_customer_document: "00000001", p_customer_phone: "3000000000", p_customer_email: null,
-    p_items: [{ itemType: "catalog", productId: product.data.id, productUnitId: unit.data.id, quantity: 1, unitPriceCop: 700000 }],
-    p_discount_cop: 0, p_payment_method: "transferencia", p_payment_status: "pendiente", p_warranty_months: 6, p_notes: "Sólo prueba local", p_idempotency_key: randomUUID(),
-  });
   await rpc(operator.client, "erp_shipping_command", { p_action: "configure", p_arguments: { enabled: true }, p_request_id: randomUUID() });
-  const sale = await localAdmin.from("sales").select("sale_number").eq("id", saleId).single();
-  if (sale.error) throw sale.error;
   page.on("dialog", (dialog) => dialog.accept());
   await login(page, operator);
   await page.goto("/admin/envios");
   await page.getByRole("button", { name: "Nuevo envío", exact: true }).click();
-  await page.getByLabel("Venta", { exact: true }).selectOption(saleId);
+  const stu = (await localAdmin.from("product_units").select("unit_code").eq("id", unit.data.id).single()).data!.unit_code as string;
+  await page.getByLabel("STU del computador", { exact: true }).fill(stu);
+  await page.getByLabel(/^Valor de venta COP/).fill("700000");
+  await page.getByLabel("Nombre del cliente", { exact: true }).fill("Cliente FICTICIO E2E");
+  await page.getByLabel("Cédula", { exact: true }).fill("00000001");
+  await page.getByLabel("Celular", { exact: true }).fill("3000000000");
   await page.getByLabel("Ciudad", { exact: true }).fill("Ciudad FICTICIA");
   await page.getByLabel("Departamento", { exact: true }).fill("Departamento Prueba");
   await page.getByLabel("Dirección o sede de recogida").fill("Oficina de prueba local");
   await page.getByLabel("Transportadora", { exact: true }).fill(carrier);
   await page.getByRole("button", { name: "Crear envío", exact: true }).click();
-  await page.getByRole("button", { name: new RegExp(sale.data.sale_number) }).click();
+  await expect(page.getByText("Guardado en el servidor.")).toBeVisible({ timeout: 20000 });
+  // Búsqueda por STU: abre el envío recién creado.
+  await page.getByLabel("Buscar envío", { exact: true }).fill(stu);
+  await expect(page.getByRole("button", { name: /Cliente FICTICIO E2E/ })).toHaveCount(1);
+  await page.getByRole("button", { name: /Cliente FICTICIO E2E/ }).click();
   const guide = `000${Date.now()}`;
-  await page.getByLabel("Guía (conserva ceros iniciales)").fill(guide);
-  await page.getByLabel("Flete exacto COP").fill("30000");
-  await page.getByLabel("Flete: responsable",{exact:true}).selectOption("sistetecni");
-  await page.getByLabel("Flete: forma de pago",{exact:true}).selectOption("withheld");
-  await page.getByRole("button", { name: "Registrar guía y flete" }).click();
+  await page.getByLabel("Guía (conserva ceros iniciales)").first().fill(guide);
+  await page.getByLabel(/^Valor que te llegará a la cuenta/).fill("670000");
+  await page.getByRole("button", { name: "Guardar guía y valor a consignar" }).click();
   await page.getByRole("button", { name: "Registrar despacho", exact: true }).click();
   await expect(page.getByLabel("Fecha y hora de entrega (Bogotá)")).toBeVisible();
   // El campo registra segundos; avanzar un segundo evita truncar antes del despacho real.

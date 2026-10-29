@@ -5,7 +5,7 @@ const money = z.string().regex(/^(0|[1-9][0-9]{0,11})$/, "COP enteros, sin separ
 const bounded = (min: number, max: number) => z.string().trim().min(min).max(max);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const versioned = { id: uuid, version: z.number().int().positive() };
-const filters = { carrier: bounded(1, 100).optional(), reference: bounded(1, 100).optional(), from: date.optional(), to: date.optional() };
+const filters = { carrier: bounded(1, 100).optional(), reference: bounded(1, 100).optional(), from: date.optional(), to: date.optional(), search: bounded(1, 100).optional() };
 export const transportConceptSchema=z.object({
   code:z.string().regex(/^[a-z0-9_-]{1,50}$/),kind:z.enum(["freight","commission","return","failed_delivery","other"]),description:bounded(3,300),
   amountCop:money.nullable(),costBearer:z.enum(["sistetecni","customer","unclassified"]),settlement:z.enum(["withheld","prepaid","payable","customer_direct","unclassified"]),
@@ -34,6 +34,7 @@ export const shippingArgumentSchemas = {
   incident: z.object({ ...versioned, reason: bounded(3, 1000),recognizeTransport:z.boolean().optional() }).strict(),
   cancel: z.object({ ...versioned, reason: bounded(3, 1000),recognizeTransport:z.boolean().optional() }).strict(),
   return: z.object({ ...versioned, reason: bounded(3, 1000),recognizeTransport:z.boolean().optional() }).strict(),
+  quick_create: z.object({ stu: bounded(3, 60), name: bounded(2, 160), document: bounded(3, 40), phone: bounded(7, 30), city: bounded(2, 100), department: bounded(2, 100), address: bounded(3, 300), officePickup: z.boolean().optional(), carrier: bounded(2, 100), priceCop: money.optional(), notes: bounded(0, 4000).optional() }).strict(),
   return_confirm: z.object({ ...versioned, reason: bounded(3, 1000), guide: bounded(1, 100) }).strict(),
   reconcile: z.object({ amountCop: money, depositedOn: date, account: bounded(2, 160), reference: bounded(1, 160), evidence: bounded(0, 1000).optional(), confirmed: z.literal(true), allocations: z.array(z.object({ shipmentId: uuid, amountCop: money, version: z.number().int().positive(),finalSettlement:z.boolean().optional() }).strict()).min(1).max(50) }).strict(),
   reverse_deposit: z.object({ id: uuid, reason: bounded(3, 1000), confirmed: z.literal(true) }).strict(),
