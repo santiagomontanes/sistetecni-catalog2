@@ -5,6 +5,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     {
+      url: 'https://sistetecni.com/tarjeta',
+      lastModified,
+    },
+    {
       url: 'https://sistetecni.com',
       lastModified,
     },

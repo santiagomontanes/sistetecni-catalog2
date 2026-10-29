@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "tarjeta:assets": "node scripts/generate-business-card-assets.mjs",
     "dev": "next dev",
     "build": "next build",
     "build:staging": "node scripts/build-staging.mjs",
@@ -34,6 +35,7 @@
     "lucide-react": "^0.563.0",
     "next": "^15.1.9",
     "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "zod": "^3.25.76"
