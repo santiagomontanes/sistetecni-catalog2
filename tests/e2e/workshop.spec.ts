@@ -227,3 +227,34 @@ test("Fase 3: sin unidad pide el STU y un producto nuevo se crea sin imágenes y
   expect(row[0].visible_web).toBe(false);
   expect(row[0].images).toEqual([]);
 });
+
+test("Fase 2: copiar la configuración verificada de un equipo igual y aplicarla a otros STU", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `CP-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Copia configuración E2E" });
+  const snapshot = { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 1 }] };
+  const batch = await command("qr_batch", { count: 3 });
+  const [a, b, c] = await Promise.all(batch.labels.map((l: { code: string }) => command("receive", { qrCode: l.code, locationId: location.id, condition: "good", snapshot })));
+  const cpu = `CPU E2E ${randomUUID().slice(0, 5)}`;
+  const base = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: a.unitId }, token);
+  await command("configuration", { unitId: a.unitId, version: base.unit.row_version, configuration: { cpu, screen: "14 HD", ramGeneration: "DDR3", ramFormFactor: "SO-DIMM", storageInterfaces: ["SATA"], chargerVoltage: 19.5, chargerConnector: "4.5x3.0" }, reason: "Base para copiar E2E" });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${b.unitId}`);
+  await page.getByRole("tab", { name: /Fase 2/ }).click();
+  await page.getByText("Configuración actual verificada (independiente de la recepción)", { exact: true }).click();
+  await page.getByLabel("Copiar de otro equipo", { exact: true }).selectOption({ label: `${a.unitCode} · ${cpu}` });
+  await expect(page.getByPlaceholder("CPU verificada")).toHaveValue(cpu);
+  await expect(page.getByLabel("Interfaz de almacenamiento compatible SATA", { exact: true })).toBeChecked();
+  await page.getByPlaceholder("Cómo se verificó / motivo", { exact: true }).fill("Mismo modelo que el equipo base");
+  await page.getByPlaceholder("STU-000127, STU-000128, STU-000129").fill(c.unitCode);
+  page.once("dialog", d => d.accept());
+  await page.getByRole("button", { name: "Aplicar a esos STU", exact: true }).click();
+  await expect(page.getByText(/1 actualizado\(s\)/)).toBeVisible({ timeout: 20000 });
+  await page.getByRole("button", { name: "Guardar configuración verificada", exact: true }).click();
+  await expect(async () => {
+    const sb = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: b.unitId }, token);
+    const sc = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: c.unitId }, token);
+    expect(sb.unit.spec_overrides.cpu).toBe(cpu);
+    expect(sc.unit.spec_overrides.cpu).toBe(cpu);
+    expect(sc.unit.spec_overrides.chargerVoltage).toBe(19.5);
+  }).toPass({ timeout: 20000 });
+});
