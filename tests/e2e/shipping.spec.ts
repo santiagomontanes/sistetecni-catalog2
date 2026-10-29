@@ -48,6 +48,7 @@ test("envío web, guía, entrega y consignación persisten con Auth/PostgREST re
   await page.getByLabel("Transportadora (opcional)").fill(carrier);
   await page.getByRole("button", { name: "Buscar combinaciones exactas" }).click();
   await expect(page.getByText(/1 coincidencia\(s\) exacta\(s\)/)).toBeVisible();
+  await expect(page.getByText(/Equivale probablemente a:.*SHIP-E2E/).first()).toBeVisible();
   await page.getByRole("button", { name: "Seleccionar para revisar" }).click();
   await page.getByLabel("Fecha de consignación").fill(new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10));
   await page.getByLabel("Cuenta receptora").fill("Cuenta FICTICIA E2E");
@@ -55,6 +56,9 @@ test("envío web, guía, entrega y consignación persisten con Auth/PostgREST re
   await page.getByLabel("Referencia única de la consignación").fill(reference);
   await page.getByRole("button", { name: "Confirmar y registrar consignación" }).click();
   await expect(page.getByText(new RegExp(reference))).toBeVisible();
+  await page.getByRole("button", { name: "Estadísticas", exact: true }).click();
+  await expect(page.getByText("Cobro promedio de la transportadora por envío").first()).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText("Promedio que te llega por envío").first()).toBeVisible();
   const rows = await rpc(operator.client, "erp_shipping_command", { p_action: "list", p_arguments: { carrier }, p_request_id: null });
   expect(rows.items).toHaveLength(1);
   expect(rows.items[0]).toMatchObject({ guide, status: "delivered", collection_status: "reconciled", received_cop: "670000", balance_cop: "0" });

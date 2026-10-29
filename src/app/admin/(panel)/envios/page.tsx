@@ -10,6 +10,7 @@ import { getErpProfile } from "@/supabase/auth";
 import { roleHasPermission, type ErpRole } from "@/lib/erpAuth/types";
 import ShippingTransport,{TransportFields} from "@/components/workshop/ShippingTransport";
 import ShippingNotifications from "@/components/workshop/ShippingNotifications";
+import ShippingStats from "@/components/workshop/ShippingStats";
 import {expectedShipmentNet,guideTransportFromFields} from "@/lib/shipping/transport";
 
 const inputClass = "w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-text";
@@ -25,7 +26,7 @@ interface Job { id: string; kind: string; due_at: string; status: string; attemp
 interface Allocation { shipmentId: string; amountCop: string; version: number;finalSettlement?:boolean }
 
 export default function ShippingPage() {
-  const [tab, setTab] = useState<"shipments" | "collections" | "settings">("shipments");
+  const [tab, setTab] = useState<"shipments" | "collections" | "stats" | "settings">("shipments");
   const [role, setRole] = useState<ErpRole | null>(null);
   const [items, setItems] = useState<Shipment[]>([]);
   const [selected, setSelected] = useState<Shipment | null>(null);
@@ -100,6 +101,7 @@ export default function ShippingPage() {
     try { const data = await read("sales"); setSales(data.items as Sale[]); setShowCreate(true); } catch (e) { setError((e as Error).message); }
   };
   const pickedSale = sales.find((s) => s.id === saleId);
+  const unitsText = (shipmentId: string) => { const sh = pending.find((p) => p.id === shipmentId); const codes = sh?.units.map((u) => u.unit_code) ?? []; return `${sh?.guide ?? "guía"}: ${codes.length ? codes.join(", ") : "sin unidades"}`; };
   const allocationTotal = allocations.reduce((sum, a) => sum + BigInt(/^\d+$/.test(a.amountCop) ? a.amountCop : "0"), BigInt(0)).toString();
 
   return <div className="space-y-6">
@@ -107,11 +109,14 @@ export default function ShippingPage() {
     <nav className="flex flex-wrap gap-2" aria-label="Secciones de envíos">
       <button className={tab === "shipments" ? buttonClass : secondaryClass} onClick={() => setTab("shipments")}>Envíos</button>
       {canCash && <button className={tab === "collections" ? buttonClass : secondaryClass} onClick={() => setTab("collections")}>Recaudos</button>}
+      {canCash && <button className={tab === "stats" ? buttonClass : secondaryClass} onClick={() => setTab("stats")}>Estadísticas</button>}
       <button className={tab === "settings" ? buttonClass : secondaryClass} onClick={() => setTab("settings")}>Avisos y configuración</button>
     </nav>
     {settings && !settings.enabled && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Módulo desactivado: los datos conservados se pueden consultar. Un administrador puede activarlo desde configuración.</p>}
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     {(message || busy) && <p role="status" className="rounded-xl bg-green-50 p-3 text-sm text-green-800">{busy ? "Guardando…" : message}</p>}
+
+    {tab === "stats" && canCash && <ShippingStats read={read} />}
 
     {tab === "shipments" && <>
       <div className="flex flex-wrap gap-3"><select aria-label="Estado del envío" className={`${inputClass} max-w-xs`} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}><option value="">Todos los estados</option>{Object.entries(SHIPMENT_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><button className={secondaryClass} onClick={() => void refreshList().catch((e: Error) => setError(e.message))}>Actualizar</button>{canManage && <button className={buttonClass} disabled={!settings?.enabled || busy} onClick={() => void startCreate()}>Nuevo envío</button>}</div>
@@ -184,17 +189,17 @@ export default function ShippingPage() {
         <Field label="Entrega hasta"><input className={inputClass} type="date" name="to"/></Field>
         <button className={buttonClass} disabled={busy}>Buscar combinaciones exactas</button>
       </form>
-      {matches && <section className="space-y-3"><p className="text-sm">{matches.matches.length} coincidencia(s) exacta(s). Ninguna se aplica automáticamente.{matches.limited && " La búsqueda fue limitada; acota fechas, guía o transportadora para revisar más candidatos."}</p>{matches.matches.map((m, i) => <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-3" key={i}><p className="text-sm">Guías: {m.shipments.map((s) => s.guide).join(", ")} · <Cop value={m.sumCop}/></p>{canReconcile && <button className={secondaryClass} onClick={() => setAllocations(m.shipments.map((s) => ({ shipmentId: s.id, version: s.version, amountCop: s.balance_cop })))}>Seleccionar para revisar</button>}</div>)}</section>}
+      {matches && <section className="space-y-3"><p className="text-sm">{matches.matches.length} coincidencia(s) exacta(s). Ninguna se aplica automáticamente.{matches.limited && " La búsqueda fue limitada; acota fechas, guía o transportadora para revisar más candidatos."}</p>{matches.matches.map((m, i) => <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-3" key={i}><p className="text-sm">Guías: {m.shipments.map((s) => s.guide).join(", ")} · <Cop value={m.sumCop}/><span className="block text-muted">Equivale probablemente a: {m.shipments.map((s) => unitsText(s.id)).join(" · ")}</span></p>{canReconcile && <button className={secondaryClass} onClick={() => setAllocations(m.shipments.map((s) => ({ shipmentId: s.id, version: s.version, amountCop: s.balance_cop })))}>Seleccionar para revisar</button>}</div>)}</section>}
       <h2 className="font-semibold">Saldos pendientes y abonos parciales</h2>
       <p className="text-sm text-muted">Se muestran hasta 100 saldos. El buscador permite acotar el conjunto. Para un abono, selecciona la guía y escribe el importe realmente consignado.</p>
       <div className="space-y-2">{pending.map((s) => { const allocation = allocations.find((a) => a.shipmentId === s.id); return <div key={s.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-white p-3">
         {canReconcile && <input aria-label={`Seleccionar guía ${s.guide}`} type="checkbox" checked={Boolean(allocation)} onChange={(e) => setAllocations(e.target.checked ? [...allocations, { shipmentId: s.id, version: s.version, amountCop: s.balance_cop }] : allocations.filter((a) => a.shipmentId !== s.id))}/>}
-        <p className="flex-1 text-sm">{s.guide} · {s.carrier} · Saldo <Cop value={s.balance_cop}/></p>
+        <p className="flex-1 text-sm">{s.guide} · {s.carrier} · Saldo <Cop value={s.balance_cop}/><span className="block text-muted">{unitsText(s.id)}</span></p>
         {allocation && <><Field label="Abono COP"><input className={`${inputClass} max-w-44`} inputMode="numeric" pattern="[0-9]+" value={allocation.amountCop} onChange={(e) => setAllocations(allocations.map((a) => a.shipmentId === s.id ? { ...a, amountCop: e.target.value } : a))}/></Field><label className="text-xs"><input type="checkbox" checked={Boolean(allocation.finalSettlement)} onChange={e=>setAllocations(allocations.map(a=>a.shipmentId===s.id?{...a,finalSettlement:e.target.checked}:a))}/> Esta es la liquidación final de la guía; registrar la diferencia sin causa como pendiente de revisión.</label></>}
       </div>; })}</div>
       {!pending.length && <p className="text-sm text-muted">No hay recaudos pendientes de envíos entregados.</p>}
       {canReconcile && allocations.length > 0 && <form className="grid gap-3 rounded-2xl border border-primary/30 bg-white p-5 sm:grid-cols-2" onSubmit={(e) => { const v = formValues(e); if (window.confirm(`Confirmar consignación de ${allocationTotal} COP para ${allocations.length} guía(s), cuenta ${v.account}, referencia ${v.reference}? Se registra una sola entrada en caja.`)) void mutate("reconcile", { amountCop: allocationTotal, depositedOn: v.depositedOn, account: v.account, reference: v.reference, evidence: v.evidence, allocations, confirmed: true }); }}>
-        <p className="text-sm sm:col-span-2">Selección: {allocations.length} envío(s) · Importe a registrar <strong><Cop value={allocationTotal}/></strong></p>
+        <p className="text-sm sm:col-span-2">Selección por confirmar: {allocations.length} envío(s) · Importe a registrar <strong><Cop value={allocationTotal}/></strong><span className="block text-muted">Al confirmar se dan por cobrados: {allocations.map((a) => unitsText(a.shipmentId)).join(" · ")}</span></p>
         <Field label="Fecha de consignación"><input className={inputClass} required type="date" name="depositedOn"/></Field>
         <Field label="Cuenta receptora"><input className={inputClass} required name="account" maxLength={160}/></Field>
         <Field label="Referencia única de la consignación"><input className={inputClass} required name="reference" maxLength={160}/></Field>
