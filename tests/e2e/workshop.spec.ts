@@ -80,6 +80,10 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     await mobile.getByLabel("Código temporal").fill(pairingCode);
     await mobile.getByRole("button", { name: "Vincular este celular" }).click();
     await expect(mobile.getByText("Conectado · sincronizado", { exact: true })).toBeVisible({ timeout: 15000 });
+    // El celular actúa como lector del computador: lo que lee/escribe el celular aparece en la pantalla del computador.
+    await mobile.getByLabel("Código QR", { exact: true }).fill(qr);
+    await mobile.getByRole("button", { name: "Abrir QR", exact: true }).click();
+    await expect(page.getByRole("heading", { name: `Recepción · ${qr}` })).toBeVisible({ timeout: 20000 });
     await page.getByLabel("Código QR", { exact: true }).fill(qr);
     await page.getByRole("button", { name: "Abrir QR", exact: true }).click();
     const receipt = page.locator("form").filter({ has: page.getByRole("heading", { name: `Recepción · ${qr}` }) });

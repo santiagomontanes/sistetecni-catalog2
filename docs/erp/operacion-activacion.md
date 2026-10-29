@@ -10,7 +10,7 @@ Guías operativas y contratos: [taller](taller.md), [envíos y bot](envios.md), 
 
 ## Migraciones revisables
 
-Aplicar en orden las **dieciséis** migraciones nuevas `20261023010000` a `20261023080000`, `20261024010000`, `20261029010000`, `20261029020000`, `20261029030000`, `20261030010000`, `20261030020000`, `20261030030000` y `20261031010000` (código de vínculo de 5 dígitos), después de verificar el historial del entorno y un respaldo recuperable. No reaplicar a producción las baselines ni las migraciones históricas: sus instrucciones tienen advertencias específicas. Todas las nuevas migraciones son transaccionales; sus reaplicaciones locales preservan registros y flags ya configurados.
+Aplicar en orden las **dieciséis** migraciones nuevas `20261023010000` a `20261023080000`, `20261024010000`, `20261029010000`, `20261029020000`, `20261029030000`, `20261030010000`, `20261030020000`, `20261030030000` y `20261031010000` (código de vínculo de 5 dígitos) y `20261031020000` (el celular envía sus lecturas al computador), después de verificar el historial del entorno y un respaldo recuperable. No reaplicar a producción las baselines ni las migraciones históricas: sus instrucciones tienen advertencias específicas. Todas las nuevas migraciones son transaccionales; sus reaplicaciones locales preservan registros y flags ya configurados.
 
 1. Taller: tablas de evidencia, ubicaciones y QR; campos aditivos y `product_id` nullable en unidades/movimientos para recepción desconocida.
 2. Envíos y conciliación: saldos, jobs y guardas de caja.

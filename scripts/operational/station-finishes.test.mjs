@@ -41,6 +41,20 @@ test('vínculo temporal: misma unidad, aislamiento usuario/sesión/pestaña, un 
  await link('revoke',{id:created.id,token:created.token});
  await assert.rejects(()=>link('read',{id:created.id,token:joined.token},actor,mobile),/link_invalid/);
 });
+test('lectura del celular llega al computador: solo si está vinculado, valor acotado, secuencia creciente',async()=>{
+ const created=await link('create',{station:'Lector'});
+ await assert.rejects(()=>link('scan',{id:created.id,token:created.token,value:'STU-000123'}),/link_not_paired/);
+ const joined=await link('join',{code:created.code},actor,mobile);
+ const before=await link('read',{id:created.id,token:created.token});assert.equal(before.scanSeq,0);assert.equal(before.scan,null);
+ await link('scan',{id:created.id,token:joined.token,value:'  STU-000123  '},actor,mobile);
+ await link('scan',{id:created.id,token:joined.token,value:'STU-000124'},actor,mobile);
+ const after=await link('read',{id:created.id,token:created.token});assert.equal(after.scan,'STU-000124');assert.equal(after.scanSeq,2);assert.equal(after.role,'desktop');
+ const seenByMobile=await link('read',{id:created.id,token:joined.token},actor,mobile);assert.equal(seenByMobile.role,'mobile');
+ await assert.rejects(()=>link('scan',{id:created.id,token:joined.token,value:''},actor,mobile),/scan_invalid/);
+ await assert.rejects(()=>link('scan',{id:created.id,token:joined.token,value:'x'.repeat(301)},actor,mobile),/scan_invalid/);
+ await assert.rejects(()=>link('scan',{id:created.id,token:'bad',value:'STU-000125'},actor,mobile),/link_invalid/);
+ await assert.rejects(()=>link('scan',{id:created.id,token:joined.token,value:'STU-000125'},other,desktop),/link_invalid/);
+});
 test('vínculo expira y no concede lectura directa de secretos mediante RLS',async()=>{
  const created=await link('create',{station:'Temporal'});
  await pool.query("update erp_station_links set pair_until=now()-interval '1 second' where id=$1",[created.id]);
