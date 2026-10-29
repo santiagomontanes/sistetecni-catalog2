@@ -88,6 +88,33 @@ export async function reprintWorkshopLabelsPdf(input: { accessToken: unknown; ba
     return { ok: true, data: await pdfForCodes(data.map(l => l.code as string), parsed.size, parsed.batchId) };
   } catch (error) { return failure(error); }
 }
+// Reimpresión de etiquetas de unidades ya registradas (etiqueta rota, borrada o ilegible). No reserva números nuevos.
+export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes: string; from?: number; to?: number; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
+  try {
+    const { client } = await requireErpPermission(input.accessToken, "inventory.read");
+    const parsed = z.object({ codes: z.string().max(5000), from: z.number().int().min(1).max(999999999999).optional(), to: z.number().int().min(1).max(999999999999).optional(), size: labelSize }).parse(input);
+    const wanted = new Set<string>();
+    const code = (n: number) => `STU-${String(n).padStart(6, "0")}`;
+    for (const token of parsed.codes.split(/[\s,;]+/).filter(Boolean)) {
+      const match = /^(?:stu-?)?(\d{1,12})$/i.exec(token);
+      if (!match) return { ok: false, error: "labels_bad_code", message: `«${token.slice(0, 40)}» no es un código válido. Use el formato STU-000123 o solo el número.` };
+      wanted.add(code(Number(match[1])));
+    }
+    if (parsed.from || parsed.to) {
+      const from = parsed.from ?? parsed.to!, to = parsed.to ?? parsed.from!;
+      if (to < from || to - from >= 200) return { ok: false, error: "labels_bad_range", message: "El rango debe ir de menor a mayor y tener máximo 200 equipos." };
+      for (let n = from; n <= to; n++) wanted.add(code(n));
+    }
+    if (!wanted.size) return { ok: false, error: "labels_empty", message: "Escriba al menos un STU o un rango." };
+    if (wanted.size > 200) return { ok: false, error: "labels_too_many", message: "Máximo 200 etiquetas por PDF." };
+    const { data, error } = await client.from("product_units").select("unit_code").in("unit_code", [...wanted]);
+    if (error) throw new Error(error.message);
+    const found = new Set((data ?? []).map(u => u.unit_code as string));
+    const missing = [...wanted].filter(c => !found.has(c));
+    if (missing.length) return { ok: false, error: "labels_unit_not_found", message: `No existe ninguna unidad registrada con: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}. Las etiquetas nuevas se generan arriba.` };
+    return { ok: true, data: await pdfForCodes([...found], parsed.size, "reimpresion") };
+  } catch (error) { return failure(error); }
+}
 export async function listWorkshopLabelBatches(input: { accessToken: unknown }): Promise<WorkshopResult<LabelBatch[]>> {
   try {
     const { client } = await requireErpPermission(input.accessToken, "inventory.read");

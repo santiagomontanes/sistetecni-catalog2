@@ -1,4 +1,4 @@
-import { attendanceAuth, attendanceFailure } from "@/lib/attendance/server";
+import { assertRecentLogin, attendanceAuth, attendanceFailure } from "@/lib/attendance/server";
 import { validateCommand } from "@/lib/attendance/validation";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,8 +32,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { client } = await attendanceAuth(request);
+    const { client, userId } = await attendanceAuth(request);
     const parsed = validateCommand(await request.json());
+    if (parsed.action === "start" && !(parsed.data as { evidenceId?: string }).evidenceId) await assertRecentLogin(request, userId);
     const { data, error } = await client.rpc("attendance_command", { p_action: parsed.action, p_data: parsed.data, p_request_key: parsed.requestKey });
     if (error) throw new Error(error.message);
     return Response.json({ data }, { headers: { "Cache-Control": "no-store" } });

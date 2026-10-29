@@ -258,3 +258,22 @@ test("Fase 2: copiar la configuración verificada de un equipo igual y aplicarla
     expect(sc.unit.spec_overrides.chargerVoltage).toBe(19.5);
   }).toPass({ timeout: 20000 });
 });
+
+test("Reimprimir etiquetas de unidades ya registradas: PDF con el mismo STU y rechazo de STU inexistentes", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `RP-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Reimpresión E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } });
+  await login(page);
+  await page.getByText("Preparar taller: etiquetas QR y ubicaciones", { exact: true }).click();
+  await page.locator("summary").filter({ hasText: "Reimprimir etiquetas de equipos ya registrados" }).click();
+  await page.getByLabel(/STU a reimprimir/).fill("STU-999999999");
+  await page.getByRole("button", { name: "Ver PDF para reimprimir" }).click();
+  await expect(page.getByText(/No existe ninguna unidad registrada/)).toBeVisible();
+  await page.getByLabel(/STU a reimprimir/).fill(received.unitCode.toLowerCase());
+  await page.getByRole("button", { name: "Ver PDF para reimprimir" }).click();
+  await expect(page.getByTitle("Vista previa de etiquetas")).toBeVisible();
+  await expect(page.locator("p").filter({ hasText: new RegExp(`1 etiquetas · ${received.unitCode}`) }).first()).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Descargar PDF" }).click()]);
+  expect(readFileSync((await download.path())!).subarray(0, 5).toString()).toBe("%PDF-");
+});

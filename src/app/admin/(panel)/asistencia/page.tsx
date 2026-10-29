@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import { supabase } from "@/supabase/client";
 import type { AttendanceAction } from "@/lib/attendance/validation";
 
-type Shift = { id: string; employee_id: string; started_at: string; lunch_started_at: string | null; lunch_ended_at: string | null; ended_at: string | null; evidence_id: string; rate_snapshot: { amount_cop: string | number; modality: string; paid_lunch: boolean } | null; version: number; settlement_id: string | null };
+type Shift = { id: string; employee_id: string; started_at: string; lunch_started_at: string | null; lunch_ended_at: string | null; ended_at: string | null; evidence_id: string | null; rate_snapshot: { amount_cop: string | number; modality: string; paid_lunch: boolean } | null; version: number; settlement_id: string | null };
 type Settlement = { id: string; status: string; period_from: string; period_to: string; seconds_worked: number; base_cop: string | number; adjustment_cop: string | number; approved_cop: string | number | null };
 type Payment = { id: string; settlement_id: string; amount_cop: string | number; reference: string; kind: string; expense_status: string };
 type Dashboard = {
@@ -38,12 +39,10 @@ export default function AttendancePage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [employee, setEmployee] = useState(""); const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(""); const [error, setError] = useState(""); const [message, setMessage] = useState("");
-  const [online, setOnline] = useState(true); const [camera, setCamera] = useState(false);
-  const [photo, setPhoto] = useState<Blob | null>(null); const [preview, setPreview] = useState("");
-  const [photoView, setPhotoView] = useState(""); const [correction, setCorrection] = useState<Shift | null>(null);
+  const [online, setOnline] = useState(true); const [password, setPassword] = useState("");
+    const [photoView, setPhotoView] = useState(""); const [correction, setCorrection] = useState<Shift | null>(null);
   const [selectedSettlement, setSelectedSettlement] = useState("");
-  const video = useRef<HTMLVideoElement>(null); const stream = useRef<MediaStream | null>(null);
-  const photoKey = useRef(crypto.randomUUID()); const commandRef = useRef<{ signature: string; key: string } | null>(null);
+  const commandRef = useRef<{ signature: string; key: string } | null>(null);
   const loadSequence = useRef(0);
   const manager = data?.profile.erp_role === "admin" || data?.profile.erp_role === "supervisor";
   const payManager = manager || data?.profile.erp_role === "caja";
@@ -60,9 +59,6 @@ export default function AttendancePage() {
     setOnline(navigator.onLine); window.addEventListener("online", connected); window.addEventListener("offline", disconnected);
     return () => { window.removeEventListener("online", connected); window.removeEventListener("offline", disconnected); };
   }, [load]);
-  useEffect(() => { if (!photo) { setPreview(""); return; } const url = URL.createObjectURL(photo); setPreview(url); return () => URL.revokeObjectURL(url); }, [photo]);
-  useEffect(() => () => { stream.current?.getTracks().forEach(track => track.stop()); }, []);
-  useEffect(() => { if (camera && video.current && stream.current) video.current.srcObject = stream.current; }, [camera]);
   useEffect(() => { if (!photoView) return; const timeout = window.setTimeout(() => setPhotoView(""), 55000); return () => window.clearTimeout(timeout); }, [photoView]);
 
   const command = async (action: AttendanceAction, values: Record<string, unknown>) => {
@@ -78,34 +74,18 @@ export default function AttendancePage() {
     catch (caught) { setError(caught instanceof Error ? caught.message : "No se guardó. Puedes reintentar."); }
     finally { setBusy(""); }
   };
-  const openCamera = async () => {
-    setError("");
-    if (!navigator.mediaDevices?.getUserMedia) { setError("La cámara requiere HTTPS y permisos. Usa la captura alternativa del celular o abre esta página mediante HTTPS."); return; }
-    try { stream.current?.getTracks().forEach(track => track.stop()); stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 } }, audio: false }); setCamera(true); }
-    catch { setError("No se pudo abrir la cámara. Permite el acceso en tu navegador o usa la captura alternativa."); }
-  };
-  const compress = async (source: CanvasImageSource, width: number, height: number) => {
-    if (!width || !height) throw new Error("La cámara aún no está lista.");
-    const scale = Math.min(1, 960 / Math.max(width, height)); const canvas = document.createElement("canvas"); canvas.width = Math.round(width * scale); canvas.height = Math.round(height * scale);
-    const context = canvas.getContext("2d"); if (!context) throw new Error("No se pudo procesar la fotografía."); context.drawImage(source, 0, 0, canvas.width, canvas.height);
-    let blob: Blob | null = null;
-    for (const quality of [0.8, 0.65, 0.5]) { blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality)); if (blob && blob.size <= 524288) break; }
-    if (!blob || blob.size > 524288) throw new Error("La imagen es demasiado grande. Intenta otra captura.");
-    setPhoto(blob); photoKey.current = crypto.randomUUID(); setCamera(false); stream.current?.getTracks().forEach(track => track.stop());
-  };
-  const capture = async () => { try { if (video.current) await compress(video.current, video.current.videoWidth, video.current.videoHeight); } catch (caught) { setError((caught as Error).message); } };
-  const uploadCapture = async (file: File | undefined) => {
-    if (!file) return;
-    try { if (!file.type.startsWith("image/") || file.size > 15000000) throw new Error("Selecciona una foto de máximo 15 MB."); const bitmap = await createImageBitmap(file); try { await compress(bitmap, bitmap.width, bitmap.height); } finally { bitmap.close(); } }
-    catch (caught) { setError((caught as Error).message); }
-  };
   const start = async () => {
-    if (!photo || busy) return; setBusy("start"); setError("");
+    if (!password || busy) return; setBusy("start"); setError(""); setMessage("");
     try {
-      const form = new FormData(); form.set("photo", photo, "selfie.jpg"); form.set("requestKey", photoKey.current);
-      const saved = await api("/api/admin/attendance/photo", { method: "POST", body: form });
-      await command("start", { evidenceId: saved.id }); setPhoto(null); setMessage("Entrada registrada con hora del servidor."); await load();
-    } catch (caught) { setError((caught as Error).message); } finally { setBusy(""); }
+      const { data: current } = await supabase.auth.getSession();
+      const email = current.session?.user.email;
+      if (!email) throw new Error("Tu sesión expiró. Ingresa nuevamente.");
+      const fresh = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+      const login = await fresh.auth.signInWithPassword({ email, password });
+      if (login.error || !login.data.session) throw new Error("Contraseña incorrecta.");
+      await api("/api/admin/attendance", { method: "POST", headers: { "Content-Type": "application/json", "x-reauth-token": login.data.session.access_token }, body: JSON.stringify({ action: "start", data: {}, requestKey: crypto.randomUUID() }) });
+      setPassword(""); setMessage("Entrada registrada con hora del servidor."); await load();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "No se registró la entrada."); } finally { setBusy(""); }
   };
   const showEvidence = async (id: string) => { try { const result = await api(`/api/admin/attendance/photo?id=${id}`); setPhotoView(result.url); } catch (caught) { setError((caught as Error).message); } };
 
@@ -113,7 +93,7 @@ export default function AttendancePage() {
   const shift = data?.openShift;
   const selected = data?.settlements.find(item => item.id === selectedSettlement);
   return <main className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Asistencia y pagos operativos</h1><p className="text-sm text-slate-600">Hora de Bogotá · Evidencia fotográfica, sin reconocimiento facial · No es nómina legal completa.</p></div><button className={secondary} onClick={() => { setError(""); void load(); }} disabled={disabled}>Actualizar</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">Asistencia y pagos operativos</h1><p className="text-sm text-slate-600">Hora de Bogotá · El turno inicia con tu contraseña · No es nómina legal completa.</p></div><button className={secondary} onClick={() => { setError(""); void load(); }} disabled={disabled}>Actualizar</button></div>
     <p role="status" className="text-sm">{!online ? "Sin conexión: reconecta antes de registrar." : busy ? "Guardando…" : message || "Conectado"}</p>
     {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
     {!data && <p>Cargando datos autorizados del servidor…</p>}
@@ -128,12 +108,15 @@ export default function AttendancePage() {
           {!shift.lunch_started_at && <button className={button} disabled={disabled} onClick={() => void perform("lunch.start", { shiftId: shift.id, version: shift.version })}>Iniciar almuerzo</button>}
           {shift.lunch_started_at && !shift.lunch_ended_at && <button className={button} disabled={disabled} onClick={() => void perform("lunch.end", { shiftId: shift.id, version: shift.version })}>Finalizar almuerzo</button>}
           {(!shift.lunch_started_at || shift.lunch_ended_at) && <button className={button} disabled={disabled} onClick={() => { if (confirm("¿Registrar tu salida ahora? Se cerrará el turno con la hora del servidor.")) void perform("end", { shiftId: shift.id, version: shift.version }); }}>Registrar salida</button>}
-        </div>{Date.now() - Date.parse(shift.started_at) > 18 * 3600000 && <p className="text-amber-700">Turno abierto hace más de 18 horas. Si olvidaste marcar, solicita una corrección al responsable.</p>}</> : <><p>No tienes un turno abierto. Captura una selfie para registrar la entrada.</p><div className="flex flex-wrap gap-3"><button className={button} disabled={disabled} onClick={() => void openCamera()}>Iniciar turno: abrir cámara</button><label className={secondary}>Captura alternativa<input aria-label="Captura alternativa" className="mt-1 block max-w-xs text-sm" type="file" accept="image/*" capture="user" disabled={disabled} onChange={event => void uploadCapture(event.target.files?.[0])} /></label></div>
-          {camera && <div><video ref={video} autoPlay muted playsInline className="max-h-80 w-full rounded-lg bg-slate-900" /><button className={button + " mt-2"} onClick={() => void capture()}>Tomar selfie</button><button className={secondary + " ml-2"} onClick={() => { stream.current?.getTracks().forEach(track => track.stop()); setCamera(false); }}>Cerrar cámara</button></div>}
-          {preview && <div className="flex flex-wrap items-center gap-3">{/* eslint-disable-next-line @next/next/no-img-element */}<Image unoptimized width={960} height={720} alt="Selfie pendiente de guardar" src={preview} className="h-40 rounded-lg" /><button className={button} disabled={disabled} onClick={() => void start()}>Confirmar selfie y registrar entrada</button><button className={secondary} disabled={disabled} onClick={() => setPhoto(null)}>Descartar</button></div>}
-          <p className="text-sm text-slate-600">La foto se comprime, se guarda en almacenamiento privado y vence a los {data.settings.retention_days} días. Se usa como evidencia; no verifica tu identidad automáticamente.</p>
+        </div>{Date.now() - Date.parse(shift.started_at) > 18 * 3600000 && <p className="text-amber-700">Turno abierto hace más de 18 horas. Si olvidaste marcar, solicita una corrección al responsable.</p>}</> : <>
+          <p>No tienes un turno abierto. Para iniciar, vuelve a escribir tu contraseña, como si iniciaras sesión de nuevo.</p>
+          <form className="flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); void start(); }}>
+            <label className="text-sm">Contraseña<input className={field + " max-w-xs"} type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required /></label>
+            <button className={button} disabled={disabled || !password}>Iniciar turno</button>
+          </form>
+          <p className="text-sm text-slate-600">La entrada se guarda con la hora del servidor y queda a tu nombre. No se usa la cámara.</p>
         </>}
-      </section>}
+        </section>}
 
       <div className="flex flex-wrap items-center gap-3"><label>Empleado<select aria-label="Empleado" className={field} value={currentEmployee} onChange={event => { setEmployee(event.target.value); setPage(0); setSelectedSettlement(""); }}>{data.employees.map(person => <option key={person.id} value={person.id}>{person.display_name || person.id.slice(0, 8)} · {person.erp_role}</option>)}</select></label><span className="text-sm text-slate-600">Página {page + 1} · 25 turnos, liquidaciones y eventos por página</span></div>
 
@@ -144,7 +127,7 @@ export default function AttendancePage() {
         <form className="grid gap-3 sm:grid-cols-3" onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); void perform("settlement.create", { employeeId: currentEmployee, from: String(form.get("from")), to: String(form.get("to")) }); }}><label>Entradas desde<input type="date" name="from" className={field} required /></label><label>Hasta<input type="date" name="to" className={field} required /></label><button className={button} disabled={disabled}>Calcular borrador</button></form>
       </details>}
 
-      <section className="rounded-xl border bg-white p-4"><h2 className="mb-3 text-lg font-semibold">Turnos</h2>{!data.shifts.length ? <p>No hay turnos registrados.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Entrada / salida</th><th className="p-2">Almuerzo</th><th className="p-2">Tarifa preservada</th><th className="p-2">Acciones</th></tr></thead><tbody>{data.shifts.map(item => <tr key={item.id} className="border-t"><td className="p-2">{when(item.started_at)}<br />{item.ended_at ? when(item.ended_at) : "Turno abierto"}</td><td className="p-2">{when(item.lunch_started_at)}<br />{when(item.lunch_ended_at)}</td><td className="p-2">{item.rate_snapshot ? `${money(item.rate_snapshot.amount_cop)} / ${item.rate_snapshot.modality === "hourly" ? "hora" : "turno"}` : "Sin tarifa"}<br />{item.settlement_id && "En liquidación"}</td><td className="space-y-1 p-2">{(manager || item.employee_id === data.profile.id) && <button className={secondary} onClick={() => void showEvidence(item.evidence_id)}>Ver evidencia</button>}{manager && !item.settlement_id && data.settings.enabled && <button className={secondary} disabled={disabled} onClick={() => setCorrection(item)}>Corregir</button>}</td></tr>)}</tbody></table></div>}</section>
+      <section className="rounded-xl border bg-white p-4"><h2 className="mb-3 text-lg font-semibold">Turnos</h2>{!data.shifts.length ? <p>No hay turnos registrados.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Entrada / salida</th><th className="p-2">Almuerzo</th><th className="p-2">Tarifa preservada</th><th className="p-2">Acciones</th></tr></thead><tbody>{data.shifts.map(item => <tr key={item.id} className="border-t"><td className="p-2">{when(item.started_at)}<br />{item.ended_at ? when(item.ended_at) : "Turno abierto"}</td><td className="p-2">{when(item.lunch_started_at)}<br />{when(item.lunch_ended_at)}</td><td className="p-2">{item.rate_snapshot ? `${money(item.rate_snapshot.amount_cop)} / ${item.rate_snapshot.modality === "hourly" ? "hora" : "turno"}` : "Sin tarifa"}<br />{item.settlement_id && "En liquidación"}</td><td className="space-y-1 p-2">{item.evidence_id && (manager || item.employee_id === data.profile.id) && <button className={secondary} onClick={() => void showEvidence(item.evidence_id!)}>Ver evidencia</button>}{manager && !item.settlement_id && data.settings.enabled && <button className={secondary} disabled={disabled} onClick={() => setCorrection(item)}>Corregir</button>}</td></tr>)}</tbody></table></div>}</section>
       {photoView && <section className="rounded-xl border bg-white p-4"><button className={secondary} onClick={() => setPhotoView("")}>Cerrar evidencia</button>{/* eslint-disable-next-line @next/next/no-img-element */}<Image unoptimized width={960} height={720} alt="Evidencia privada de entrada" src={photoView} referrerPolicy="no-referrer" className="mt-3 max-h-96 rounded-lg" /><p className="text-sm">Enlace autorizado válido durante 60 segundos.</p></section>}
       {correction && <section className="rounded-xl border border-amber-300 bg-amber-50 p-4"><h2 className="font-semibold">Corrección auditada · horario Bogotá</h2><form key={correction.id} className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); const values: Record<string, unknown> = { shiftId: correction.id, version: correction.version, startedAt: instant(String(form.get("start"))), lunchStartedAt: instant(String(form.get("lunchStart"))), lunchEndedAt: instant(String(form.get("lunchEnd"))), endedAt: instant(String(form.get("end"))), reason: String(form.get("reason")) }; if (form.get("rateId")) values.rateId = form.get("rateId"); if (confirm("¿Guardar esta corrección? Quedarán registrados el antes, después, responsable y motivo.")) void perform("correct", values); }}>
         <label>Entrada<input name="start" type="datetime-local" className={field} defaultValue={localInput(correction.started_at)} required /></label><label>Salida (vacío = turno abierto)<input name="end" type="datetime-local" className={field} defaultValue={localInput(correction.ended_at)} /></label><label>Inicio de almuerzo<input name="lunchStart" type="datetime-local" className={field} defaultValue={localInput(correction.lunch_started_at)} /></label><label>Fin de almuerzo<input name="lunchEnd" type="datetime-local" className={field} defaultValue={localInput(correction.lunch_ended_at)} /></label>

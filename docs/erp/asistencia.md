@@ -16,7 +16,7 @@ Estado de esta entrega: código integrado en `/admin/asistencia`, migración adi
 
 ## Evidencia privada y conservación
 
-La cámara usa `getUserMedia` con lente frontal; se ofrece captura de archivo del móvil como alternativa. HTTPS (o localhost para pruebas) y permiso del usuario son necesarios. La imagen se reduce a máximo 960 píxeles en su lado mayor y se comprime a JPEG de máximo 512 KiB. El servidor limita también el cuerpo HTTP a 600 KB antes de parsear multipart y valida tipo, tamaño y firma JPEG. Esto no es reconocimiento facial ni una garantía de identidad.
+**Desde la migración `20261029030000` el turno inicia con la contraseña, sin cámara.** El navegador abre una sesión nueva con la contraseña del usuario y envía ese token a la API (`x-reauth-token`); la API exige que sea del mismo usuario y de menos de 2 minutos. La foto pasó a ser opcional (`evidence_id` admite nulo; turnos viejos conservan su evidencia y retención). Lo que sigue describe el flujo opcional con foto: la cámara usa `getUserMedia` con lente frontal; se ofrece captura de archivo del móvil como alternativa. HTTPS (o localhost para pruebas) y permiso del usuario son necesarios. La imagen se reduce a máximo 960 píxeles en su lado mayor y se comprime a JPEG de máximo 512 KiB. El servidor limita también el cuerpo HTTP a 600 KB antes de parsear multipart y valida tipo, tamaño y firma JPEG. Esto no es reconocimiento facial ni una garantía de identidad.
 
 El servidor reserva primero una fila `attendance_evidence` con ruta aleatoria, propietario, tamaño, MIME y vencimiento. Luego carga el objeto y marca la evidencia lista. Si se interrumpe el proceso, la fila pendiente conserva el objeto localizable para reintento y retención. El inicio de turno solo admite evidencia del empleado, lista, no vencida y reservada durante los últimos 15 minutos. Una evidencia no se puede reutilizar en otro turno.
 
@@ -38,7 +38,7 @@ No hay emisión de facturas, mensajes ni cambios automáticos de roles desde est
 
 ## Guía por rol
 
-**Empleado:** abrir Asistencia, “Iniciar turno: abrir cámara”, tomar selfie y confirmar entrada. Marcar inicio y fin de almuerzo; al terminar, confirmar salida. La hora es la del servidor. Si hubo olvido, solicitar corrección al responsable. Al reconectar la pantalla recarga el estado del servidor; no registra marcas retroactivas de forma silenciosa.
+**Empleado:** abrir Asistencia, volver a escribir la contraseña (como un inicio de sesión nuevo) y pulsar «Iniciar turno». No se usa la cámara. Marcar inicio y fin de almuerzo; al terminar, confirmar salida. La hora es la del servidor. Si hubo olvido, solicitar corrección al responsable. Al reconectar la pantalla recarga el estado del servidor; no registra marcas retroactivas de forma silenciosa.
 
 **Supervisor/administrador:** seleccionar empleado; definir tarifa con motivo/vigencia; revisar turnos, evidencia temporal y eventos. Corregir únicamente datos comprobados, con motivo. Calcular borrador por rango de fechas de entrada, registrar bonos/ajustes y revisar valor calculado antes de confirmar aprobación.
 

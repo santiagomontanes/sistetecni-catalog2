@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { createOperator, localAdmin, login, rpc } from './helpers';
 import { appEnv } from '../../scripts/operational/browser-env.mjs';
 
-test.use({ permissions: ['camera'], launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] } });
 test.describe.serial('Asistencia con Auth, PostgreSQL y Storage locales reales', () => {
   let manager: Awaited<ReturnType<typeof createOperator>>;
   let employee: Awaited<ReturnType<typeof createOperator>>;
@@ -25,25 +24,34 @@ test.describe.serial('Asistencia con Auth, PostgreSQL y Storage locales reales',
     if (manager) await command('settings', { enabled: originalEnabled, reason: 'Restaurar bandera tras E2E' });
   });
 
-  test('selfie cámara, turno, almuerzo, salida y evidencia privada persistida', async ({ page, request }) => {
+  test('inicio de turno con contraseña (sin cámara), almuerzo, salida y evidencia privada opcional', async ({ page, request }) => {
     await login(page, employee);
     await page.goto('/admin/asistencia');
     await expect(page.getByRole('heading', { name: 'Asistencia y pagos operativos' })).toBeVisible();
-    await page.getByRole('button', { name: 'Iniciar turno: abrir cámara' }).click();
-    await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2);
-    await page.getByRole('button', { name: 'Tomar selfie' }).click();
-    await expect(page.getByAltText('Selfie pendiente de guardar')).toBeVisible();
-    await page.getByRole('button', { name: 'Confirmar selfie y registrar entrada' }).click();
+    await expect(page.getByRole('button', { name: /cámara|selfie/i })).toHaveCount(0);
+    await page.getByLabel('Contraseña').fill('contraseña-incorrecta');
+    await page.getByRole('button', { name: 'Iniciar turno' }).click();
+    await expect(page.getByText('Contraseña incorrecta.')).toBeVisible();
+    expect((await localAdmin.from('attendance_shifts').select('id').eq('employee_id', employee.id)).data).toHaveLength(0);
+    // La API rechaza iniciar sin foto y sin un inicio de sesión reciente verificado.
+    const bare = await request.post('/api/admin/attendance', { headers: { Authorization: `Bearer ${employee.token}` }, data: { action: 'start', data: {}, requestKey: randomUUID() } });
+    expect(bare.status()).toBe(400);
+    expect((await localAdmin.from('attendance_shifts').select('id').eq('employee_id', employee.id)).data).toHaveLength(0);
+    await page.getByLabel('Contraseña').fill(employee.password);
+    await page.getByRole('button', { name: 'Iniciar turno' }).click();
     await expect(page.getByRole('button', { name: 'Iniciar almuerzo' })).toBeVisible();
     const shifts = await employee.client.from('attendance_shifts').select('*').eq('employee_id', employee.id).single();
-    expect(shifts.error).toBeNull(); expect(shifts.data.started_at).toBeTruthy();
-    shiftId = shifts.data.id; evidenceId = shifts.data.evidence_id;
+    expect(shifts.error).toBeNull(); expect(shifts.data.started_at).toBeTruthy(); expect(shifts.data.evidence_id).toBeNull();
+    shiftId = shifts.data.id;
+    // Evidencia fotográfica opcional (flujo anterior): subida, URL firmada y propiedad privada.
+    actualJpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('sintetica'), Buffer.from([0xff, 0xd9])]);
+    const upload = await request.post('/api/admin/attendance/photo', { headers: { Authorization: `Bearer ${employee.token}` }, multipart: { requestKey: randomUUID(), photo: { name: 'selfie.jpg', mimeType: 'image/jpeg', buffer: actualJpeg } } });
+    expect(upload.status()).toBe(200); evidenceId = (await upload.json()).id;
     const evidence = await employee.client.from('attendance_evidence').select('*').eq('id', evidenceId).single();
     expect(evidence.error).toBeNull(); expect(evidence.data.status).toBe('ready'); expect(evidence.data.bytes).toBeLessThanOrEqual(524288);
     expect(evidence.data).not.toHaveProperty('base64'); expect(evidence.data).not.toHaveProperty('binary'); evidencePath = evidence.data.storage_path;
     const actualFile = await localAdmin.storage.from('attendance-private').download(evidencePath);
     expect(actualFile.error).toBeNull(); expect(actualFile.data?.size).toBe(evidence.data.bytes);
-    actualJpeg = Buffer.from(await actualFile.data!.arrayBuffer());
     const signed = await request.get(`/api/admin/attendance/photo?id=${evidenceId}`, { headers: { Authorization: `Bearer ${employee.token}` } });
     expect(signed.status()).toBe(200); const signedBody = await signed.json(); expect(signedBody.expiresIn).toBe(60);
     signedPhotoUrl = signedBody.url; signedPhotoExpiresAt = Date.now() + 62_000;
@@ -56,11 +64,11 @@ test.describe.serial('Asistencia con Auth, PostgreSQL y Storage locales reales',
     await expect(page.getByRole('button', { name: 'Registrar salida' })).toBeVisible();
     page.on('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: 'Registrar salida' }).click();
-    await expect(page.getByText('No tienes un turno abierto. Captura una selfie para registrar la entrada.')).toBeVisible();
+    await expect(page.getByText(/No tienes un turno abierto/)).toBeVisible();
     const final = await employee.client.from('attendance_shifts').select('*').eq('id', shiftId).single();
     expect(final.data.ended_at).toBeTruthy(); expect(final.data.lunch_started_at).toBeTruthy(); expect(final.data.lunch_ended_at).toBeTruthy();
     await page.reload();
-    await expect(page.getByText('No tienes un turno abierto. Captura una selfie para registrar la entrada.')).toBeVisible();
+    await expect(page.getByText(/No tienes un turno abierto/)).toBeVisible();
   });
 
   test('corrección UI auditada, snapshot histórico, aprobación y pago integrados', async ({ page }) => {

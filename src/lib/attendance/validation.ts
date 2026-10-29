@@ -9,7 +9,7 @@ const correctionInstant = instant.nullable();
 export const attendanceActions = {
   settings: z.object({ enabled: z.boolean().optional(), retentionDays: z.number().int().min(1).max(365).optional(), reason }).strict(),
   rate: z.object({ employeeId: uuid, effectiveFrom: instant, modality: z.enum(["hourly", "per_shift"]), amountCop: cop, paidLunch: z.boolean(), reason }).strict(),
-  start: z.object({ evidenceId: uuid }).strict(),
+  start: z.object({ evidenceId: uuid.optional() }).strict(),
   "lunch.start": z.object({ shiftId: uuid, version: z.number().int().positive() }).strict(),
   "lunch.end": z.object({ shiftId: uuid, version: z.number().int().positive() }).strict(),
   end: z.object({ shiftId: uuid, version: z.number().int().positive() }).strict(),
@@ -66,6 +66,7 @@ const MESSAGES: Record<string, string> = {
   attendance_payment_exceeds_balance: "El importe supera el saldo disponible o no es positivo.",
   attendance_settlement_frozen: "La liquidación ya está aprobada y no admite cambios.",
   attendance_idempotency_conflict: "La clave de reintento corresponde a otra operación.",
+  attendance_login_required: "Confirma tu contraseña para iniciar el turno. Si ya la escribiste, vuelve a intentarlo.",
   attendance_invalid_photo: "La foto debe ser JPEG válido de máximo 512 KB.",
 };
 export function attendanceError(message: string) {

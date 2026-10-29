@@ -17,6 +17,17 @@ export async function attendanceAuth(request: Request) {
   return { client, userId: user.user.id, profile };
 }
 
+/** Iniciar turno sin foto exige un inicio de sesión nuevo (contraseña) del mismo usuario, de menos de 2 minutos. */
+export async function assertRecentLogin(request: Request, userId: string) {
+  const token = request.headers.get("x-reauth-token");
+  if (!token) throw new Error("attendance_login_required");
+  const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await client.auth.getUser(token);
+  let issuedAt = 0;
+  try { issuedAt = Number(JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString()).iat) * 1000; } catch { issuedAt = 0; }
+  if (error || data.user?.id !== userId || !(Date.now() - issuedAt < 120000) || issuedAt > Date.now() + 60000) throw new Error("attendance_login_required");
+}
+
 export async function attendanceEnabled(client: Awaited<ReturnType<typeof attendanceAuth>>["client"]) {
   const { data, error } = await client.from("attendance_settings").select("enabled").eq("singleton", true).single();
   if (error || !data?.enabled) throw new Error("attendance_disabled");
