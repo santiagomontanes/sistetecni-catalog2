@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "tarjeta:assets": "node scripts/generate-business-card-assets.mjs",
     "test:unit": "node scripts/test-unit.mjs",
     "test:operational:db": "node scripts/operational/db-local.mjs",
     "test:operational": "node scripts/operational/test-all.mjs",
