@@ -8,7 +8,7 @@ export function shippingPermission(action: ShippingAction): ErpPermission {
   if (["transport_save","difference_review"].includes(action)) return "profitability.manage";
   if (["pending_collections", "deposits", "metrics", "search","references"].includes(action)) return "cash.read";
   if (action === "configure") return "users.manage";
-  if (["create", "guide", "dispatch", "deliver", "incident", "cancel", "return"].includes(action)) return "sales.manage";
+  if (["create", "guide", "dispatch", "deliver", "incident", "cancel", "return", "return_confirm"].includes(action)) return "sales.manage";
   return "sales.read";
 }
 

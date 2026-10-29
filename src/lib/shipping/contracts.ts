@@ -13,7 +13,7 @@ export const transportConceptSchema=z.object({
   prepaymentMovementId:uuid.optional(),existingCostEntryId:uuid.optional(),
 }).strict();
 export const shippingArgumentSchemas = {
-  list: z.object({ status: z.enum(["pending_guide", "ready", "dispatched", "incident", "delivered", "returned", "cancelled"]).optional(), offset: z.number().int().min(0).max(100000).optional(), limit: z.number().int().min(1).max(101).optional(), ...filters }).strict(),
+  list: z.object({ status: z.enum(["pending_guide", "ready", "dispatched", "incident", "delivered", "return_pending", "returned", "cancelled"]).optional(), offset: z.number().int().min(0).max(100000).optional(), limit: z.number().int().min(1).max(101).optional(), ...filters }).strict(),
   detail: z.object({ id: uuid }).strict(),
   references:z.object({id:uuid,search:bounded(0,80).optional()}).strict(),
   sales: z.object({ search: bounded(1, 100).optional() }).strict(),
@@ -34,6 +34,7 @@ export const shippingArgumentSchemas = {
   incident: z.object({ ...versioned, reason: bounded(3, 1000),recognizeTransport:z.boolean().optional() }).strict(),
   cancel: z.object({ ...versioned, reason: bounded(3, 1000),recognizeTransport:z.boolean().optional() }).strict(),
   return: z.object({ ...versioned, reason: bounded(3, 1000),recognizeTransport:z.boolean().optional() }).strict(),
+  return_confirm: z.object({ ...versioned, reason: bounded(3, 1000), guide: bounded(1, 100) }).strict(),
   reconcile: z.object({ amountCop: money, depositedOn: date, account: bounded(2, 160), reference: bounded(1, 160), evidence: bounded(0, 1000).optional(), confirmed: z.literal(true), allocations: z.array(z.object({ shipmentId: uuid, amountCop: money, version: z.number().int().positive(),finalSettlement:z.boolean().optional() }).strict()).min(1).max(50) }).strict(),
   reverse_deposit: z.object({ id: uuid, reason: bounded(3, 1000), confirmed: z.literal(true) }).strict(),
 };

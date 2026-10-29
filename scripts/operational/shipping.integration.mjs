@@ -155,14 +155,21 @@ test("envíos y recaudos: persistencia, concurrencia, permisos y regresión vent
       const sum = (await db.query("select sum(cm.amount_cop)::text as sum from public.cash_movements cm where cm.id in (select cash_movement_id from public.erp_shipping_deposits where id=any($1::uuid[])) or cm.reversal_of_id in (select cash_movement_id from public.erp_shipping_deposits where id=any($1::uuid[]))", [[partialDeposit.depositId, finalDeposit.depositId]])).rows[0].sum;
       assert.equal(sum, "0");
     });
-    await t.test("cancelación preserva venta/stock; devolución no hace available ni devuelve dinero", async () => {
+    await t.test("cancelación preserva venta/stock; devolución queda pendiente hasta confirmar reingreso; no devuelve dinero", async () => {
       const cancelled = await fixtureShipment();
       await command(admin, "cancel", { id: cancelled.id, version: cancelled.version, reason: "Transportadora cancelada" });
       assert.equal((await db.query("select status from public.product_units where id=$1", [cancelled.fixture.unit])).rows[0].status, "sold");
       const returned = await command(admin, "return", { id: first.id, version: first.version, reason: "Devolución física FICTICIA" });
-      assert.equal(returned.status, "returned"); assert.equal(returned.collection_status, "not_due");
-      assert.equal((await db.query("select status from public.product_units where id=$1", [first.units[0].id])).rows[0].status, "returned");
+      assert.equal(returned.status, "return_pending"); assert.equal(returned.collection_status, "not_due");
+      // En devolución: las unidades siguen vendidas y no hay movimiento de inventario hasta confirmar el reingreso.
+      assert.equal((await db.query("select status from public.product_units where id=$1", [first.units[0].id])).rows[0].status, "sold");
+      assert.equal((await db.query("select count(*)::int as n from public.inventory_movements where reference_type='shipment' and reference_id=$1 and movement_type='return'", [first.id])).rows[0].n, 0);
+      await assert.rejects(command(admin, "return_confirm", { id: returned.id, version: returned.version, reason: "Llegó al local", guide: "GUIA-EQUIVOCADA" }), /shipping_return_guide_mismatch/);
+      const confirmed = await command(admin, "return_confirm", { id: returned.id, version: returned.version, reason: "Llegó al local FICTICIO", guide: returned.guide });
+      assert.equal(confirmed.status, "returned");
+      assert.equal((await db.query("select status from public.product_units where id=$1", [first.units[0].id])).rows[0].status, "available");
       assert.equal((await db.query("select count(*)::int as n from public.inventory_movements where reference_type='shipment' and reference_id=$1 and movement_type='return'", [first.id])).rows[0].n, 1);
+      await assert.rejects(command(admin, "return_confirm", { id: confirmed.id, version: confirmed.version, reason: "Otra vez", guide: returned.guide }), /shipping_invalid_return_confirm_state/);
     });
     await t.test("referencia de depósito duplicada falla y revierte toda la transacción", async () => {
       const a = await deliver(await fixtureShipment()), b = await deliver(await fixtureShipment());
@@ -201,7 +208,7 @@ test("envíos y recaudos: persistencia, concurrencia, permisos y regresión vent
       s = await command(admin, "deliver", { id: s.id, version: s.version, deliveredAt: new Date().toISOString(), expectedNetCop: "0", evidence: "Prueba prepagado" });
       assert.equal(s.collection_status, "reconciled");
       s = await command(admin, "return", { id: s.id, version: s.version, reason: "Devolución prueba prepagado" });
-      assert.equal(s.status, "returned");
+      assert.equal(s.status, "return_pending");
       assert.equal((await db.query("select payment_status from public.sales where id=$1", [prepaid.sale_id])).rows[0].payment_status, "pagado");
       assert.equal((await db.query("select sum(amount_cop)::text as total from public.cash_movements where sale_id=$1", [prepaid.sale_id])).rows[0].total, "70000");
       assert.ok((await command(cashier, "metrics")).pendingGuide >= 0);

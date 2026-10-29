@@ -79,7 +79,7 @@ test('entrega fallida y devolución pueden reconocer costos sin venta entregada 
  assert.equal(s.status,'incident');assert.equal((await costs(s)).total,'30000');
  s=await command('return',{id:s.id,version:s.version,reason:'Devolución física sintética',recognizeTransport:true});assert.equal((await costs(s)).total,'30000');
  s=await command('transport_save',{id:s.id,version:s.version,concept:{...freight('12000',{settlement:'payable'}),code:'return',kind:'return',description:'Retorno confirmado transportadora'},confirmed:true,reason:'Costo adicional de retorno'});
- assert.equal((await costs(s)).total,'42000');assert.equal(s.received_cop,'0');assert.equal(s.status,'returned');
+ assert.equal((await costs(s)).total,'42000');assert.equal(s.received_cop,'0');assert.equal(s.status,'return_pending');
  assert.equal((await sql('select count(*)::int n from cash_movements where sale_id=$1',[s.sale_id]))[0].n,0);
 });
 test('anticipo ya registrado como gasto se asigna al margen sin duplicar gasto, ledger ni caja',async()=>{

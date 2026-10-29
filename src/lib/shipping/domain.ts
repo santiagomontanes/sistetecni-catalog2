@@ -64,7 +64,7 @@ export function addBogotaBusinessDays(at: string, days = 3): string {
 
 export const SHIPMENT_STATUS_LABELS: Record<string, string> = {
   pending_guide: "Pendiente de guía", ready: "Guía registrada", dispatched: "Despachado",
-  incident: "Novedad", delivered: "Entregado", returned: "Devuelto", cancelled: "Cancelado",
+  incident: "Novedad", delivered: "Entregado", return_pending: "Devolución en proceso", returned: "Devuelto (reingresó)", cancelled: "Cancelado",
 };
 export const COLLECTION_STATUS_LABELS: Record<string, string> = {
   not_due: "No exigible", pending: "Pendiente", partial: "Parcial", reconciled: "Conciliado",
