@@ -42,6 +42,33 @@ tocar para abrir la web. Probar con Android e iPhone antes de distribuirlas.
 
 ## Mantener la tarjeta
 
+### Vista previa al compartir
+
+Los botones de compartir envían **solo** `https://sistetecni.com/tarjeta`.
+La página incluye Open Graph con nombre, descripción breve e imagen JPEG de
+1200 × 630 px. Los metadatos están en el HTML inicial y no requieren JS.
+La imagen pesa aproximadamente 60 KB y tiene una URL HTTPS pública.
+
+La fuente editable es `assets/tarjeta/vista-previa.svg`. La portada publicada
+es `public/tarjeta/santiago-sistetecni-v1.jpg`; puede regenerarse con Sharp
+a calidad 90. Al cambiarla, usar un nombre nuevo y actualizar las etiquetas
+Open Graph/Twitter y la imagen del diálogo para evitar reutilizar la imagen
+anterior. El QR y el NFC siguen apuntando a la misma dirección permanente.
+
+WhatsApp decide cómo mostrar la vista previa; no se puede imponer su diseño
+desde la web. Para probarla, pegar el enlace en un chat y esperar a que cargue
+la miniatura antes de enviarlo. No se enviaron mensajes desde el desarrollo.
+Las preferencias de privacidad del remitente y la caché de WhatsApp pueden
+afectar su aparición o actualización. Si conserva una vista antigua, probar
+una vez `https://sistetecni.com/tarjeta?v=2`; el contenido y la URL canónica
+siguen siendo los mismos.
+
+- [WhatsApp: enviar enlaces](https://faq.whatsapp.com/453914586839706/).
+- [WhatsApp: desactivar vistas previas](https://faq.whatsapp.com/445453537819972/).
+- [Especificación Open Graph](https://ogp.me/).
+
+### Cambios de contenido
+
 Editar `public/tarjeta/` y desplegar la web. No cambiar la dirección permanente:
 así se pueden actualizar los datos y servicios sin reimprimir el QR ni
 regrabar la etiqueta NFC. El contacto vCard se conserva en ese directorio.

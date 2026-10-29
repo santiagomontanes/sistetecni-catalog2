@@ -5,11 +5,10 @@
   const status = document.getElementById('share-status');
   // QR, NFC and sharing use the same permanent address, even on previews.
   const url = 'https://sistetecni.com/tarjeta';
-  const title = 'Santiago Montañes · Sistetecni';
-  const text = 'Santiago Montañes, representante legal de Sistetecni. Computadores y desarrollo de software a medida. Opciones de software para tu negocio desde $30.000 COP mensuales. Local 151, Centro Comercial Intercentro, Bogotá.';
 
   urlInput.value = url;
-  document.getElementById('share-whatsapp').href = 'https://wa.me/?text=' + encodeURIComponent(title + '\n' + text + '\n' + url);
+  // Send just the link. The receiving app can build its preview from Open Graph.
+  document.getElementById('share-whatsapp').href = 'https://wa.me/?text=' + encodeURIComponent(url);
   // Core contact links work without JavaScript; sharing is an enhancement.
   if (typeof dialog.showModal !== 'function') return;
   const qrDialog = document.getElementById('qr-dialog');
@@ -22,7 +21,7 @@
   shareButton.addEventListener('click', async () => {
     if (navigator.share) {
       try {
-        await navigator.share({title, text, url});
+        await navigator.share({url});
         return;
       } catch (error) {
         if (error && error.name === 'AbortError') return;
