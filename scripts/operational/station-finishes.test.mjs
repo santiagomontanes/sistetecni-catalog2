@@ -29,7 +29,7 @@ async function ready(id){
 }
 test('vínculo temporal: misma unidad, aislamiento usuario/sesión/pestaña, un solo canje y revocación',async()=>{
  const id=await receive();const created=await link('create',{station:'Prueba computador'});
- assert.equal(created.code.length,16);
+ assert.match(created.code,/^\d{5}$/);
  const joined=await link('join',{code:created.code},actor,mobile);
  await assert.rejects(()=>link('join',{code:created.code},actor,randomUUID()),/link_invalid/);
  await link('select',{id:created.id,token:joined.token,unitId:id},actor,mobile);

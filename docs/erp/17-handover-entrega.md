@@ -44,7 +44,7 @@ Guía completa: [piloto-operativo.md](piloto-operativo.md). Resumen de lo que so
 
 ## 3. Activar los cron jobs (systemd timers) en producción
 
-Hacerlo **solo cuando decidas activar**, y después de: respaldo recuperable, migraciones `20261023010000`…`080000` y `20261024010000`, `20261029010000`, `20261029020000`, `20261029030000`, `20261030010000`, `20261030020000` y `20261030030000` aplicadas en orden con autorización, y recarga de esquema PostgREST (`NOTIFY pgrst, 'reload schema'`). Detalle: [operacion-activacion.md](operacion-activacion.md), [jobs-operativos.md](jobs-operativos.md).
+Hacerlo **solo cuando decidas activar**, y después de: respaldo recuperable, migraciones `20261023010000`…`080000` y `20261024010000`, `20261029010000`, `20261029020000`, `20261029030000`, `20261030010000`, `20261030020000`, `20261030030000` y `20261031010000` aplicadas en orden con autorización, y recarga de esquema PostgREST (`NOTIFY pgrst, 'reload schema'`). Detalle: [operacion-activacion.md](operacion-activacion.md), [jobs-operativos.md](jobs-operativos.md).
 
 ### 3.1 Jobs del ERP (preparación de recordatorios + retención de selfies)
 

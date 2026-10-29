@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireErpPermission } from "@/lib/erpAuth/auth";
 const input=z.discriminatedUnion("action",[
  z.object({action:z.literal("create"),station:z.string().trim().min(1).max(80)}),
- z.object({action:z.literal("join"),code:z.string().trim().regex(/^[a-fA-F0-9]{16}$/)}),
+ z.object({action:z.literal("join"),code:z.string().trim().regex(/^(\d{5}|[a-fA-F0-9]{16})$/)}),
  z.object({action:z.enum(["read","revoke"]),id:z.string().uuid(),token:z.string().regex(/^[a-f0-9]{64}$/)}),
  z.object({action:z.literal("select"),id:z.string().uuid(),token:z.string().regex(/^[a-f0-9]{64}$/),unitId:z.string().uuid()}),
 ]);
