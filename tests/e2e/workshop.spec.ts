@@ -106,8 +106,10 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     await page.getByPlaceholder("Motivo del traslado").fill("Traslado sintético E2E");
     await page.getByRole("button",{name:"Guardar movimiento",exact:true}).click();
     await expect(page.locator('p[role="alert"]')).toHaveCount(0);
-    await page.getByText("Evidencia original y correcciones de recepción", { exact: true }).click();
-    await expect(page.getByText("Instantánea original", { exact: false }).first()).toBeVisible();
+    await expect(async () => {
+      if (!(await page.getByText("Instantánea original", { exact: false }).first().isVisible())) await page.getByText("Evidencia original y correcciones de recepción", { exact: true }).click();
+      await expect(page.getByText("Instantánea original", { exact: false }).first()).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 20000 });
     const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: unitId }, token);
     expect(server.receipts[0].snapshot.components[0].capacityGb).toBe(1);
     expect(server.components.find((c: { installed_in_unit_id: string }) => c.installed_in_unit_id === unitId)).toBeTruthy();
@@ -202,4 +204,26 @@ test("regresión ERP: inventario y rentabilidad admiten unidad sin producto come
   await page.goto(`${appUrl}/admin/rentabilidad/unidad/${received.unitId}`);
   await expect(page.getByRole("heading", { name: received.unitCode, exact: true })).toBeVisible({ timeout: 20000 });
   await expect(page.getByText("Unidad no encontrada.", { exact: true })).toHaveCount(0);
+});
+
+test("Fase 3: sin unidad pide el STU y un producto nuevo se crea sin imágenes y queda seleccionado", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `F3-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Fase 3 E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 1 }] } });
+  await login(page);
+  await page.getByRole("tab", { name: /Fase 3/ }).click();
+  await page.getByLabel("STU de la unidad", { exact: true }).fill(received.unitCode);
+  await page.getByRole("button", { name: "Abrir unidad", exact: true }).click();
+  await expect(page.getByText("Unidad:", { exact: false }).first()).toBeVisible({ timeout: 20000 });
+  const model = `Modelo ${randomUUID().slice(0, 6)}`;
+  await page.getByText(/¿No está registrado\? Crear producto/).click();
+  await page.getByLabel("Marca del producto nuevo", { exact: true }).fill("MarcaE2E");
+  await page.getByLabel("Modelo del producto nuevo", { exact: true }).fill(model);
+  await page.getByRole("button", { name: "Crear producto y seleccionarlo", exact: true }).click();
+  await expect(page.getByText(/Las imágenes quedan pendientes/).first()).toBeVisible({ timeout: 20000 });
+  const row = await json(`/rest/v1/products?title=eq.${encodeURIComponent(`MarcaE2E ${model}`)}&select=id,visible_web,images`, "GET", undefined, token);
+  expect(row).toHaveLength(1);
+  expect(row[0].visible_web).toBe(false);
+  expect(row[0].images).toEqual([]);
 });

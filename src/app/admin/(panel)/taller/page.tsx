@@ -121,10 +121,10 @@ export default function WorkshopPage() {
       }}>Reversar con historial</button>}</div>)}</details>
       </div>
       {unit.asset_kind === "computer" && <div hidden={phase !== "3"} className="space-y-4">
-        <div onChange={e => e.stopPropagation()}><UnitFinish unitId={unit.id} onSaved={() => void load()} /></div>
+        <div onChange={e => e.stopPropagation()}><UnitFinish unitId={unit.id} unitCode={unit.unit_code} onSaved={() => void load()} /></div>
       </div>}
     </section>}
-    {!unit && (phase === "2" || phase === "3") && <p className="rounded border bg-white p-4 text-sm">Primero abre un equipo: escanea o escribe su STU arriba, o elígelo en la lista de abajo.</p>}
+    {!unit && (phase === "2" || phase === "3") && <form className="flex flex-wrap items-center gap-2 rounded border bg-white p-4" onChange={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); scan(String(new FormData(e.currentTarget).get("stu"))); }}><label className="text-sm">¿De qué unidad? Escribe su STU<input name="stu" aria-label="STU de la unidad" placeholder="STU-000126" className={`${field} mt-1`} /></label><button className={button}>Abrir unidad</button></form>}
     <div hidden={phase !== "1"} className="space-y-5">
     <details className="rounded border bg-white p-4" open={!!data && data.locations.length === 0}><summary className="cursor-pointer font-medium">Preparar taller: etiquetas QR y ubicaciones</summary><div className="mt-4 space-y-5">
       <LabelsPanel enabled={!!data?.enabled} hasLocations={locations.length > 0} />
