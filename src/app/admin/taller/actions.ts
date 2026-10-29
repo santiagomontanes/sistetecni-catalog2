@@ -66,11 +66,11 @@ async function pdfForCodes(codes: string[], size: z.infer<typeof labelSize>, bat
   const bytes = await buildLabelsPdf(sorted, size, title);
   return { pdfBase64: Buffer.from(bytes).toString("base64"), batchId, count: sorted.length, first: sorted[0], last: sorted[sorted.length - 1] };
 }
-// Reserva N números STU y devuelve el PDF para imprimir. Si el PDF fallara, el lote queda
+// Solo administrador (también se exige en SQL). Reserva N números STU y devuelve el PDF para imprimir. Si el PDF fallara, el lote queda
 // registrado y se puede reimprimir desde «Lotes anteriores»; los STU no se pierden.
 export async function createWorkshopLabelsPdf(input: { accessToken: unknown; count: number; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
-    const { client } = await requireErpPermission(input.accessToken, "inventory.manage");
+    const { client } = await requireErpPermission(input.accessToken, "users.manage");
     const parsed = z.object({ count: z.number().int().min(1).max(200), size: labelSize }).parse(input);
     const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: parsed.count }, p_key: randomUUID() });
     if (error) throw new Error(error.message);

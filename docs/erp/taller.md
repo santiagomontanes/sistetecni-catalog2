@@ -69,3 +69,10 @@ No se necesitan credenciales adicionales para QR: se genera SVG localmente media
 La configuración automática por agente de Windows y el reconocimiento por fotografía no se implementaron: el flujo manual está operativo, y escanear nunca instala ni formatea nada. La verificación de compatibilidad solo rechaza contradicciones conocidas (generación/formato de RAM, interfaz de disco y conector/voltaje de cargador cuando están registrados); con atributos desconocidos se requiere inspección humana.
 
 La lista general pagina 50 unidades. La ficha precarga hasta 200 componentes; el buscador de repuestos consulta todo el inventario suelto por código o atributos y pagina 50 resultados. La ficha muestra 100 eventos/programas recientes; los registros anteriores permanecen en las tablas de auditoría y no se eliminan por este límite de visualización.
+
+
+## Ingreso de remate y QR solo para el administrador
+
+- Migración `20261030010000`. La generación de números STU nuevos (`qr_batch`, `qr_void` y el panel «1. Etiquetas QR») exige el permiso `users.manage` (solo administrador) tanto en la acción del servidor como en SQL. Reimprimir etiquetas de unidades ya registradas sigue disponible para quien tenga acceso al taller.
+- `/admin/remates` («Ingreso de remate», solo administrador): se registran fecha, remate/proveedor, **precio total**, y cuántos **computadores, memorias y discos** se compraron (1 a 200 piezas). Al guardar se crea el remate `REM-000001…` y se reservan **tantos QR como piezas**, se muestra el PDF para imprimir y el remate queda listado con «Reimprimir QR» y cuántas etiquetas ya se usaron. Mostrar el costo promedio por pieza es solo una referencia: **no** se reparte automáticamente a cada STU; el costo real de adquisición se sigue asignando al recibir/registrar cada unidad.
+- Es idempotente por clave: repetir el envío devuelve el mismo remate y reutilizar la clave con otros datos se rechaza.

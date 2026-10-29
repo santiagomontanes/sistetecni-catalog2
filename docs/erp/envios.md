@@ -113,3 +113,8 @@ La búsqueda utiliza sólo saldos de envíos `delivered` en `pending/partial`. N
 ## Estadísticas y rentabilidad mensual
 
 Pestaña **Estadísticas** (requiere `cash.read`; costos de equipos requieren además `profitability.view`): por transportadora, promedio de valor enviado, cobro de la transportadora (comisión + envío descontados del recaudo), promedio que llega y costo de transporte asumido; y una tabla **por mes** (según fecha de entrega en Bogotá) con ventas, lo que se queda la transportadora, lo que llega, costo de equipos, **utilidad bruta** (venta − costo del equipo: compra + mejoras), **utilidad neta** (bruta − descuentos de la transportadora) y su margen, más una fila de **total**. Los envíos cuya venta no tiene costo de compra registrado quedan fuera de bruta y neta y se marcan con «*». Usa hasta los 500 envíos entregados y las 200 ventas más recientes de Rentabilidad. El documento sigue siendo el comprobante interno.
+
+
+## Marcar una venta pendiente como pagada
+
+Migración `20261030020000` (`erp_sale_mark_paid`, permiso `cash.manage`: administrador y caja). En `Ventas → detalle` una venta **pendiente** muestra «Cobro pendiente» con medio de pago y referencia opcional; «Marcar como pagada» cambia el estado a pagado y registra **una** entrada de caja (`sale`) por el total, ligada a la venta (índice único: no se duplica). Repetir devuelve «ya estaba pagada». No aplica a ventas de un envío contraentrega activo: esas se cierran al registrar la consignación en Envíos → Recaudos, que guarda el valor real consignado y el costo de envío. Las ventas parciales no se pueden marcar con este botón.

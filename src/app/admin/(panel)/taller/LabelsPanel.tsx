@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { callAdminAction } from "@/lib/callAdminAction";
+import { getErpProfile } from "@/supabase/auth";
 import { createWorkshopLabelsPdf, listWorkshopLabelBatches, reprintUnitLabelsPdf, reprintWorkshopLabelsPdf, type LabelBatch, type LabelsPdfResult } from "@/app/admin/taller/actions";
 
 const field = "rounded border px-3 py-2";
@@ -17,6 +18,7 @@ export default function LabelsPanel({ enabled, hasLocations }: { enabled: boolea
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [pdf, setPdf] = useState<{ url: string; info: LabelsPdfResult }>();
   const [codes, setCodes] = useState(""); const [from, setFrom] = useState(""); const [to, setTo] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [batches, setBatches] = useState<LabelBatch[]>([]);
   const frame = useRef<HTMLIFrameElement>(null); const current = useRef<string | undefined>(undefined);
 
@@ -24,6 +26,7 @@ export default function LabelsPanel({ enabled, hasLocations }: { enabled: boolea
     const result = await callAdminAction(listWorkshopLabelBatches, {});
     if (result.ok) setBatches(result.data);
   }, []);
+  useEffect(() => { void getErpProfile().then(p => setIsAdmin(p?.role === "admin")); }, []);
   useEffect(() => { void refresh(); return () => { if (current.current) URL.revokeObjectURL(current.current); }; }, [refresh]);
 
   function show(info: LabelsPdfResult) {
@@ -48,7 +51,7 @@ export default function LabelsPanel({ enabled, hasLocations }: { enabled: boolea
     <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); void run(() => callAdminAction(createWorkshopLabelsPdf, { count, size })); }}>
       <label className="text-sm">¿Cuántos equipos llegaron?<input type="number" min={1} max={200} value={count} onChange={e => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))} className={`${field} block w-32`} /></label>
       <label className="text-sm">Tamaño de etiqueta<select value={size} onChange={e => setSize(e.target.value as typeof size)} className={`${field} block`}>{sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-      <button disabled={busy || !enabled} className={`${button} bg-slate-900 text-white`}>{busy ? "Generando…" : `Generar ${count} QR y ver PDF`}</button>
+      <button disabled={busy || !enabled || !isAdmin} className={`${button} bg-slate-900 text-white`}>{busy ? "Generando…" : `Generar ${count} QR y ver PDF`}</button>
     </form>
     <details className="rounded border bg-slate-50 p-3 text-sm"><summary className="cursor-pointer font-medium">Reimprimir etiquetas de equipos ya registrados</summary>
       <p className="mt-2 text-slate-600">Para una etiqueta rota, borrada o que no se lee. Se imprime el mismo STU de la unidad; no se reservan números nuevos.</p>
@@ -58,6 +61,7 @@ export default function LabelsPanel({ enabled, hasLocations }: { enabled: boolea
         <label>hasta<input inputMode="numeric" value={to} onChange={e => setTo(e.target.value.replace(/\D/g, ""))} placeholder="240" className={`${field} block w-24`} /></label>
         <button disabled={busy || !enabled || (!codes.trim() && !from && !to)} className={`${button} bg-slate-900 text-white`}>{busy ? "Generando…" : "Ver PDF para reimprimir"}</button>
       </form></details>
+    {!isAdmin && <p className="rounded bg-amber-50 p-3 text-sm text-amber-900">Solo el administrador puede generar números QR nuevos (también desde «Ingreso de remate»). Puede reimprimir etiquetas de equipos ya registrados.</p>}
     {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     {pdf && <div className="space-y-2">
       <p className="text-sm"><strong>{pdf.info.count} etiquetas</strong> · {pdf.info.first} a {pdf.info.last}. Revise la hoja y luego imprima. Corte por las líneas punteadas.</p>
