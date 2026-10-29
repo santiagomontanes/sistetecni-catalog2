@@ -96,6 +96,8 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     await expect(mobile).toHaveURL(new RegExp(`unit=${unitId}`), { timeout: 20000 });
     await expect(page.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
     await expect(mobile.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: /Fase 1/ }).click();
+    await mobile.getByRole("tab", { name: /Fase 1/ }).click();
     const png=await mobile.screenshot();
     await mobile.getByLabel(/Tomar foto o seleccionar archivo/).setInputFiles({name:"evidencia-sintetica.png",mimeType:"image/png",buffer:png});
     await expect(mobile.getByText("Foto guardada en almacenamiento privado.",{exact:true})).toBeVisible();
@@ -140,6 +142,7 @@ test("reutiliza STU recibido y registra atributos completos de cargador suelto",
  await page.getByLabel(/^Ubicación física/).selectOption(location.id);
  await page.getByRole("button",{name:"Registrar y asignar QR",exact:true}).click();
  await expect(page).toHaveURL(new RegExp(`unit=${existing[0].unit_id}`));
+ await page.getByRole("tab",{name:/Fase 2/}).click();
  await page.getByText("Configuración actual verificada (independiente de la recepción)",{exact:true}).click();
  await page.getByLabel("Interfaz de almacenamiento compatible SATA",{exact:true}).check();
  await page.getByLabel("Interfaz de almacenamiento compatible NVMe",{exact:true}).check();
@@ -148,6 +151,7 @@ test("reutiliza STU recibido y registra atributos completos de cargador suelto",
  await page.getByPlaceholder("Cómo se verificó / motivo",{exact:true}).fill("Atributos confirmados sintéticamente para verificar persistencia UI");
  await page.getByRole("button",{name:"Guardar configuración verificada",exact:true}).click();
  await expect(page.locator('p[role="alert"]')).toHaveCount(0);
+ await page.getByRole("tab",{name:/Fase 1/}).click();
  await page.getByText("Registrar repuesto suelto",{exact:true}).click();
  await page.getByLabel("Tipo repuesto").selectOption("charger");
  const connector="TEST-"+randomUUID().slice(0,8);await page.getByPlaceholder("Conector",{exact:true}).fill(connector);
@@ -171,6 +175,7 @@ test("recepción persistida: controles incompletos impiden disponibilidad y reti
   await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
   await expect(page.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
   page.on("dialog", dialog => dialog.accept());
+  await page.getByRole("tab", { name: /Fase 2/ }).click();
   await page.getByLabel("Fase de trabajo").selectOption("ready");
   await page.getByRole("button", { name: "Cambiar fase", exact: true }).click();
   await expect(page.locator('p[role="alert"]')).toContainText("Asocie primero el producto");

@@ -20,6 +20,7 @@ test('estética web, dos acabados, fotos reales, stock público y snapshot de ve
   const received=await command('receive',{qrCode:qr.labels[0].code,locationId:location.id,condition:'good',snapshot:{physical:'good',powersOn:'unchecked',video:'unchecked',screenType:'unknown',chargerReceived:'unchecked',components:[{kind:'ram',capacityGb:i?8:4,generation:'DDR4'}]}});
   units.push(received.unitId);
   await page.goto(`/admin/taller?unit=${received.unitId}`);
+  await page.getByRole('tab',{name:/Fase 3/}).click();
   const aesthetic=page.locator('section').filter({has:page.getByRole('heading',{name:'Estética y catálogo',exact:true})}).last();
   await aesthetic.getByLabel('Buscar producto en estética').fill(title);
   await aesthetic.getByRole('button',{name:'Buscar',exact:true}).click();
