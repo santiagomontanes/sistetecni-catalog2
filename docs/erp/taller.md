@@ -80,3 +80,7 @@ La lista general pagina 50 unidades. La ficha precarga hasta 200 componentes; el
 ## El celular como lector del computador
 
 Con el vínculo activo (código de 5 dígitos), todo lo que el **celular** lee con la cámara —o escribe en «Código QR» y pulsa «Abrir QR»— se envía al computador, que abre ese mismo QR (recepción de etiqueta libre o ficha de la unidad) sin tocar el computador. Solo el celular vinculado puede enviar lecturas; el computador no reenvía. Valor máximo 300 caracteres, sin caracteres de control. Migración `20261031020000_station_link_scan.sql` (columnas `last_scan`, `last_scan_seq`; acción `scan` de `erp_station_link`). Alcance actual: pantalla de Taller.
+
+## Inspección → Recepción
+
+En Inventario, una unidad en **Inspección** tiene la acción «Volver a recepción» (estado Recibido). Es la única transición nueva de la matriz (`20261101010000_inspection_back_to_received.sql`); queda registrada como ajuste en los movimientos de inventario.

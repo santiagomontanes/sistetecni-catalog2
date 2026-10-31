@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getSession, hasErpPanelAccess } from '@/supabase/auth';
+import { getSession, hasErpPanelAccess, sessionWasClosedElsewhere, signOutUser } from '@/supabase/auth';
 
 export default function ProtectedAdmin({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -11,6 +11,11 @@ export default function ProtectedAdmin({ children }: { children: React.ReactNode
     async function check() {
       const session = await getSession();
       if (!session) { router.replace('/admin/login'); return; }
+      if (await sessionWasClosedElsewhere().catch(() => false)) {
+        await signOutUser().catch(() => undefined);
+        window.location.href = '/admin/login?sesion=cerrada';
+        return;
+      }
       const ok = await hasErpPanelAccess();
       if (!ok) { router.replace('/'); return; }
       setLoading(false);

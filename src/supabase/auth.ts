@@ -7,9 +7,22 @@ type ProfileRow = { is_admin: boolean | null; erp_role?: string | null; active?:
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  // Una sola sesión por usuario: cierra las demás sesiones de esta persona. Si falla, no bloquea el ingreso.
+  try { await supabase.rpc("erp_claim_single_session"); } catch { /* sin la función (entorno sin migrar) se conserva el comportamiento anterior */ }
   return data;
 }
-export async function signOutUser() { const { error } = await supabase.auth.signOut(); if (error) throw error; }
+// scope local: cerrar sesión aquí no cierra el celular vinculado ni otros dispositivos de la misma persona.
+export async function signOutUser() { const { error } = await supabase.auth.signOut({ scope: "local" }); if (error) throw error; }
+/** true si el servidor ya no reconoce esta sesión (iniciada en otro lado). Un fallo de red NO cuenta. */
+export async function sessionWasClosedElsewhere(): Promise<boolean> {
+  const { data: current } = await supabase.auth.getSession();
+  if (!current.session) return false;
+  const { error } = await supabase.auth.getUser();
+  if (!error) return false;
+  const { status, code, message } = error as { status?: number; code?: string; message?: string };
+  // El servidor responde 400/401/403 "session not found / Auth session missing" cuando la sesión fue cerrada.
+  return (status === 400 || status === 401 || status === 403) && (code === "session_not_found" || code === "bad_jwt" || /session|jwt/i.test(message ?? ""));
+}
 export async function getSession() { const { data, error } = await supabase.auth.getSession(); if (error) return null; return data.session ?? null; }
 
 export async function isAdmin(): Promise<boolean> {

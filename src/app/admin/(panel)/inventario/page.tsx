@@ -34,7 +34,7 @@ const STATUS_STYLES: Record<ProductUnitStatus, string> = {
 
 const TARGETS: Record<ProductUnitStatus, readonly ProductUnitStatus[]> = {
   received: ["inspection", "available", "retired"],
-  inspection: ["available", "repair", "retired"],
+  inspection: ["received", "available", "repair", "retired"],
   available: ["reserved", "repair", "retired"],
   reserved: ["available", "repair", "retired"],
   sold: ["warranty", "returned"],
@@ -74,6 +74,7 @@ function actionLabel(from: ProductUnitStatus, to: ProductUnitStatus): string {
   if (from === "reserved" && to === "available") return "Liberar reserva";
   if ((from === "warranty" || from === "repair") && to === "sold") return "Devolver al cliente";
   const labels: Partial<Record<ProductUnitStatus, string>> = {
+    received: "Volver a recepción",
     inspection: "Enviar a inspección",
     available: "Marcar disponible",
     reserved: "Reservar",

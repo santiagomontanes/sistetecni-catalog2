@@ -52,7 +52,7 @@ interface OperationalMetaRow {
 
 const ALLOWED_TARGETS: Record<ProductUnitStatus, readonly ProductUnitStatus[]> = {
   received: ["inspection", "available", "retired"],
-  inspection: ["available", "repair", "retired"],
+  inspection: ["received", "available", "repair", "retired"],
   available: ["reserved", "repair", "retired"],
   reserved: ["available", "repair", "retired"],
   sold: ["warranty", "returned"],

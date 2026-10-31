@@ -13,10 +13,12 @@ export async function createOperator(role='admin'){
  const session=await client.auth.signInWithPassword({email,password:testPassword});if(session.error||!session.data.session)throw session.error??new Error('No session');
  return {id,email,password:testPassword,client,token:session.data.session.access_token};
 }
-export async function login(page:Page,operator:{email:string;password:string}){
+export async function login(page:Page,operator:{email:string;password:string;client?:SupabaseClient;token?:string}){
  await page.goto('/admin/login');
  await page.locator('input[type="email"]').fill(operator.email);await page.locator('input[type="password"]').fill(operator.password);
  await page.getByRole('button',{name:/ingresar|entrar|iniciar sesión/i}).click();
  await page.waitForURL(url=>url.pathname.startsWith('/admin')&&url.pathname!=='/admin/login');
+ // Una sola sesión por usuario: el ingreso por pantalla cierra la sesión creada por createOperator; se renueva para las llamadas directas.
+ if(operator.client){const again=await operator.client.auth.signInWithPassword({email:operator.email,password:operator.password});if(again.data.session)operator.token=again.data.session.access_token;}
 }
 export async function rpc(client:SupabaseClient,name:string,args:Record<string,unknown>){const r=await client.rpc(name,args);if(r.error)throw new Error(`${name}: ${r.error.message}`);return r.data;}

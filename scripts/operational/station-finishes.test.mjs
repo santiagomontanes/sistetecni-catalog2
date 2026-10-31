@@ -136,3 +136,11 @@ test('inventario valorizado excluye pieza instalada vendida, sin alterar costo h
  const persisted=await unit(id);assert.equal(persisted.installed_in_unit_id,parent);assert.equal(persisted.acquisition_cost_cop,'27000');
  const ledger=await pool.query('select amount_cop from cost_entries where id=$1',[persisted.component_cost_entry_id]);assert.equal(ledger.rows[0].amount_cop,'27000');
 });
+test('matriz de estados: inspección puede volver a recepción y nada más cambió',async()=>{
+ const ok=async(a,b)=>(await pool.query('select erp_unit_transition_allowed($1,$2) as v',[a,b])).rows[0].v;
+ assert.equal(await ok('inspection','received'),true);
+ assert.equal(await ok('received','inspection'),true);
+ assert.equal(await ok('available','received'),false);
+ assert.equal(await ok('sold','received'),false);
+ assert.equal(await ok('retired','received'),false);
+});

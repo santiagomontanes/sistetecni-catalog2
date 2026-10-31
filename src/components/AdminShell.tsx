@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { getErpProfile, signOutUser } from "@/supabase/auth";
+import { getErpProfile, sessionWasClosedElsewhere, signOutUser } from "@/supabase/auth";
 import ProtectedAdmin from "@/components/ProtectedAdmin";
 import {
   roleHasPermission,
@@ -63,6 +63,22 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       setRole(profile?.role ?? null);
       setName(profile?.displayName ?? null);
     });
+  }, []);
+
+  useEffect(() => {
+    // Si esta persona inició sesión en otro dispositivo, esta sesión deja de ser válida: volver al ingreso con aviso.
+    let stopped = false;
+    const check = async () => {
+      try {
+        if (stopped || !(await sessionWasClosedElsewhere())) return;
+        await signOutUser().catch(() => undefined);
+        window.location.href = "/admin/login?sesion=cerrada";
+      } catch { /* sin conexión: se reintenta */ }
+    };
+    const timer = window.setInterval(() => void check(), 30000);
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
   }, []);
 
   useEffect(() => {

@@ -30,7 +30,11 @@ export default function AdminLoginClient() {
   const [error, setError] = useState('');
   // Evita submit HTML nativo antes de hidratar en una carga inicial lenta.
   const [ready, setReady] = useState(false);
-  useEffect(() => { setReady(true); }, []);
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    setReady(true);
+    if (new URLSearchParams(window.location.search).get('sesion') === 'cerrada') setNotice('Tu sesión se cerró porque esta cuenta ingresó desde otro dispositivo. Ingresa de nuevo si fuiste tú.');
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -58,6 +62,7 @@ export default function AdminLoginClient() {
   return (
     <section className="mx-auto max-w-md space-y-4">
       <h1 className="text-3xl font-bold text-slate-900">Ingreso al ERP</h1>
+      {notice ? <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{notice}</p> : null}
       <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-6">
         <div>
           <label className="mb-1 block text-sm text-slate-700">Correo</label>

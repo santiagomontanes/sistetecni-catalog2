@@ -59,6 +59,7 @@ export const productStockModeSchema = z
   .strict();
 
 const operationalStatusSchema = z.enum([
+  "received",
   "inspection",
   "available",
   "reserved",
