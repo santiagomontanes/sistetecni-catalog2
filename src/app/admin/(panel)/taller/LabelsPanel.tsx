@@ -53,7 +53,7 @@ export default function LabelsPanel({ enabled, hasLocations }: { enabled: boolea
       <label className="text-sm">Tamaño de etiqueta<select value={size} onChange={e => setSize(e.target.value as typeof size)} className={`${field} block`}>{sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       <button disabled={busy || !enabled || !isAdmin} className={`${button} bg-slate-900 text-white`}>{busy ? "Generando…" : `Generar ${count} QR y ver PDF`}</button>
     </form>
-    <details className="rounded border bg-slate-50 p-3 text-sm"><summary className="cursor-pointer font-medium">Reimprimir etiquetas de equipos ya registrados</summary>
+    <details className="rounded border bg-slate-50 p-3 text-sm"><summary className="cursor-pointer font-medium">Reimprimir etiquetas (registradas o aún sin usar)</summary>
       <p className="mt-2 text-slate-600">Para una etiqueta rota, borrada o que no se lee. Se imprime el mismo STU de la unidad; no se reservan números nuevos.</p>
       <form className="mt-2 flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); void run(() => callAdminAction(reprintUnitLabelsPdf, { codes, from: from ? Number(from) : undefined, to: to ? Number(to) : undefined, size })); }}>
         <label>STU a reimprimir (varios, separados por espacio o coma)<textarea value={codes} onChange={e => setCodes(e.target.value)} rows={2} placeholder="STU-000225, 27, STU-000230" className={`${field} block w-72`} /></label>

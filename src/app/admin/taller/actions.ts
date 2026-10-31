@@ -88,7 +88,7 @@ export async function reprintWorkshopLabelsPdf(input: { accessToken: unknown; ba
     return { ok: true, data: await pdfForCodes(data.map(l => l.code as string), parsed.size, parsed.batchId) };
   } catch (error) { return failure(error); }
 }
-// Reimpresión de etiquetas de unidades ya registradas (etiqueta rota, borrada o ilegible). No reserva números nuevos.
+// Reimpresión de etiquetas ya generadas, estén o no asignadas a un equipo (etiqueta rota, borrada, ilegible o nunca impresa). Solo lee: no reserva números ni toca unidades.
 export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes: string; from?: number; to?: number; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
     const { client } = await requireErpPermission(input.accessToken, "inventory.read");
@@ -110,8 +110,11 @@ export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes:
     const { data, error } = await client.from("product_units").select("unit_code").in("unit_code", [...wanted]);
     if (error) throw new Error(error.message);
     const found = new Set((data ?? []).map(u => u.unit_code as string));
+    const { data: labels, error: labelsError } = await client.from("workshop_qr_labels").select("code").in("code", [...wanted]).neq("state", "void");
+    if (labelsError) throw new Error(labelsError.message);
+    for (const l of labels ?? []) found.add(l.code as string);
     const missing = [...wanted].filter(c => !found.has(c));
-    if (missing.length) return { ok: false, error: "labels_unit_not_found", message: `No existe ninguna unidad registrada con: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}. Las etiquetas nuevas se generan arriba.` };
+    if (missing.length) return { ok: false, error: "labels_unit_not_found", message: `No existe ninguna etiqueta ni unidad vigente con: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}. Las etiquetas nuevas se generan arriba.` };
     return { ok: true, data: await pdfForCodes([...found], parsed.size, "reimpresion") };
   } catch (error) { return failure(error); }
 }
