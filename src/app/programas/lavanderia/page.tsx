@@ -52,7 +52,7 @@ const DEMO_URL = whatsappLink(programas.find((p) => p.slug === "lavanderia")!.me
 //   facebook:  "https://www.facebook.com/reel/XXXXXXXXXXXXXXX"
 // Se incrusta con el mismo embed oficial de la sección «Lo último en nuestras redes» de la portada.
 const VIDEO_LAVANDERIA = {
-  instagram: "",
+  instagram: "https://www.instagram.com/reel/DfQbN1WxJhN/",
   facebook: "",
 };
 
