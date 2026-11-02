@@ -83,3 +83,21 @@ body {
     font-size: 0.875rem;
   }
 }
+
+
+/* ── Despacho Azul: detalles del navegador con la paleta de marca ── */
+html { scrollbar-color: #1A56DB #EEF2FB; scrollbar-width: thin; }
+body { overflow-x: clip; }
+::selection { background: #FFD400; color: #0B1020; }
+:focus-visible { outline: 3px solid #FFD400; outline-offset: 3px; border-radius: 4px; }
+.on-paper :focus-visible, .on-white :focus-visible { outline-color: #1A56DB; }
+
+/* Sección a todo el ancho dentro del contenedor del layout */
+.bleed { width: 100vw; margin-left: calc(50% - 50vw); }
+
+/* Código y precios: numerales de ancho fijo */
+.tnum { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe-only { animation: none !important; transition: none !important; }
+}

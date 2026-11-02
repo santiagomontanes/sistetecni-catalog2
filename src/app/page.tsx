@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Benefits from "@/components/Benefits";
-import Hero from "@/components/Hero";
-import ProductCard from "@/components/ProductCard";
+import HomeHero from "@/components/home/HomeHero";
+import TapeMarquee from "@/components/home/TapeMarquee";
+import TrackingSteps from "@/components/home/TrackingSteps";
+import CatalogRows, { CatalogRowSkeleton } from "@/components/home/CatalogRows";
+import SocialVideos from "@/components/home/SocialVideos";
+import { ArrowRight } from "lucide-react";
 import Testimonials from "@/components/Testimonials";
-import Stats from "@/components/Stats";
 import CommercialGallery from "@/components/CommercialGallery";
 import BigCTA from "@/components/BigCTA";
-import FadeIn from "@/components/FadeIn";
 import SoftwarePreview from "@/components/SoftwarePreview";
 
 import { getBusinessProfile, getProducts, getTestimonials, getGalleryImages } from "@/supabase/db";
@@ -17,20 +18,6 @@ import type { BusinessProfile } from "@/types/business";
 import type { Product } from "@/types/product";
 import type { Testimonial } from "@/types/testimonial";
 import type { GalleryImage } from "@/types/gallery";
-
-function SkeletonCard() {
-  return (
-    <div className="animate-pulse overflow-hidden rounded-2xl border border-border bg-white">
-      <div className="aspect-square bg-surface" />
-      <div className="space-y-3 p-4">
-        <div className="h-3 w-2/5 rounded-md bg-border" />
-        <div className="h-4 w-4/5 rounded-md bg-border" />
-        <div className="h-3 w-3/5 rounded-md bg-border" />
-        <div className="h-6 w-2/5 rounded-md bg-border" />
-      </div>
-    </div>
-  );
-}
 
 export default function HomePage() {
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
@@ -68,91 +55,79 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="space-y-16">
-      <FadeIn>
-        <Hero
-          companyName={profile?.companyName ?? "Sistetecni"}
-          description={
-            profile?.description ??
-            "Tecnología corporativa y software para impulsar tu negocio, con equipos reacondicionados, garantía real y soporte postventa."
-          }
-          heroVideoUrl={profile?.heroVideoUrl}
-          heroMediaType={profile?.heroMediaType}
-        />
-      </FadeIn>
+    <div>
+      <HomeHero
+        companyName={profile?.companyName ?? "Sistetecni"}
+        description={
+          profile?.description ??
+          "Tecnología corporativa y software para impulsar tu negocio, con equipos reacondicionados, garantía real y soporte postventa."
+        }
+        heroVideoUrl={profile?.heroVideoUrl}
+        heroMediaType={profile?.heroMediaType}
+      />
 
-      <FadeIn delay={0.06}>
-        <Benefits />
-      </FadeIn>
+      <TapeMarquee />
 
-      {/* Featured products */}
-      <FadeIn delay={0.1}>
-        <section>
-          <div className="mb-6 flex items-end justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-text">Productos destacados</h2>
-              <p className="mt-1 text-sm text-muted">
-                Los equipos más buscados esta semana
-              </p>
-            </div>
-            <Link
-              href="/catalog"
-              className="hidden text-sm font-semibold text-primary transition hover:underline md:block"
-            >
-              Ver todos →
-            </Link>
+      <TrackingSteps />
+
+      {/* Productos destacados */}
+      <section className="on-white py-20">
+        <div className="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="font-display text-4xl font-extrabold uppercase leading-none text-ink md:text-5xl">
+              Productos destacados
+            </h2>
+            <p className="mt-3 font-body text-lg text-ink/70">Los equipos más buscados esta semana</p>
           </div>
+          <Link
+            href="/catalog"
+            className="hidden shrink-0 items-center gap-2 font-display text-xl font-bold uppercase tracking-wide text-primary underline-offset-4 transition hover:underline md:inline-flex"
+          >
+            Ver todos <ArrowRight className="h-5 w-5" aria-hidden="true" />
+          </Link>
+        </div>
 
-          {error && (
-            <p className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {error}
-            </p>
-          )}
+        {error && (
+          <p role="alert" className="mb-4 rounded-md border-2 border-red-600 bg-red-50 px-4 py-3 font-body text-base text-red-700">
+            {error}
+          </p>
+        )}
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {loading
-              ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
-              : featuredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-          </div>
+        {loading ? (
+          <ul className="overflow-hidden rounded-xl border-2 border-ink bg-white">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <CatalogRowSkeleton key={i} />
+            ))}
+          </ul>
+        ) : (
+          featuredProducts.length > 0 && <CatalogRows products={featuredProducts} />
+        )}
 
-          {!loading && featuredProducts.length === 0 && !error && (
-            <p className="mt-4 rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-              No hay productos destacados aún.
-            </p>
-          )}
+        {!loading && featuredProducts.length === 0 && !error && (
+          <p className="rounded-md border-2 border-dashed border-ink/30 p-6 text-center font-body text-base text-ink/70">
+            No hay productos destacados aún.
+          </p>
+        )}
 
-          <div className="mt-6 text-center md:hidden">
-            <Link
-              href="/catalog"
-              className="inline-block rounded-full border border-primary px-6 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white"
-            >
-              Ver todos los equipos →
-            </Link>
-          </div>
-        </section>
-      </FadeIn>
+        <div className="mt-8">
+          <Link
+            href="/catalog"
+            className="inline-flex h-14 items-center justify-center rounded-xl bg-primary px-9 font-display text-xl font-bold uppercase tracking-wide text-white transition duration-200 hover:bg-ink motion-reduce:transition-none max-md:w-full"
+          >
+            Ver todos los equipos
+          </Link>
+        </div>
+      </section>
 
-      <FadeIn delay={0.14}>
-        <Stats />
-      </FadeIn>
+      <SocialVideos socialLinks={profile?.socialLinks} />
 
-      <FadeIn delay={0.18}>
-        <SoftwarePreview />
-      </FadeIn>
+      <SoftwarePreview />
 
-      <FadeIn delay={0.22}>
-        <CommercialGallery images={galleryImages} />
-      </FadeIn>
+      <CommercialGallery images={galleryImages} />
 
-      <FadeIn delay={0.26}>
-        <Testimonials testimonials={testimonials} />
-      </FadeIn>
+      <Testimonials testimonials={testimonials} />
 
-      <FadeIn delay={0.3}>
-        <BigCTA />
-      </FadeIn>
+      <BigCTA />
     </div>
   );
 }

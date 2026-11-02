@@ -21,45 +21,32 @@ export default function CommercialGallery({ images }: CommercialGalleryProps) {
       : STATIC_IMAGES;
 
   return (
-    <section className="mt-16">
-      <div className="flex items-end justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-text">
-            Equipos reales, calidad real
-          </h2>
-          <p className="mt-2 text-sm text-muted">
-            Fotografías de inventario y procesos reales de Sistetecni.
-          </p>
-        </div>
-      </div>
+    <section className="on-white py-20">
+      <h2 className="font-display text-4xl font-extrabold uppercase leading-none text-ink md:text-5xl">
+        Equipos reales, calidad real
+      </h2>
+      <p className="mt-3 max-w-xl font-body text-lg text-ink/70">
+        Fotografías de inventario y procesos reales de Sistetecni.
+      </p>
 
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 md:grid-cols-3">
+      <div className="mt-10 grid auto-rows-[200px] gap-3 sm:grid-cols-2 md:auto-rows-[230px] md:grid-cols-3">
         {items.map((img, idx) => (
-          <div
+          <figure
             key={img.src + idx}
-            className="group relative overflow-hidden rounded-2xl border border-border bg-surface"
+            className={`group relative overflow-hidden rounded-lg bg-paper ${idx === 0 ? "sm:col-span-2 md:row-span-2" : ""}`}
           >
-            <div className="relative h-60">
-              <Image
-                src={img.src}
-                alt={img.alt}
-                fill
-                // Las imágenes de esta sección están MUY por debajo del fold
-                // (después de hero, benefits, productos, stats, software).
-                // `loading="lazy"` ya es el default de Next/Image sin priority,
-                // lo dejamos explícito para que quede claro al lector.
-                loading="lazy"
-                sizes="(max-width: 768px) 100vw, 33vw"
-                className="object-cover transition duration-500 group-hover:scale-110"
-              />
-
-              <div className="absolute inset-0 bg-gradient-to-t from-text/80 via-text/20 to-transparent opacity-70 transition group-hover:opacity-90" />
-            </div>
-
-            <div className="absolute bottom-0 p-4">
-              <p className="text-sm text-white">{img.alt}</p>
-            </div>
-          </div>
+            <Image
+              src={img.src}
+              alt={img.alt}
+              fill
+              loading="lazy"
+              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
+              className="object-cover transition duration-500 group-hover:scale-105 motion-reduce:transition-none"
+            />
+            <figcaption className="absolute bottom-3 left-3 max-w-[85%] rounded bg-white px-2.5 py-1 font-data text-[11px] font-medium uppercase leading-snug tracking-wide text-ink">
+              {img.alt}
+            </figcaption>
+          </figure>
         ))}
       </div>
     </section>

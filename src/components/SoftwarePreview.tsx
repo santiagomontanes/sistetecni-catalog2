@@ -3,69 +3,60 @@
 import Image from "next/image";
 import Link from "next/link";
 
+const features = ["Gestión de ventas", "Control de inventario", "Administración de caja", "Facturación e impresión"];
+
 export default function SoftwarePreview() {
   return (
-    <section className="w-full bg-slate-950 py-16 px-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="grid items-center gap-10 lg:grid-cols-2">
+    <section className="bleed on-paper bg-paper py-20">
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
-            <span className="inline-block rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-1 text-sm text-cyan-300">
-              Software Empresarial
-            </span>
-
-            <h2 className="mt-4 text-3xl font-bold text-white md:text-4xl">
+            <h2 className="font-display text-4xl font-extrabold uppercase leading-[0.95] text-ink md:text-5xl">
               Sistetecni también desarrolla software para negocios
             </h2>
 
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-300 md:text-lg">
-              Además de equipos corporativos reacondicionados, desarrollamos soluciones
-              tecnológicas para operación comercial. Nuestro software destacado es
-              <span className="font-semibold text-white"> Sistetecni POS</span>, diseñado
-              para ventas, control e inventario.
+            <p className="mt-5 max-w-xl font-body text-lg leading-relaxed text-ink/75">
+              Además de equipos corporativos reacondicionados, desarrollamos soluciones tecnológicas para
+              operación comercial. Nuestro software destacado es{" "}
+              <span className="font-semibold text-ink">Sistetecni POS</span>, diseñado para ventas, control e
+              inventario.
             </p>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-slate-200">
-                Gestión de ventas
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-slate-200">
-                Control de inventario
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-slate-200">
-                Administración de caja
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-slate-200">
-                Facturación e impresión
-              </div>
-            </div>
+            <ul className="mt-7 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+              {features.map((f) => (
+                <li key={f} className="flex items-center gap-3 border-b border-ink/15 pb-3 font-display text-xl font-bold uppercase text-ink">
+                  <span className="h-2 w-2 shrink-0 rotate-45 bg-primary" aria-hidden="true" />
+                  {f}
+                </li>
+              ))}
+            </ul>
 
-            <div className="mt-8 flex flex-wrap gap-4">
+            <div className="mt-9 flex flex-wrap gap-3">
               <Link
                 href="/software"
-                className="rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
+                className="inline-flex h-13 items-center rounded-xl bg-primary px-7 py-3.5 font-display text-lg font-bold uppercase tracking-wide text-white transition duration-200 hover:bg-ink motion-reduce:transition-none"
               >
                 Ver software
               </Link>
-
               <a
                 href="https://www.mediafire.com/file/0fov546fc7jm6cw/SistetecniPOS-Setup-1.0.3.exe/file"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-xl border border-white/15 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+                className="inline-flex items-center rounded-xl border-2 border-ink px-7 py-3 font-display text-lg font-bold uppercase tracking-wide text-ink transition duration-200 hover:bg-ink hover:text-white motion-reduce:transition-none"
               >
                 Descargar
               </a>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl">
+          <div className="overflow-hidden rounded-xl border-2 border-ink bg-white shadow-[0_24px_40px_-24px_rgba(11,16,32,0.5)]">
             <Image
               src="/pos.png"
               alt="Sistetecni POS"
               width={1400}
               height={900}
+              sizes="(max-width: 1024px) 100vw, 50vw"
               className="h-auto w-full object-cover"
-              priority
             />
           </div>
         </div>

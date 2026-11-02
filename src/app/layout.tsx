@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Barlow, Barlow_Condensed, Chivo_Mono } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import EnvironmentBanner from "@/components/EnvironmentBanner";
+
+const fontDisplay = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-display", display: "swap" });
+const fontBody = Barlow({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body", display: "swap" });
+const fontData = Chivo_Mono({ subsets: ["latin"], weight: ["500", "700"], variable: "--font-data", display: "swap" });
 
 const siteUrl = "https://sistetecni.com";
 
@@ -72,7 +77,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es">
+    <html lang="es" className={`${fontDisplay.variable} ${fontBody.variable} ${fontData.variable}`}>
       <body className="min-h-screen bg-bg text-text antialiased">
         <EnvironmentBanner />
         <div className="flex min-h-screen flex-col">
