@@ -26,7 +26,7 @@ const count = z.number().int().min(0).max(200);
 const input = z.object({
   supplier: z.string().trim().max(160).default(""), purchasedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   machines: count, memories: count, disks: count, totalPriceCop: z.string().regex(/^\d{1,12}$/), notes: z.string().trim().max(1000).default(""),
-  size: z.enum(["small", "medium", "large"]), requestKey: z.string().uuid(),
+  size: z.enum(["small", "medium", "large", "ram"]), requestKey: z.string().uuid(),
 }).refine(v => v.machines + v.memories + v.disks >= 1, { message: "Indique al menos una pieza", path: ["machines"] });
 
 // Registra el remate y reserva un STU por cada computador, memoria o disco comprado. Solo administrador.
@@ -64,7 +64,7 @@ export async function listAuctionLots(args: { accessToken: unknown }): Promise<A
 export async function reprintAuctionLot(args: { accessToken: unknown; lotId: string; size: string }): Promise<AuctionResult<{ pdfBase64: string; lotNumber: string; count: number }>> {
   try {
     const { client } = await requireErpPermission(args.accessToken, "users.manage");
-    const v = z.object({ lotId: z.string().uuid(), size: z.enum(["small", "medium", "large"]) }).parse(args);
+    const v = z.object({ lotId: z.string().uuid(), size: z.enum(["small", "medium", "large", "ram"]) }).parse(args);
     const lot = await client.from("auction_lots").select("lot_number,qr_batch_id").eq("id", v.lotId).single();
     if (lot.error || !lot.data) return { ok: false, error: "NOT_FOUND", message: "No encontré ese remate." };
     const labels = await client.from("workshop_qr_labels").select("code").eq("batch_id", lot.data.qr_batch_id).order("code").limit(200);

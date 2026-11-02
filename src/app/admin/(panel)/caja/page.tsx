@@ -165,9 +165,33 @@ export default function CajaPage() {
     }
   };
 
+  // Ingreso o egreso manual: formulario visible, sin ventanas emergentes.
+  const addManual = async (form: HTMLFormElement) => {
+    const fd = new FormData(form);
+    const type = String(fd.get("type")), method = String(fd.get("method"));
+    const amount = Number(String(fd.get("amount") ?? "").replace(/[^\d]/g, ""));
+    const description = String(fd.get("description") ?? "").trim();
+    if (!["manual_in", "manual_out"].includes(type) || !METHODS.includes(method as PaymentMethod)) return;
+    if (!Number.isInteger(amount) || amount <= 0) { setError("Escribe un valor mayor a cero."); return; }
+    if (!description) { setError("Escribe a qué corresponde el movimiento."); return; }
+    setBusy("movement");
+    setError("");
+    try {
+      const result = await withCashTimeout(callAdminAction(addCashMovement, { movementType: type, paymentMethod: method, amountCop: amount, description }));
+      if (!result.ok) { setError(result.error === "VALIDATION_ERROR" ? result.issues.join(" ") : "No se pudo registrar movimiento."); return; }
+      setMessage(type === "manual_in" ? `Ingreso de ${formatCOP(amount)} registrado.` : `Egreso de ${formatCOP(amount)} registrado.`);
+      form.reset();
+      await load();
+    } catch {
+      setNeedsRefresh(true);
+      setError("El movimiento no respondió en 20 segundos. Pulsa Actualizar antes de repetirlo.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const add = async () => {
-    const type = prompt("Tipo: manual_in | manual_out | purchase_payment", "manual_out")?.trim();
-    if (!type || !["manual_in", "manual_out", "purchase_payment"].includes(type)) return;
+    const type = "purchase_payment";
 
     const method = prompt(`Método: ${METHODS.join(" | ")}`, "efectivo")?.trim();
     if (!method || !METHODS.includes(method as PaymentMethod)) return;
@@ -270,13 +294,25 @@ export default function CajaPage() {
             </button>
           )}
           <button onClick={() => void add()} disabled={mutationDisabled} className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
-            + Movimiento
+            Pago de compra
           </button>
           <button onClick={() => void load()} disabled={refreshDisabled} className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
             {busy === "load" ? "Actualizando..." : "Actualizar"}
           </button>
         </div>
       </div>
+
+      <form onSubmit={(e) => { e.preventDefault(); void addManual(e.currentTarget); }} className="grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2 lg:grid-cols-[auto_9rem_9rem_1fr_auto] lg:items-end">
+        <fieldset className="flex gap-3 text-sm font-semibold">
+          <legend className="mb-1 text-xs font-semibold uppercase text-muted">Movimiento manual</legend>
+          <label className="flex items-center gap-1"><input type="radio" name="type" value="manual_in" /> Ingreso</label>
+          <label className="flex items-center gap-1"><input type="radio" name="type" value="manual_out" defaultChecked /> Egreso</label>
+        </fieldset>
+        <label className="text-sm">Valor (COP)<input name="amount" inputMode="numeric" required placeholder="50000" className="mt-1 w-full rounded-lg border border-border p-2" /></label>
+        <label className="text-sm">Método<select name="method" defaultValue="efectivo" className="mt-1 w-full rounded-lg border border-border p-2">{METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+        <label className="text-sm">Concepto (qué es)<input name="description" required maxLength={200} placeholder="Ej. Almuerzo del taller, pago de domicilio, aporte del dueño" className="mt-1 w-full rounded-lg border border-border p-2" /></label>
+        <button disabled={mutationDisabled} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{busy === "movement" ? "Guardando..." : "Registrar"}</button>
+      </form>
 
       {message ? <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{message}</p> : null}
       {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}

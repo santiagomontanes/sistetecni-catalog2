@@ -5,7 +5,11 @@ test("QR admite texto o URL sin extraer datos sensibles", () => {
   assert.equal(parseQr("STU-000123"), "STU-000123");
   assert.equal(parseQr("https://erp.invalid/admin/taller?qr=STU-000123"), "STU-000123");
   assert.equal(parseQr("javascript:alert(1)"), null);
-  assert.equal(parseQr("STU-123"), null);
+  assert.equal(parseQr("83"), "STU-000083");
+  assert.equal(parseQr("stu 93"), "STU-000093");
+  assert.equal(parseQr("STU-123"), "STU-000123");
+  assert.equal(parseQr("STU-"), null);
+  assert.equal(parseQr("abc"), null);
 });
 test("recepción admite desconocidos; disco M.2 no implica NVMe", () => {
   const value = receiptSchema.parse({ physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "storage", formFactor: "M.2" }, { kind: "ram", capacityGb: null }] });

@@ -57,7 +57,7 @@ export async function commandWorkshop(input: { accessToken: unknown; action: str
     return { ok: true, data: data as Record<string, unknown> };
   } catch (error) { return failure(error); }
 }
-const labelSize = z.enum(["small", "medium", "large"]);
+const labelSize = z.enum(["small", "medium", "large", "ram"]);
 export interface LabelBatch { batchId: string; createdAt: string; total: number; free: number; assigned: number; void: number; first: string; last: string }
 export interface LabelsPdfResult { pdfBase64: string; batchId: string; count: number; first: string; last: string }
 async function pdfForCodes(codes: string[], size: z.infer<typeof labelSize>, batchId: string): Promise<LabelsPdfResult> {

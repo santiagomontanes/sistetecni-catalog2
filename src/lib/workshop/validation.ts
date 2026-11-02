@@ -49,5 +49,8 @@ export function validateWorkshopCommand(action: string, payload: unknown) {
 export function parseQr(value: string): string | null {
   const trimmed = value.trim();
   if (/^STU-\d{6,}$/i.test(trimmed)) return trimmed.toUpperCase();
+  // Solo el número (83, 000083) o «STU 83»: se completa a STU-000083.
+  const short = /^(?:stu[-\s]?)?(\d{1,12})$/i.exec(trimmed);
+  if (short) return `STU-${short[1].padStart(6, "0")}`;
   try { const url = new URL(trimmed); const qr = url.searchParams.get("qr"); return qr && /^STU-\d{6,}$/i.test(qr) ? qr.toUpperCase() : null; } catch { return null; }
 }

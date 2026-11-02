@@ -6,7 +6,7 @@ import { createWorkshopLabelsPdf, listWorkshopLabelBatches, reprintUnitLabelsPdf
 
 const field = "rounded border px-3 py-2";
 const button = "rounded border px-3 py-2 disabled:opacity-50";
-const sizes = [["small", "Pequeña · QR 3 cm (más etiquetas por hoja)"], ["medium", "Mediana · QR 4 cm"], ["large", "Grande · QR 5 cm (fácil de leer)"]] as const;
+const sizes = [["small", "Pequeña · QR 3 cm (más etiquetas por hoja)"], ["medium", "Mediana · QR 4 cm"], ["large", "Grande · QR 5 cm (fácil de leer)"], ["ram", "Memoria RAM · 1 cm de alto, hoja carta"]] as const;
 
 function toUrl(base64: string) {
   const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));

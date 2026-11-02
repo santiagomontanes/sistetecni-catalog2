@@ -43,3 +43,10 @@ test("ubicaciones: ruta legible, reutiliza la ubicación y crea la sub-posición
   assert.equal((deep.steps[0] as { parentId?: string }).parentId, "a1");
   assert.equal(deep.label, "Mueble A › Estante 1 › Caja 3");
 });
+test("etiqueta de RAM: hoja carta, 1 cm de alto y muchas por hoja", async () => {
+  const codes = Array.from({ length: 120 }, (_, i) => `STU-${String(83 + i).padStart(6, "0")}`);
+  const doc = await PDFDocument.load(await buildLabelsPdf(codes, "ram", "RAM"));
+  const { width, height } = doc.getPage(0).getSize();
+  assert.ok(Math.abs(width - 21.59 * 28.3465) < 1 && Math.abs(height - 27.94 * 28.3465) < 1, "hoja carta");
+  assert.equal(doc.getPageCount(), 1, "120 etiquetas de 1 cm caben en una carta");
+});
