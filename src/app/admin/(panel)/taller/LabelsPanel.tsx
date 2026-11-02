@@ -13,8 +13,9 @@ function toUrl(base64: string) {
   return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
 }
 
-export default function LabelsPanel({ enabled, hasLocations }: { enabled: boolean; hasLocations: boolean }) {
+export default function LabelsPanel({ enabled, hasLocations, presetSize }: { enabled: boolean; hasLocations: boolean; presetSize?: { size: (typeof sizes)[number][0]; n: number } }) {
   const [count, setCount] = useState(10); const [size, setSize] = useState<(typeof sizes)[number][0]>("medium");
+  useEffect(() => { if (presetSize) setSize(presetSize.size); }, [presetSize]);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [pdf, setPdf] = useState<{ url: string; info: LabelsPdfResult }>();
   const [codes, setCodes] = useState(""); const [from, setFrom] = useState(""); const [to, setTo] = useState("");
@@ -44,7 +45,7 @@ export default function LabelsPanel({ enabled, hasLocations }: { enabled: boolea
     finally { setBusy(false); }
   }
   const fileName = pdf ? `etiquetas-${pdf.info.first}-a-${pdf.info.last}.pdf` : "etiquetas.pdf";
-  return <section className="space-y-4 rounded border bg-white p-4">
+  return <section id="etiquetas-qr" className="space-y-4 rounded border bg-white p-4">
     <div><h2 className="text-lg font-semibold">1. Etiquetas QR</h2>
       <p className="text-sm text-slate-600">Cada etiqueta es un código STU único: el mismo que tendrá el equipo en todo el sistema. Al generar se <strong>reservan</strong> esos números y se abre el PDF para revisar e imprimir. Si lo pierde, lo recupera en «Lotes anteriores».</p></div>
     {!hasLocations && <p className="rounded bg-amber-50 p-3 text-sm text-amber-900">Aún no hay ubicaciones. Puede imprimir etiquetas, pero para recibir equipos primero cree al menos una ubicación (paso 2).</p>}

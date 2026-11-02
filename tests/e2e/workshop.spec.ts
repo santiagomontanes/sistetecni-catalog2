@@ -286,3 +286,23 @@ test("Reimprimir etiquetas de unidades ya registradas: PDF con el mismo STU y re
   await page.getByRole("button", { name: "Ver PDF para reimprimir" }).click();
   await expect(page.locator("p").filter({ hasText: new RegExp(`1 etiquetas · ${free}`) }).first()).toBeVisible();
 });
+
+test("Repuesto suelto: usa una etiqueta ya impresa, la deja asignada y enlaza a crear etiquetas RAM", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `RS-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Repuesto con etiqueta E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const label = batch.labels[0].code as string;
+  await login(page);
+  await page.getByText("Registrar repuesto suelto", { exact: true }).click();
+  await page.getByRole("button", { name: "Crear etiquetas QR para memorias RAM" }).click();
+  await expect(page.getByLabel("Tamaño de etiqueta")).toHaveValue("ram");
+  await page.getByLabel("Etiqueta QR del repuesto").fill(label.replace("STU-", "").replace(/^0+/, ""));
+  await page.getByLabel("Tipo repuesto").selectOption("ram");
+  await page.getByLabel("Ubicación repuesto").selectOption(location.id);
+  await page.getByRole("button", { name: "Registrar repuesto", exact: true }).click();
+  await expect.poll(async () => {
+    const r = await command("qr_void", { code: label, reason: "no debe poder anularse: ya está asignada" }).then(() => "voided", () => "assigned");
+    return r;
+  }, { timeout: 20000 }).toBe("assigned");
+  await expect(page.getByText("Etiqueta no válida")).toHaveCount(0);
+});
