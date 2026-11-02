@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import type { Product } from "@/types/product";
+import { programaMessageFor } from "@/lib/programas";
 
 interface WhatsAppButtonProps {
   phone?: string;
@@ -29,7 +30,12 @@ export default function WhatsAppButton({
 
   const phoneValue = (phone ?? "573115996339").replace(/\D/g, "");
 
-  const message = product
+  // En /programas/* el botón flotante lleva el mensaje del programa de esa página.
+  const programMessage = fixed && !product ? programaMessageFor(pathname) : null;
+
+  const message = programMessage
+    ? programMessage
+    : product
     ? `Hola 👋
 
 Estoy interesado en este equipo:

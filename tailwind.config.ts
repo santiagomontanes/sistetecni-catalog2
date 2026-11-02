@@ -28,10 +28,12 @@ const config: Config = {
         data: ["var(--font-data)", "ui-monospace", "monospace"],
       },
       keyframes: {
+        "fade-up": { from: { opacity: "0", transform: "translateY(6px)" }, to: { opacity: "1", transform: "translateY(0)" } },
         marquee: { from: { transform: "translateX(0)" }, to: { transform: "translateX(-50%)" } },
         scan: { "0%": { transform: "translateY(-10%)", opacity: "0" }, "10%": { opacity: "1" }, "90%": { opacity: "1" }, "100%": { transform: "translateY(110%)", opacity: "0" } },
       },
       animation: {
+        "fade-up": "fade-up 220ms cubic-bezier(0.23,1,0.32,1) both",
         marquee: "marquee 38s linear infinite",
         scan: "scan 3.6s cubic-bezier(0.4,0,0.2,1) 1.4s infinite",
       },

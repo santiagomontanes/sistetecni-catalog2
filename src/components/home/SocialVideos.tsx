@@ -5,10 +5,10 @@ import { Facebook, Instagram, Play } from "lucide-react";
 import { socialFeed } from "@/config/social-feed";
 import type { SocialLinks } from "@/types/business";
 
-type Net = "instagram" | "facebook";
+export type Net = "instagram" | "facebook";
 
 // Convierte el enlace de un post al URL del embed oficial de cada red.
-function embedUrl(net: Net, url: string): string | null {
+export function embedUrl(net: Net, url: string): string | null {
   const clean = url.trim();
   if (!clean) return null;
   if (net === "instagram") {
