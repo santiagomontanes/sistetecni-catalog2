@@ -29,7 +29,7 @@ export default function ProductGallery({
     <div className="space-y-3">
       {/* Imagen principal con lupa */}
       <div
-        className="group relative overflow-hidden rounded-2xl border border-border bg-surface"
+        className="group relative overflow-hidden rounded-xl border-2 border-ink bg-paper"
         onMouseEnter={() => setIsZoom(true)}
         onMouseLeave={() => setIsZoom(false)}
         onMouseMove={onMove}
@@ -40,7 +40,7 @@ export default function ProductGallery({
           loading="eager"
           decoding="async"
           fetchPriority="high"
-          className="h-[420px] w-full object-cover transition-transform duration-200"
+          className="h-[320px] w-full object-cover sm:h-[420px] transition-transform duration-200"
         />
 
         {/* Capa lupa */}
@@ -57,22 +57,22 @@ export default function ProductGallery({
         />
 
         {/* Hint */}
-        <div className="absolute bottom-3 left-3 rounded-full border border-white/20 bg-text/60 px-3 py-1 text-xs text-white backdrop-blur">
+        <div className="absolute bottom-3 left-3 rounded bg-ink px-3 py-1 font-data text-[11px] uppercase tracking-wider text-white">
           Pasa el mouse para zoom
         </div>
       </div>
 
       {/* Miniaturas */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 overflow-x-auto">
         {safeImages.slice(0, 6).map((src, idx) => (
           <button
             key={`${src}-${idx}`}
             type="button"
             onClick={() => setActive(idx)}
-            className={`overflow-hidden rounded-xl border transition ${
+            className={`shrink-0 overflow-hidden rounded-lg border-2 transition ${
               idx === active
-                ? "border-primary ring-2 ring-primary/20"
-                : "border-border hover:border-primary/40"
+                ? "border-primary"
+                : "border-ink/20 hover:border-ink"
             }`}
           >
             <img

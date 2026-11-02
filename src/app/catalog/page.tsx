@@ -12,7 +12,7 @@ const PAGE_SIZE = 12;
 
 function SkeletonCard() {
   return (
-    <div className="animate-pulse overflow-hidden rounded-2xl border border-border bg-white">
+    <div className="animate-pulse overflow-hidden rounded-xl border-2 border-ink/15 bg-white">
       <div className="aspect-square bg-surface" />
       <div className="space-y-3 p-4">
         <div className="h-3 w-2/5 rounded-md bg-border" />
@@ -80,26 +80,28 @@ export default function CatalogPage() {
   return (
     <section className="space-y-6">
       <FadeIn>
-        <div className="border-b border-border pb-6">
-          <h1 className="text-3xl font-bold text-text">Catálogo</h1>
-          <p className="mt-1 text-sm text-muted">
+        <div className="bleed -mt-8 bg-primary text-white">
+          <div className="mx-auto max-w-6xl px-4 py-8 md:py-10">
+          <h1 className="font-display text-5xl font-bold uppercase leading-none md:text-6xl">Catálogo</h1>
+          <p className="tnum mt-3 font-data text-sm text-white/85">
             {loading
               ? "Cargando equipos…"
               : `Mostrando ${products.length} de ${total} equipo${total !== 1 ? "s" : ""}`}
           </p>
+          </div>
         </div>
       </FadeIn>
 
       <FadeIn delay={0.03}>
         <Link
           href="/personalizar"
-          className="flex items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4 transition hover:border-primary/40"
+          className="flex items-center justify-between gap-4 rounded-xl border-2 border-dashed border-ink/40 bg-white px-5 py-4 transition-colors hover:border-primary motion-reduce:transition-none"
         >
           <div>
-            <p className="text-sm font-semibold text-text">¿No sabes cuál elegir?</p>
-            <p className="text-xs text-muted">Personaliza tu portátil y te ayudamos a encontrar el ideal.</p>
+            <p className="font-display text-xl font-bold uppercase text-ink">¿No sabes cuál elegir?</p>
+            <p className="text-sm text-muted">Personaliza tu portátil y te ayudamos a encontrar el ideal.</p>
           </div>
-          <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white">
+          <span className="shrink-0 rounded bg-tape px-4 py-2 font-display text-sm font-bold uppercase tracking-wide text-ink">
             Empezar
           </span>
         </Link>
@@ -119,7 +121,7 @@ export default function CatalogPage() {
 
       <FadeIn delay={0.12}>
         {error ? (
-          <div className="rounded-2xl border border-red-100 bg-red-50 px-6 py-4 text-sm text-red-600">
+          <div className="rounded-xl border-2 border-red-300 bg-red-50 px-6 py-4 text-sm text-red-700">
             {error}
           </div>
         ) : null}
@@ -133,9 +135,8 @@ export default function CatalogPage() {
         ) : null}
 
         {!loading && !error && products.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-surface p-12 text-center">
-            <p className="text-4xl">📦</p>
-            <p className="mt-3 font-semibold text-text">
+          <div className="rounded-xl border-2 border-dashed border-ink/30 bg-paper p-12 text-center">
+            <p className="font-display text-3xl font-bold uppercase text-ink">
               No hay productos con esos filtros
             </p>
             <p className="mt-1 text-sm text-muted">
@@ -163,7 +164,7 @@ export default function CatalogPage() {
                   type="button"
                   onClick={() => void loadMore()}
                   disabled={loadingMore}
-                  className="rounded-full border border-primary px-6 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white disabled:opacity-60"
+                  className="rounded border-2 border-primary px-6 py-2.5 font-display text-base font-bold uppercase tracking-wide text-primary transition hover:bg-primary hover:text-white disabled:opacity-60"
                 >
                   {loadingMore ? "Cargando..." : `Ver más (${total - products.length} restantes)`}
                 </button>

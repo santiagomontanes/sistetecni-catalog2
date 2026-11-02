@@ -10,7 +10,7 @@ const items = [
 export default function IncludesSection() {
   return (
     <section className="mt-12">
-      <h2 className="text-xl font-semibold text-text">Incluye</h2>
+      <h2 className="font-display text-3xl font-bold uppercase text-ink">Incluye</h2>
       <p className="mt-2 text-sm text-muted">
         Beneficios y respaldo de Sistetecni.
       </p>
@@ -21,13 +21,13 @@ export default function IncludesSection() {
           return (
             <div
               key={it.title}
-              className="rounded-2xl border border-border bg-surface p-5"
+              className="rounded-xl border-2 border-ink bg-white p-5"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                  <Icon className="h-5 w-5 text-primary" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+                  <Icon className="h-5 w-5 text-white" />
                 </div>
-                <div className="font-semibold text-text">{it.title}</div>
+                <div className="font-display text-lg font-bold uppercase leading-tight text-ink">{it.title}</div>
               </div>
               <p className="mt-3 text-sm text-muted">{it.desc}</p>
             </div>

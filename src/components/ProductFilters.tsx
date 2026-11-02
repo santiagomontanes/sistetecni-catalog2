@@ -26,7 +26,7 @@ export default function ProductFilters({
   onClear,
 }: ProductFiltersProps) {
   const inputClass =
-    "rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-text placeholder:text-muted outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
+    "rounded-lg border-2 border-ink/20 bg-white px-4 py-2.5 font-data text-sm text-ink placeholder:text-muted outline-none transition focus:border-primary";
 
   return (
     <div className="space-y-4">
@@ -47,10 +47,10 @@ export default function ProductFilters({
                 // Pasamos `next` directamente — evita el stale closure
                 onApply(next);
               }}
-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition ${
+              className={`shrink-0 rounded border-2 px-4 py-2 font-display text-base font-bold uppercase tracking-wide transition ${
                 isActive
-                  ? "border-primary bg-primary text-white"
-                  : "border-border bg-white text-muted hover:border-primary hover:text-primary"
+                  ? "border-ink bg-ink text-white"
+                  : "border-ink/20 bg-white text-ink hover:border-primary hover:text-primary"
               }`}
             >
               {brand}
@@ -106,14 +106,14 @@ export default function ProductFilters({
 
         <button
           onClick={() => onApply(filters)}
-          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary/90"
+          className="rounded-lg bg-primary px-5 py-2.5 font-display text-base font-bold uppercase tracking-wide text-white transition hover:bg-ink"
         >
           Aplicar
         </button>
 
         <button
           onClick={onClear}
-          className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium text-muted transition hover:border-primary hover:text-primary"
+          className="rounded-lg border-2 border-ink/20 px-5 py-2.5 font-display text-base font-bold uppercase tracking-wide text-ink transition hover:border-primary hover:text-primary"
         >
           Limpiar
         </button>

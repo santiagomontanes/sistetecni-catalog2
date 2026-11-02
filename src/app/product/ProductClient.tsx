@@ -68,8 +68,8 @@ export default function ProductClient() {
           <div className="h-7 w-1/4 rounded-md bg-border" />
         </div>
         <div className="grid gap-8 lg:grid-cols-2">
-          <div className="aspect-square rounded-2xl bg-surface" />
-          <div className="rounded-2xl border border-border bg-surface p-6">
+          <div className="aspect-square rounded-xl bg-paper" />
+          <div className="rounded-xl border-2 border-ink/15 bg-paper p-6">
             <div className="h-5 w-1/3 rounded-md bg-border" />
             <div className="mt-4 space-y-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -88,11 +88,11 @@ export default function ProductClient() {
     <section className="space-y-10">
       <FadeIn>
         <header className="space-y-2">
-          <p className="text-sm uppercase tracking-widest text-muted">
+          <p className="font-data text-xs font-medium uppercase tracking-wider text-muted">
             {product.brand} {product.model}
           </p>
-          <h1 className="text-3xl font-bold text-text md:text-4xl">{product.title}</h1>
-          <p className="text-2xl font-bold text-primary">{formatCOP(product.price)}</p>
+          <h1 className="font-display text-4xl font-bold uppercase leading-none text-ink md:text-6xl">{product.title}</h1>
+          <p className="tnum font-data text-3xl font-bold text-primary">{formatCOP(product.price)}</p>
         </header>
       </FadeIn>
 
@@ -100,8 +100,8 @@ export default function ProductClient() {
         <div className="grid gap-8 lg:grid-cols-2">
           <ProductGallery images={images} title={product.title} />
 
-          <div className="rounded-2xl border border-border bg-surface p-6">
-            <h2 className="text-lg font-semibold text-text">Especificaciones</h2>
+          <div className="rounded-xl border-2 border-ink bg-white p-6">
+            <h2 className="font-display text-2xl font-bold uppercase text-ink">Especificaciones</h2>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Spec label="Condición" value={product.condition} />
@@ -133,7 +133,7 @@ export default function ProductClient() {
                 dangerouslySetInnerHTML, así que el contenido se escapa. */}
             {product.description ? (
               <div className="mt-6 border-t border-border pt-5">
-                <h3 className="text-sm font-semibold text-text">Sobre este equipo</h3>
+                <h3 className="font-display text-lg font-bold uppercase text-ink">Sobre este equipo</h3>
                 <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted">
                   {product.description}
                 </p>
@@ -145,13 +145,13 @@ export default function ProductClient() {
 
               <a
                 href="/catalog"
-                className="rounded-xl border border-border bg-surface px-6 py-3 text-sm font-medium text-muted transition hover:border-primary hover:text-primary"
+                className="rounded-lg border-2 border-ink/20 px-6 py-3 font-display text-base font-bold uppercase tracking-wide text-ink transition hover:border-primary hover:text-primary"
               >
                 Volver al catálogo
               </a>
             </div>
 
-            <p className="mt-4 text-xs text-muted">
+            <p className="mt-4 inline-block rounded bg-tape px-3 py-1.5 font-data text-xs font-bold uppercase tracking-wide text-ink">
               Garantía 8 meses • Soporte post-venta • Envíos nacionales
             </p>
           </div>
@@ -167,9 +167,9 @@ export default function ProductClient() {
 
 function Spec({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-surface px-4 py-3">
-      <span className="text-sm font-medium text-muted">{label}</span>
-      <span className="text-sm text-text">{value}</span>
+    <div className="flex items-center justify-between gap-4 rounded-lg bg-paper px-4 py-3">
+      <span className="font-data text-xs font-medium uppercase tracking-wider text-muted">{label}</span>
+      <span className="tnum text-right font-data text-sm font-medium text-ink">{value}</span>
     </div>
   );
 }

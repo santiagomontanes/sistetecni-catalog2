@@ -20,9 +20,9 @@ function formatCOP(value: number) {
 
 function getConditionBadge(condition: string) {
   const c = condition?.toLowerCase() ?? "";
-  if (c.includes("reacondicionado")) return { label: "Reacondicionado", cls: "bg-primary text-white" };
+  if (c.includes("reacondicionado")) return { label: "Reacondicionado", cls: "bg-ink text-white" };
   if (c.includes("nuevo")) return { label: "Nuevo", cls: "bg-success text-white" };
-  if (c.includes("buen")) return { label: "Buen estado", cls: "bg-blue-500 text-white" };
+  if (c.includes("buen")) return { label: "Buen estado", cls: "bg-primary text-white" };
   return null;
 }
 
@@ -35,7 +35,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
   return (
     <Link
       href={`/product?id=${product.id}`}
-      className="group block overflow-hidden rounded-2xl border border-border bg-white transition duration-300 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/10"
+      className="group block overflow-hidden rounded-xl border-2 border-ink bg-white transition-colors duration-200 hover:border-primary motion-reduce:transition-none"
     >
       {/* Square image */}
       <div className="relative aspect-square overflow-hidden bg-surface">
@@ -45,13 +45,13 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "low"}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105 motion-reduce:transition-none"
         />
 
         {/* Condition badge */}
         {badge && (
           <span
-            className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold ${badge.cls}`}
+            className={`absolute left-3 top-3 rounded px-2 py-1 font-data text-[10px] font-bold uppercase tracking-wider ${badge.cls}`}
           >
             {badge.label}
           </span>
@@ -59,8 +59,8 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
 
         {/* Out of stock overlay */}
         {!inStock && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-            <span className="rounded-full bg-text px-4 py-1.5 text-xs font-semibold text-white">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+            <span className="rounded bg-tape px-4 py-1.5 font-display text-sm font-bold uppercase tracking-wide text-ink">
               Agotado
             </span>
           </div>
@@ -68,12 +68,12 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
       </div>
 
       {/* Product info */}
-      <div className="space-y-2 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+      <div className="space-y-2 border-t-2 border-ink p-4 group-hover:border-primary">
+        <p className="font-data text-[11px] font-medium uppercase tracking-wider text-muted">
           {product.brand} · {product.model}
         </p>
 
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-text">
+        <h3 className="line-clamp-2 font-display text-xl font-bold uppercase leading-tight text-ink">
           {product.title}
         </h3>
 
@@ -81,12 +81,12 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         {!product.finishesEnabled && (product.ram || product.storage) && (
           <div className="flex flex-wrap gap-1.5">
             {product.ram ? (
-              <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+              <span className="rounded bg-paper px-2 py-0.5 font-data text-[11px] font-medium text-ink">
                 {product.ram} GB RAM
               </span>
             ) : null}
             {product.storage ? (
-              <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+              <span className="rounded bg-paper px-2 py-0.5 font-data text-[11px] font-medium text-ink">
                 {product.storage}
               </span>
             ) : null}
@@ -110,11 +110,11 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
         ) : null}
 
         {/* Price */}
-        <p className="text-xl font-bold text-primary">{product.finishesEnabled ? "Ver acabados y precios" : formatCOP(price)}</p>
+        <p className={`tnum text-primary ${product.finishesEnabled ? "font-display text-xl font-bold uppercase" : "font-data text-lg font-bold"}`}>{product.finishesEnabled ? "Ver acabados y precios" : formatCOP(price)}</p>
 
         {/* Hover CTA */}
         <div className="pt-1">
-          <span className="block w-full rounded-full border border-primary py-2 text-center text-xs font-semibold text-primary transition group-hover:bg-primary group-hover:text-white">
+          <span className="block w-full rounded border-2 border-primary py-2 text-center font-display text-sm font-bold uppercase tracking-wide text-primary transition group-hover:bg-primary group-hover:text-white motion-reduce:transition-none">
             Ver producto
           </span>
         </div>
