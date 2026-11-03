@@ -16,9 +16,6 @@ const ITEM_COLS="id,product_id,product_unit_id,product_name_snapshot,unit_code_s
 const mapList=(r:PurchaseRow):AdminPurchaseListItemDTO=>({id:r.id,purchaseNumber:r.purchase_number,supplierId:r.supplier_id,supplierName:r.supplier_name_snapshot,supplierInvoiceReference:r.supplier_invoice_reference,purchaseDate:r.purchase_date,status:r.status,itemCount:Number(r.item_count),merchandiseSubtotalCop:Number(r.merchandise_subtotal_cop),sharedCostsCop:Number(r.shared_costs_cop),totalCostCop:Number(r.total_cost_cop),createdAt:r.created_at});
 const mapItem=(r:PurchaseItemRow):AdminPurchaseItemDTO=>({id:r.id,productId:r.product_id,productUnitId:r.product_unit_id,productName:r.product_name_snapshot,unitCode:r.unit_code_snapshot,serialNumber:r.serial_number_snapshot,baseCostCop:Number(r.base_cost_cop),allocatedExtraCostCop:Number(r.allocated_extra_cost_cop),landedCostCop:Number(r.landed_cost_cop),sortOrder:Number(r.sort_order),notes:r.notes});
 
-export interface ReceivePurchaseUnitInput { productId:string; serialNumber?:string; baseCostCop:number; batteryHealthPercent?:number; storageHealthPercent?:number; specOverrides?:Record<string,unknown>; notes?:string; }
-export interface ReceivePurchaseInput { supplierId:string; supplierInvoiceReference?:string; purchaseDate:string; sharedCostsCop:number; notes?:string; units:ReceivePurchaseUnitInput[]; }
-
 export function createPurchasesRepository(client:SupabaseClient){
   return {
     async list(query="",limit=100):Promise<AdminPurchaseListItemDTO[]> {
@@ -34,16 +31,6 @@ export function createPurchasesRepository(client:SupabaseClient){
       const {data:items,error:itemError}=await client.from("purchase_items").select(ITEM_COLS).eq("purchase_id",id).order("sort_order",{ascending:true}).returns<PurchaseItemRow[]>();
       if(itemError) throw new RepositoryError("PurchasesRepository.findById items falló",itemError);
       return {...mapList(data),supplierDocument:data.supplier_document_snapshot,supplierPhone:data.supplier_phone_snapshot,notes:data.notes,items:(items??[]).map(mapItem)};
-    },
-    async receive(input:ReceivePurchaseInput):Promise<AdminPurchaseDetailDTO> {
-      const {data,error}=await client.rpc("erp_receive_purchase_batch",{
-        p_supplier_id:input.supplierId,p_supplier_invoice_reference:input.supplierInvoiceReference??null,p_purchase_date:input.purchaseDate,
-        p_shared_costs_cop:input.sharedCostsCop,p_notes:input.notes??null,p_units:input.units.map(u=>({productId:u.productId,serialNumber:u.serialNumber??null,baseCostCop:u.baseCostCop,batteryHealthPercent:u.batteryHealthPercent??null,storageHealthPercent:u.storageHealthPercent??null,specOverrides:u.specOverrides??{},notes:u.notes??null})),
-      });
-      if(error||typeof data!=="string") throw new RepositoryError("PurchasesRepository.receive: RPC erp_receive_purchase_batch falló",error);
-      const created=await this.findById(data);
-      if(!created) throw new RepositoryError("PurchasesRepository.receive: compra no pudo releerse");
-      return created;
     },
   };
 }

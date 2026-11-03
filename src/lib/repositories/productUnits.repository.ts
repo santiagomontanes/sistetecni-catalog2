@@ -6,18 +6,7 @@ import type {
 } from "../../types/erp";
 import { RepositoryError } from "./errors";
 
-export interface ReceiveProductUnitInput {
-  productId: string;
-  serialNumber?: string | null;
-  acquisitionCostCop?: number | null;
-  batteryHealthPercent?: number | null;
-  storageHealthPercent?: number | null;
-  specOverrides?: Record<string, unknown>;
-  notes?: string | null;
-}
-
 export interface ProductUnitsRepository {
-  receive(input: ReceiveProductUnitInput): Promise<ProductUnit>;
   create(input: CreateProductUnitInput): Promise<ProductUnit>;
   findById(id: string): Promise<ProductUnit | null>;
   findBySerial(serialNumber: string): Promise<ProductUnit | null>;
@@ -54,11 +43,6 @@ interface ProductUnitRow {
   updated_at: string | null;
 }
 
-interface ReceiveRpcRow {
-  unit_id: string;
-  unit_code: string;
-}
-
 function cleanOptional(value: string | null | undefined): string | null {
   if (value == null) return null;
   const trimmed = value.trim();
@@ -88,26 +72,6 @@ function mapRow(row: ProductUnitRow): ProductUnit {
 
 export function createProductUnitsRepository(client: SupabaseClient): ProductUnitsRepository {
   return {
-    async receive(input) {
-      const { data, error } = await client.rpc("erp_receive_product_unit", {
-        p_product_id: input.productId,
-        p_serial_number: cleanOptional(input.serialNumber),
-        p_acquisition_cost_cop: input.acquisitionCostCop ?? null,
-        p_battery_health_percent: input.batteryHealthPercent ?? null,
-        p_storage_health_percent: input.storageHealthPercent ?? null,
-        p_spec_overrides: input.specOverrides ?? {},
-        p_notes: cleanOptional(input.notes),
-      });
-      const rows = (data ?? []) as ReceiveRpcRow[];
-      const unitId = rows[0]?.unit_id;
-      if (error || !unitId) {
-        throw new RepositoryError("ProductUnitsRepository.receive: RPC erp_receive_product_unit falló", error);
-      }
-      const created = await this.findById(unitId);
-      if (!created) throw new RepositoryError("ProductUnitsRepository.receive: unidad creada no pudo releerse");
-      return created;
-    },
-
     async create(input) {
       const unitCode = input.unitCode.trim();
       if (!unitCode) throw new RepositoryError("ProductUnitsRepository.create: unitCode vacío");

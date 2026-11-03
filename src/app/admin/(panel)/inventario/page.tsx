@@ -284,7 +284,7 @@ export default function AdminInventarioPage() {
             Fase 1E controla reservas, inspección, reparación, garantía, devolución y retiro. El estado Vendido solo nace de una venta real o del retorno al cliente después de garantía/reparación.
           </p>
         </div>
-        <Link href="/admin/inventario/recibir" className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90">+ Recibir computador</Link>
+        <Link href="/admin/taller" className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90">Recibir en Taller</Link>
       </div>
 
       {message ? <p className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">{message}</p> : null}

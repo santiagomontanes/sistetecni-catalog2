@@ -10,13 +10,11 @@ import { RepositoryError } from "@/lib/repositories/errors";
 import {
   inventoryListSchema,
   issuesFromZod,
-  productSearchSchema,
   productStockModeSchema,
-  receiveProductUnitAdminSchema,
   transitionProductUnitSchema,
   unitIdSchema,
 } from "@/lib/erpAdmin/validation";
-import type { AdminInventoryUnitDTO, AdminProductOptionDTO } from "@/lib/erpAdmin/types";
+import type { AdminInventoryUnitDTO } from "@/lib/erpAdmin/types";
 import type { ProductUnit, ProductUnitStatus } from "@/types/erp";
 import type { Product } from "@/types/product";
 
@@ -128,21 +126,6 @@ async function loadOperationalMetaOne(client: SupabaseClient, unitId: string): P
   return all.get(unitId) ?? null;
 }
 
-function productOption(product: Product, meta?: StockMeta): AdminProductOptionDTO {
-  return {
-    id: product.id,
-    title: product.title,
-    brand: product.brand,
-    model: product.model,
-    cpu: product.cpu,
-    ram: product.ram,
-    storage: product.storage,
-    stock: meta?.stock ?? product.stock,
-    visibleWeb: product.visibleWeb,
-    erpStockEnabled: meta?.enabled ?? false,
-  };
-}
-
 function unitDTO(
   unit: ProductUnit,
   product: Product | undefined,
@@ -209,52 +192,6 @@ export async function listInventory(payload: { accessToken: unknown; limit?: unk
         )),
       },
     };
-  });
-}
-
-export async function searchInventoryProducts(payload: { accessToken: unknown; query: unknown }): Promise<AdminResult<{ items: AdminProductOptionDTO[] }>> {
-  return withAdmin("searchInventoryProducts", payload.accessToken, async (client) => {
-    const parsed = productSearchSchema.safeParse({ query: payload.query });
-    if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
-    const products = await createProductsRepository(client).search(parsed.data.query, 15);
-    const stockMeta = await loadStockMetaMany(client, products.map((p) => p.id));
-    return { ok: true, data: { items: products.map((product) => productOption(product, stockMeta.get(product.id))) } };
-  });
-}
-
-export async function receiveProductUnit(payload: { accessToken: unknown; [key: string]: unknown }): Promise<AdminResult<AdminInventoryUnitDTO>> {
-  const { accessToken, ...input } = payload;
-  return withAdmin("receiveProductUnit", accessToken, async (client) => {
-    const parsed = receiveProductUnitAdminSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", issues: issuesFromZod(parsed.error) };
-
-    const productsRepo = createProductsRepository(client);
-    const product = await productsRepo.findById(parsed.data.productId);
-    if (!product) return { ok: false, error: "NOT_FOUND" };
-
-    const unitsRepo = createProductUnitsRepository(client);
-    if (parsed.data.serialNumber) {
-      const existing = await unitsRepo.findBySerial(parsed.data.serialNumber);
-      if (existing) return { ok: false, error: "VALIDATION_ERROR", issues: ["Ya existe una unidad con ese número de serial."] };
-    }
-
-    const specOverrides: Record<string, unknown> = {};
-    if (parsed.data.ramGb !== undefined) specOverrides.ramGb = parsed.data.ramGb;
-    if (parsed.data.storageGb !== undefined) specOverrides.storageGb = parsed.data.storageGb;
-    if (parsed.data.storageType !== undefined) specOverrides.storageType = parsed.data.storageType;
-    if (parsed.data.conditionNotes !== undefined) specOverrides.conditionNotes = parsed.data.conditionNotes;
-
-    const created = await unitsRepo.receive({
-      productId: parsed.data.productId,
-      serialNumber: parsed.data.serialNumber,
-      acquisitionCostCop: parsed.data.acquisitionCostCop,
-      batteryHealthPercent: parsed.data.batteryHealthPercent,
-      storageHealthPercent: parsed.data.storageHealthPercent,
-      specOverrides,
-      notes: parsed.data.notes,
-    });
-    const meta = await loadStockMetaOne(client, created.productId);
-    return { ok: true, data: unitDTO(created, product, meta ?? undefined) };
   });
 }
 

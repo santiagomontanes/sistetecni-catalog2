@@ -73,7 +73,6 @@ function createFakeProductsRepo(products: Product[]): { repo: ProductsRepository
 function createFakeUnitsRepo(units: ProductUnit[]): ProductUnitsRepository {
   const byId = new Map(units.map((unit) => [unit.id, unit]));
   return {
-    async receive() { throw new Error("not used"); },
     async create() { throw new Error("not used"); },
     async findById(id) { return byId.get(id) ?? null; },
     async findBySerial(serial) { return [...byId.values()].find((u) => u.serialNumber === serial) ?? null; },

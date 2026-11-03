@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 const optionalText = (max: number) => z.string().trim().max(max).optional().transform((v) => (v ? v : undefined));
-const optionalInteger = (min: number, max: number) => z.number().int().min(min).max(max).optional();
 
 export const createSupplierSchema = z.object({
   name: z.string().trim().min(2, "El nombre del proveedor es obligatorio.").max(160),
@@ -14,38 +13,6 @@ export const createSupplierSchema = z.object({
   city: optionalText(120),
   notes: optionalText(2000),
 }).strict();
-
-const purchaseUnitSchema = z.object({
-  productId: z.string().uuid("Producto inválido."),
-  serialNumber: optionalText(120),
-  baseCostCop: z.number().int().min(0).max(1_000_000_000),
-  batteryHealthPercent: optionalInteger(0, 100),
-  storageHealthPercent: optionalInteger(0, 100),
-  ramGb: optionalInteger(1, 1024),
-  storageGb: optionalInteger(1, 1_000_000),
-  storageType: optionalText(40),
-  conditionNotes: optionalText(1000),
-  notes: optionalText(2000),
-}).strict();
-
-export const receivePurchaseBatchSchema = z.object({
-  supplierId: z.string().uuid("Proveedor inválido."),
-  supplierInvoiceReference: optionalText(120),
-  purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de compra inválida."),
-  sharedCostsCop: z.number().int().min(0).max(1_000_000_000).default(0),
-  notes: optionalText(2000),
-  units: z.array(purchaseUnitSchema).min(1, "Agrega al menos un computador.").max(100),
-}).strict().superRefine((value, ctx) => {
-  const serials = new Set<string>();
-  value.units.forEach((unit, index) => {
-    if (!unit.serialNumber) return;
-    const key = unit.serialNumber.trim().toLowerCase();
-    if (serials.has(key)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["units", index, "serialNumber"], message: "El mismo serial está repetido dentro del lote." });
-    }
-    serials.add(key);
-  });
-});
 
 export const purchaseIdSchema = z.string().uuid("Compra inválida.");
 export const purchaseListSchema = z.object({
