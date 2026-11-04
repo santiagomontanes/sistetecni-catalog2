@@ -95,6 +95,10 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     await receipt.getByLabel("Capacidad GB", { exact: true }).fill("1");
     await receipt.getByLabel("Generación RAM", { exact: true }).selectOption("DDR3");
     await receipt.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
+    await expect(receipt.getByRole("alert")).toContainText("costo de adquisición");
+    await expect(page).not.toHaveURL(/unit=/);
+    await receipt.getByLabel(/^Costo de adquisición/).fill("150000");
+    await receipt.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
     await expect(page).toHaveURL(/\/admin\/taller\?unit=[a-f0-9-]+$/, { timeout: 30000 });
     const unitId = new URL(page.url()).searchParams.get("unit");
     await expect(mobile).toHaveURL(new RegExp(`unit=${unitId}`), { timeout: 20000 });

@@ -28,7 +28,7 @@ const schemas = {
   configure: z.object({ enabled: z.boolean() }), qr_batch: z.object({ count: z.number().int().min(1).max(200) }),
   qr_void: z.object({ code: z.string().regex(/^STU-\d{6,}$/), reason }),
   location: z.union([z.object({ code: z.string().trim().regex(/^[A-Z0-9_-]{1,32}$/), name: z.string().trim().min(1).max(120), parentId: uuid.optional() }), z.object({ id: uuid, active: z.boolean() })]),
-  receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/), existingUnitId: z.union([uuid,z.string().regex(/^STU-\d{6,}$/)]).optional(), productId: uuid.optional(), locationId: uuid, costCop: money, condition: z.enum(["good", "fair", "bad"]), snapshot: receiptSchema }),
+  receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/), existingUnitId: z.union([uuid,z.string().regex(/^STU-\d{6,}$/)]).optional(), productId: uuid.optional(), locationId: uuid, costCop: money, condition: z.enum(["good", "fair", "bad"]), snapshot: receiptSchema }).refine(v => v.existingUnitId !== undefined || v.costCop !== undefined, { path: ["costCop"], message: "El costo de adquisición es obligatorio (use 0 si fue donación)" }),
   component_receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/).optional(), kind: z.enum(["ram", "storage", "charger"]), locationId: uuid, costCop: money, componentCondition: z.enum(["untested", "functional", "defective"]), snapshot: componentSchema }),
   move: z.object({ ...unitVersion, locationId: uuid, reason }),
   phase: z.object({ ...unitVersion, phase: z.enum(["reception", "diagnosis", "technical", "aesthetic", "final_check", "ready", "warehouse"]), reason: reason.optional() }),

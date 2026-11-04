@@ -23,3 +23,10 @@ test("rechaza costo decimal, prueba sin instalación y omisión sin motivo", () 
   assert.throws(() => validateWorkshopCommand("check", { ...unit, code: "battery", result: "not_applicable" }));
   assert.throws(() => validateWorkshopCommand("component_move", { ...unit, componentId: unit.unitId, componentVersion: 1, direction: "remove", reason: "Ampliación" }));
 });
+
+test("la recepción exige costo de adquisición salvo al enlazar una unidad existente", () => {
+  const base = { qrCode: "STU-000001", locationId: "00000000-0000-4000-8000-000000000001", condition: "good", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } };
+  assert.throws(() => validateWorkshopCommand("receive", base));
+  assert.ok(validateWorkshopCommand("receive", { ...base, costCop: "0" }));
+  assert.ok(validateWorkshopCommand("receive", { ...base, existingUnitId: "STU-000002" }));
+});

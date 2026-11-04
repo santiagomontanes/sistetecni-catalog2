@@ -11,16 +11,19 @@ function Step({ n, title, hint }: { n: number; title: string; hint?: string }) {
 interface Part { kind: "ram" | "storage" | "charger"; capacityGb?: number | null; generation?: "DDR2" | "DDR3" | "DDR3L" | "DDR4" | "DDR5"; formFactor?: string; technology?: "HDD" | "SSD"; interface?: "SATA" | "NVMe" | "IDE" | "SAS" | "unknown"; connector?: string; voltage?: number | null; current?: number | null; watts?: number | null }
 export default function ReceptionForm({ qr, locations, disabled, onReceive }: { qr: string; locations: WorkshopLocation[]; disabled: boolean; onReceive: (payload: Record<string, unknown>) => Promise<void> }) {
   const [parts, setParts] = useState<Part[]>([]);
+  const [costError, setCostError] = useState('');
   const update = (i: number, changes: Partial<Part>) => setParts(v => v.map((p, j) => j === i ? { ...p, ...changes } : p));
   return <form onSubmit={e => {
     e.preventDefault(); const form = new FormData(e.currentTarget); const val = (k: string) => String(form.get(k) ?? "").trim();
+    if (!val("existing") && !/^\d{1,15}$/.test(val("cost"))) { setCostError("Ingrese el costo de adquisición en pesos enteros (0 si fue donación)."); return; }
+    setCostError("");
     void onReceive({ qrCode: qr, locationId: val("location"), condition: val("condition"), ...(val("cost") ? { costCop: val("cost") } : {}), ...(val("existing") ? { existingUnitId: val("existing") } : {}),
       snapshot: { brand: val("brand"), model: val("model"), serial: val("serial"), source: val("source"), physical: val("physical"), screenInches: val("inches") ? Number(val("inches")) : null, screenType: val("screenType"), screenNotes: val("screenNotes"), powersOn: val("powers"), video: val("video"), apparentBattery: val("battery"), chargerReceived: val("charger"), components: parts, notes: val("notes") } });
   }} className="space-y-4 rounded-xl border border-border bg-white p-5 shadow-sm">
     <div><h2 className="text-lg font-semibold">Recepción · {qr}</h2><p className="text-sm text-slate-600">Registre lo observado en 4 pasos. Deje vacío lo desconocido. La evidencia original se conserva aunque luego cambie la configuración.</p></div>
     <fieldset disabled={disabled} className="space-y-4">
       <section className={sectionClass}><Step n={1} title="¿Qué equipo es?" hint="Identificación y procedencia." /><div className="grid gap-3 sm:grid-cols-2">
-      {[['brand','Marca'],['model','Modelo'],['serial','Serial (opcional)'],['source','Procedencia / lote'],['cost','Costo de adquisición COP (recomendado: sin costo no hay utilidad)'],['existing','STU de unidad ya recibida en Compras (opcional)']].map(([name, label]) => <label key={name} className="text-sm font-medium">{label}<input className={inputClass} name={name} inputMode={name === 'cost' ? 'numeric' : undefined} /></label>)}
+      {[['brand','Marca'],['model','Modelo'],['serial','Serial (opcional)'],['source','Procedencia / lote'],['cost','Costo de adquisición COP (obligatorio; 0 si fue donación)'],['existing','STU de unidad ya recibida en Compras (opcional)']].map(([name, label]) => <label key={name} className="text-sm font-medium">{label}<input className={inputClass} name={name} inputMode={name === 'cost' ? 'numeric' : undefined} /></label>)}
       </div></section>
       <section className={sectionClass}><Step n={2} title="¿En qué estado llegó?" hint="Estado físico, pantalla y funcionamiento." /><div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-medium">Estado físico<select name="physical" className={inputClass} defaultValue="unknown"><option value="unknown">Sin comprobar</option><option value="perfect">Perfecto</option><option value="good">Bueno</option><option value="bad">Malo</option></select></label>
@@ -45,6 +48,7 @@ export default function ReceptionForm({ qr, locations, disabled, onReceive }: { 
       <section className={sectionClass}><Step n={4} title="¿Dónde queda y algo más?" hint="Ubicación física y observaciones." /><div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-medium">Ubicación física<select name="location" required className={inputClass}><option value="">Seleccione</option>{locationChoices(locations).map(l => <option key={l.id} value={l.id}>{l.path}</option>)}</select></label>
       <label className="text-sm font-medium sm:col-span-2">Observaciones<textarea name="notes" maxLength={4000} rows={2} className={inputClass} /></label></div></section>
+      {costError && <p role="alert" className="text-sm font-medium text-red-700">{costError}</p>}
       <p className="text-sm text-slate-600">Si enlaza una unidad de Compras se conservan su costo y su STU. Tras guardar podrá adjuntar fotos privadas a la ficha.</p>
       <button className="w-full rounded-lg bg-primary px-4 py-3 text-base font-semibold text-white shadow hover:opacity-90 disabled:opacity-50 sm:w-auto" type="submit">Registrar y asignar QR</button>
     </fieldset>
