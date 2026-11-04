@@ -24,6 +24,8 @@ const messages: Record<string, string> = {
   workshop_extra_amount_invalid: "El valor debe ser un número entero de pesos mayor a 0.",
   workshop_extra_missing: "Ese arreglo adicional no existe en este equipo.",
   workshop_extra_already_reversed: "Ese arreglo adicional ya fue anulado.",
+  workshop_already_in_repair: "El equipo ya está en reparación.",
+  workshop_not_in_repair: "El equipo no está en reparación.",
   workshop_unit_locked_commercially: "La unidad está vendida, reservada o retirada; resuelva primero su estado comercial.",
   workshop_idempotency_conflict: "Este identificador de operación ya se usó con datos diferentes.",
   workshop_incompatible_ram: "La generación de RAM no coincide con la especificación verificada del equipo.",

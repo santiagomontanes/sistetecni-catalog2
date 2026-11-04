@@ -26,11 +26,12 @@ const badge = "inline-flex items-center rounded-full bg-surface px-2.5 py-0.5 te
 const PHASES = [
   { id: "1", label: "Fase 1 · Recepción", hint: "Ingresar equipos" },
   { id: "2", label: "Fase 2 · Revisión", hint: "Diagnóstico y programas" },
+  { id: "R", label: "Reparación", hint: "Solo si hace falta: pantalla y piezas mayores" },
   { id: "3", label: "Fase 3 · Diseño y acabado", hint: "Skin y precio" },
   { id: "4", label: "Fase 4 · Envíos", hint: "Aparte" },
 ] as const;
 type PhaseId = (typeof PHASES)[number]["id"];
-const phaseLabels: Record<string, string> = { reception: "Recepción", diagnosis: "Diagnóstico", technical: "Preparación técnica", aesthetic: "Estética", final_check: "Control final", ready: "Lista para venta", warehouse: "Bodega" };
+const phaseLabels: Record<string, string> = { reception: "Recepción", diagnosis: "Diagnóstico", technical: "Preparación técnica", aesthetic: "Estética", repair: "En reparación", final_check: "Control final", ready: "Lista para venta", warehouse: "Bodega" };
 export default function WorkshopPage() {
   const [data, setData] = useState<WorkshopData | null>(null);
   const [unitId, setUnitId] = useState<string>(); const [search, setSearch] = useState(""); const [offset, setOffset] = useState(0);
@@ -132,7 +133,7 @@ export default function WorkshopPage() {
     <div onChange={e => e.stopPropagation()}><StationLink unitId={unitId ?? null} onSelect={selectUnit} onRefresh={() => void load()} onScan={scan} sender={relay} /></div>
     {qr && data?.qr?.state === "void" && <p className="rounded bg-red-50 p-3">Etiqueta anulada. No puede reutilizarse.</p>}
     {qr && data && !data.qr && <p className="rounded bg-amber-50 p-3">No existe esta etiqueta. Compruebe el código impreso.</p>}
-    <div role="tablist" aria-label="Fases del taller" className="grid grid-cols-2 gap-2 lg:grid-cols-4">{PHASES.map(ph => <button key={ph.id} role="tab" type="button" aria-selected={phase === ph.id} onClick={() => setPhase(ph.id)} className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${phase === ph.id ? "border-primary bg-primary text-white shadow" : "border-border bg-white hover:bg-surface"}`}><span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${phase === ph.id ? "bg-white text-primary" : "bg-surface text-slate-700"}`}>{ph.id}</span><span><span className="block font-semibold">{ph.label.replace(/^Fase \d · /, "")}<span className="sr-only">{" "}{ph.label.slice(0, 6)}</span></span><span className={`block text-xs ${phase === ph.id ? "text-white/80" : "text-slate-500"}`}>{ph.hint}</span></span></button>)}</div>
+    <div role="tablist" aria-label="Fases del taller" className="grid grid-cols-2 gap-2 lg:grid-cols-5">{PHASES.map(ph => <button key={ph.id} role="tab" type="button" aria-selected={phase === ph.id} onClick={() => setPhase(ph.id)} className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${phase === ph.id ? "border-primary bg-primary text-white shadow" : "border-border bg-white hover:bg-surface"}`}><span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${phase === ph.id ? "bg-white text-primary" : "bg-surface text-slate-700"}`}>{ph.id}</span><span><span className="block font-semibold">{ph.label.replace(/^Fase \d · /, "")}<span className="sr-only">{" "}{ph.label.slice(0, 6)}</span></span><span className={`block text-xs ${phase === ph.id ? "text-white/80" : "text-slate-500"}`}>{ph.hint}</span></span></button>)}</div>
     {qr && data?.qr?.state === "free" && <ReceptionForm qr={qr} locations={locations} disabled={busy || !data.enabled} onReceive={async payload => { const result = await command("receive", payload); if (typeof result?.unitId === "string") selectUnit(result.unitId); }} />}
     {unit && <section className={`space-y-4 ${card}`} key={`${unit.id}:${formEpoch}`}>
       <div className="space-y-2"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">{unitName(unit)}</h2>{unit.display_code && <span className="text-sm text-slate-500">QR {unit.unit_code}</span>}<span className="text-slate-600">{unit.serial_number ?? "Serial desconocido"}</span></div><div className="flex flex-wrap gap-2 text-sm"><span className={`${badge} !bg-primary/10 text-primary`}>{phaseLabels[unit.workshop_phase ?? ""] ?? "Sin fase"}</span><span className={badge}>📍 {locationName(unit.location_id)}</span><span className={badge}>Estado comercial: {unit.status}</span><span className={badge}>Versión {unit.row_version}</span></div><p className="text-sm">RAM actual: {String(unit.spec_overrides.ramGb ?? "Desconocida")} GB</p></div>
@@ -142,7 +143,7 @@ export default function WorkshopPage() {
       </div>
       <fieldset disabled={busy || !data?.enabled} className="grid gap-4 sm:grid-cols-2">
         <form onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); void command("move", versioned({ locationId: fd.get("location"), reason: fd.get("reason") })); }} className="space-y-2"><label>Trasladar a<select name="location" required className={field}>{locationOptions}</select></label><input name="reason" placeholder="Motivo del traslado" minLength={3} required className={field} /><button className={button}>Guardar movimiento</button></form>
-        {unit.asset_kind === "computer" && <form onSubmit={e => { e.preventDefault(); const phase = new FormData(e.currentTarget).get("phase"); if (phase !== "ready" || window.confirm("Habilitar comercialmente esta unidad con producto y controles completos?")) void command("phase", versioned({ phase })); }} className="space-y-2"><label>Fase de trabajo<select name="phase" defaultValue={unit.workshop_phase ?? "reception"} className={field}>{Object.entries(phaseLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><button className={button}>Cambiar fase</button><p className="text-sm text-slate-600">Disponible exige producto y todos los controles obligatorios. Los cambios de hardware exigen repetir controles.</p></form>}
+        {unit.asset_kind === "computer" && unit.workshop_phase !== "repair" && <form onSubmit={e => { e.preventDefault(); const phase = new FormData(e.currentTarget).get("phase"); if (phase !== "ready" || window.confirm("Habilitar comercialmente esta unidad con producto y controles completos?")) void command("phase", versioned({ phase })); }} className="space-y-2"><label>Fase de trabajo<select name="phase" defaultValue={unit.workshop_phase ?? "reception"} className={field}>{Object.entries(phaseLabels).filter(([value]) => value !== "repair").map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><button className={button}>Cambiar fase</button><p className="text-sm text-slate-600">Disponible exige producto y todos los controles obligatorios. Los cambios de hardware exigen repetir controles.</p></form>}
       </fieldset>
       <div hidden={phase !== "2"} className="space-y-4">
       {unit.asset_kind === "computer" && <ExtraWork extras={data?.extras ?? []} disabled={busy || !data?.enabled} onAdd={async p => { await command("extra_work", versioned(p)); }} onReverse={async (costEntryId, reason) => { await command("extra_work_reverse", versioned({ costEntryId, reason })); }} />}
@@ -167,6 +168,26 @@ export default function WorkshopPage() {
         void command("component_move", versioned({ componentId: component.id, componentVersion: component.row_version, direction, ...(locationId ? { locationId } : {}), condition: "untested", reason, reversalOf: e.id }));
       }}>Reversar con historial</button>}</div>)}</details>
       </div>
+      {unit.asset_kind === "computer" && <div hidden={phase !== "R"} className="space-y-4">
+        <section className={card}>
+          <h3 className="font-semibold">Reparación</h3>
+          <p className="text-sm text-slate-600">Solo para arreglos mayores, como cambiar una pantalla. Una batería que no sirve se cambia en la misma revisión, sin pasar por aquí.</p>
+          {unit.workshop_phase === "repair" ? (
+            <form className="mt-3 space-y-2" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); void command("repair_return", versioned({ reason: fd.get("reason") })); }}>
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">Este equipo está en reparación.</p>
+              <label className="block text-sm font-medium">¿Qué se hizo? (obligatorio)<input name="reason" required minLength={3} className={field} placeholder="Ej.: se cambió la pantalla" /></label>
+              <button disabled={busy || !data?.enabled} className={primary}>Volver de reparación</button>
+              <p className="text-xs text-slate-500">Al volver pasa a Preparación técnica y se piden de nuevo los controles obligatorios.</p>
+            </form>
+          ) : (
+            <form className="mt-3 space-y-2" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); void command("repair_send", versioned({ reason: fd.get("reason") })); }}>
+              <label className="block text-sm font-medium">¿Qué hay que arreglar? (obligatorio)<input name="reason" required minLength={3} className={field} placeholder="Ej.: pantalla rota" /></label>
+              <button disabled={busy || !data?.enabled} className={primary}>Enviar a reparación</button>
+            </form>
+          )}
+          <p className="mt-3 text-sm text-slate-600">Para cambiar una pieza, regístrela como repuesto e instálela en «Componentes instalados y repuestos» (Revisión); su valor se suma al costo del equipo. Un arreglo sin pieza va en «Arreglo adicional».</p>
+        </section>
+      </div>}
       {unit.asset_kind === "computer" && <div hidden={phase !== "3"} className="space-y-4">
         <div onChange={e => e.stopPropagation()}><UnitFinish unitId={unit.id} unitCode={unit.unit_code} onSaved={() => void load()} /></div>
       </div>}

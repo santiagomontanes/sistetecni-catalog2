@@ -168,6 +168,20 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       await assert.rejects(command(a, "extra_work_reverse", { unitId: computer, version: await version(db, computer), costEntryId: list[0].id, reason: "Otra vez" }), /extra_already_reversed/);
       assert.equal((await a.query("select erp_workshop_extras($1) r", [computer])).rows[0].r[0].reversed, true);
     });
+    await t.test("reparación: se envía y vuelve con motivo, y al volver se piden de nuevo los controles", async () => {
+      await assert.rejects(command(a, "repair_send", { unitId: computer, version: await version(db, computer), reason: " " }), /reason_required/);
+      await assert.rejects(command(a, "repair_return", { unitId: computer, version: await version(db, computer), reason: "Ya está" }), /not_in_repair/);
+      await command(b, "repair_send", { unitId: computer, version: await version(db, computer), reason: "Pantalla rota" });
+      assert.equal((await unit(db, computer)).workshop_phase, "repair");
+      await assert.rejects(command(a, "repair_send", { unitId: computer, version: await version(db, computer), reason: "Otra vez" }), /already_in_repair/);
+      await command(b, "repair_return", { unitId: computer, version: await version(db, computer), reason: "Se cambió la pantalla" });
+      assert.equal((await unit(db, computer)).workshop_phase, "technical");
+      assert.notEqual((await unit(db, computer)).status, "available");
+      const events = (await db.query("select event_type,reason from workshop_events where unit_id=$1 and event_type like 'repair_%' order by created_at", [computer])).rows;
+      assert.deepEqual(events.map(e => e.event_type), ["repair_send", "repair_return"]); assert.equal(events[1].reason, "Se cambió la pantalla");
+      const failed = (await db.query("select count(*)::int n from workshop_checks where unit_id=$1 and note='Pendiente de repetir después de reparación'", [computer])).rows[0].n;
+      assert.ok(failed > 0);
+    });
     await t.test("QR anulado, RLS, escrituras directas, ubicaciones ocupadas y desactivación", async () => {
       await command(a, "qr_void", { code: batch.labels[2].code, reason: "Etiqueta dañada" });
       await assert.rejects(command(a, "receive", { qrCode: batch.labels[2].code, locationId: locationA, condition: "good", snapshot: snapshot() }), /qr_not_free/);

@@ -244,6 +244,25 @@ test("arreglo adicional en la revisión: se agrega con nombre y valor, suma al c
   expect(rows.map((r: { amount_cop: number }) => r.amount_cop)).toEqual([35000, -35000]);
 });
 
+test("reparación: se envía con motivo, el equipo queda en reparación y vuelve a preparación técnica", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco reparación E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  await page.getByRole("tab", { name: /Reparación/ }).click();
+  await page.getByLabel(/¿Qué hay que arreglar\?/).fill("Pantalla rota");
+  await page.getByRole("button", { name: "Enviar a reparación", exact: true }).click();
+  await expect(page.getByText("Este equipo está en reparación.")).toBeVisible();
+  await page.getByLabel(/¿Qué se hizo\?/).fill("Se cambió la pantalla");
+  await page.getByRole("button", { name: "Volver de reparación", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Enviar a reparación", exact: true })).toBeVisible();
+  const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token);
+  expect(server.unit.workshop_phase).toBe("technical");
+  expect(server.events.filter((e: { event_type: string }) => e.event_type.startsWith("repair_"))).toHaveLength(2);
+});
+
 test("regresión ERP: inventario y rentabilidad admiten unidad sin producto comercial", async ({ page }) => {
   test.setTimeout(90000);
   const location = await command("location", { code: `REG-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Recepción desconocida E2E" });
