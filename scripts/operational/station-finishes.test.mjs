@@ -95,6 +95,16 @@ test('dos acabados con mismo color: fotos, RAM/precio/stock por selección; stoc
  await assert.rejects(()=>asUser("update product_units set commercial_price_cop=1 where id=$1",[second]),/finish_use_command/);
  await assert.rejects(()=>finish('assign',{unitId:second,version:0,finishId:fs[1],priceCop:'1',confirmed:true}),/version_conflict/);
 });
+test('un acabado sin fotos se asigna, se publica y aparece en el catálogo',async()=>{
+ const id=await receive(16);
+ const f=await finish('create',{productId:product,baseColor:'Negro',texture:'liso',name:'Negro liso'});
+ await finish('assign',{unitId:id,version:Number((await unit(id)).row_version),finishId:f.id,priceCop:'700000',confirmed:true},randomUUID());
+ await ready(id);
+ await finish('publish',{productId:product,confirmed:true});
+ const data=await asUser('select catalog_finish_options($1) as result',[product],actor,desktop,'anon');
+ const option=data.options.find(o=>o.name==='Negro liso');
+ assert.ok(option,'el acabado sin fotos debe listarse');assert.deepEqual(option.imagePaths,[]);
+});
 test('desconocidos nunca se publican como RAM total conocida y configuración no aprobada impide venta',async()=>{
  const id=await receive(null);const draft=await asUser('select erp_finish_read($1) as result',[id]);assert.equal(draft.draft.ramGb,null);
  const u=await unit(id);
