@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { partKinds } from "./partKinds";
 
 const optionalText = (max = 300) => z.string().trim().max(max).optional();
 const uuid = z.string().uuid();
 const money = z.string().regex(/^\d{1,15}$/, "Use pesos enteros, sin separadores").optional();
 export const componentSchema = z.object({
-  kind: z.enum(["ram", "storage", "charger"]),
+  kind: z.enum(partKinds),
   capacityGb: z.number().positive().max(100000).nullable().optional(),
   generation: z.enum(["DDR2", "DDR3", "DDR3L", "DDR4", "DDR5"]).nullable().optional(),
   formFactor: optionalText(50), technology: z.enum(["HDD", "SSD"]).nullable().optional(),
@@ -29,7 +30,7 @@ const schemas = {
   qr_void: z.object({ code: z.string().regex(/^STU-\d{6,}$/), reason }),
   location: z.union([z.object({ code: z.string().trim().regex(/^[A-Z0-9_-]{1,32}$/), name: z.string().trim().min(1).max(120), parentId: uuid.optional() }), z.object({ id: uuid, active: z.boolean() })]),
   receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/), existingUnitId: z.union([uuid,z.string().regex(/^STU-\d{6,}$/)]).optional(), productId: uuid.optional(), locationId: uuid, costCop: money, condition: z.enum(["good", "fair", "bad"]), snapshot: receiptSchema }).refine(v => v.existingUnitId !== undefined || v.costCop !== undefined, { path: ["costCop"], message: "El costo de adquisición es obligatorio (use 0 si fue donación)" }),
-  component_receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/).optional(), kind: z.enum(["ram", "storage", "charger"]), locationId: uuid, costCop: money, componentCondition: z.enum(["untested", "functional", "defective"]), snapshot: componentSchema }),
+  component_receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/).optional(), kind: z.enum(partKinds), locationId: uuid, costCop: money, componentCondition: z.enum(["untested", "functional", "defective"]), snapshot: componentSchema }),
   move: z.object({ ...unitVersion, locationId: uuid, reason }),
   phase: z.object({ ...unitVersion, phase: z.enum(["reception", "diagnosis", "technical", "aesthetic", "final_check", "ready", "warehouse"]), reason: reason.optional() }),
   correct_unit: z.object({ ...unitVersion, reason, costCop: money, condition: z.enum(["good", "fair", "bad"]).optional(), locationId: uuid.optional(), serial: z.string().trim().max(120).optional(), brand: optionalText(100), model: optionalText(100), source: optionalText(200),

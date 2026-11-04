@@ -123,17 +123,34 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       assert.equal(receipts.length, 2); assert.equal(receipts[0].snapshot.serial, undefined); assert.equal(receipts[1].snapshot.serial, "LOCAL-TEST"); assert.ok(receipts[1].correction_of);
     });
     await t.test("corregir la unidad: solo administrador, con motivo, y queda el antes y el después", async () => {
-      const fixes = { costCop: "320000", condition: "fair", serial: "SN-CORREGIDO", brand: "MarcaFix", model: "ModeloFix" };
+      const fixes = { costCop: "320000", condition: "fair", serial: `SN-FIX-${suffix}`, brand: "MarcaFix", model: "ModeloFix" };
       await assert.rejects(command(b, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "Sin permiso", ...fixes }), /permission_denied/);
       await assert.rejects(command(a, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "  ", ...fixes }), /reason_required/);
       const before = await unit(db, computer);
       await command(a, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "Se digitó mal al recibir", ...fixes });
       const after = await unit(db, computer);
-      assert.equal(String(after.acquisition_cost_cop), "320000"); assert.equal(after.preliminary_condition, "fair"); assert.equal(after.serial_number, "SN-CORREGIDO");
+      assert.equal(String(after.acquisition_cost_cop), "320000"); assert.equal(after.preliminary_condition, "fair"); assert.equal(after.serial_number, `SN-FIX-${suffix}`);
       const event = (await db.query("select before_data,after_data,reason from workshop_events where unit_id=$1 and event_type='correct_unit'", [computer])).rows[0];
-      assert.equal(event.reason, "Se digitó mal al recibir"); assert.equal(event.before_data.serial_number, before.serial_number); assert.equal(event.after_data.serial_number, "SN-CORREGIDO");
+      assert.equal(event.reason, "Se digitó mal al recibir"); assert.equal(event.before_data.serial_number, before.serial_number); assert.equal(event.after_data.serial_number, `SN-FIX-${suffix}`);
       const latest = (await db.query("select snapshot from workshop_receipts where unit_id=$1 order by created_at desc, id desc limit 1", [computer])).rows[0].snapshot;
       assert.equal(latest.brand, "MarcaFix"); assert.equal(latest.model, "ModeloFix");
+    });
+    await t.test("cada tipo de pieza tiene su código corto y las que llegan con el equipo reciben su QR", async () => {
+      const own = await command(a, "qr_batch", { count: 1 });
+      const got = await command(a, "receive", { qrCode: own.labels[0].code, locationId: locationA, condition: "good", costCop: "0", snapshot: { ...snapshot(), components: [{ kind: "battery", notes: "6 celdas" }, { kind: "screen", notes: "14 pulgadas" }, { kind: "storage", capacityGb: 256 }] } });
+      const parts = (await db.query("select id,asset_kind,display_code,unit_code from product_units where installed_in_unit_id=$1 order by asset_kind", [got.unitId])).rows;
+      const code = k => parts.find(p => p.asset_kind === k).display_code;
+      assert.match(code("battery"), /^B-\d{4}$/); assert.match(code("screen"), /^P-\d{4}$/); assert.match(code("storage"), /^D-\d{4}$/);
+      assert.equal((await unit(db, got.unitId)).display_code, null);
+      const labels = (await db.query("select code,state,unit_id from workshop_qr_labels where unit_id = any($1)", [parts.map(p => p.id)])).rows;
+      assert.equal(labels.length, 3); assert.ok(labels.every(l => l.state === "assigned" && parts.some(p => p.unit_code === l.code)));
+      const mouse = await command(a, "component_receive", { kind: "mouse", locationId: locationA, costCop: "15000", componentCondition: "functional", snapshot: { kind: "mouse", notes: "inalámbrico" } });
+      const mouseRow = (await db.query("select display_code from product_units where id=$1", [mouse.unitId])).rows[0];
+      assert.match(mouseRow.display_code, /^R-\d{4}$/);
+      assert.equal((await db.query("select count(*)::int n from workshop_qr_labels where unit_id=$1", [mouse.unitId])).rows[0].n, 1);
+      const second = await command(a, "component_receive", { kind: "mouse", locationId: locationA, componentCondition: "untested", snapshot: { kind: "mouse" } });
+      assert.notEqual((await db.query("select display_code from product_units where id=$1", [second.unitId])).rows[0].display_code, mouseRow.display_code);
+      await assert.rejects(db.query("update product_units set display_code='X-0001' where id=$1", [mouse.unitId]), /display_code_immutable/);
     });
     await t.test("QR anulado, RLS, escrituras directas, ubicaciones ocupadas y desactivación", async () => {
       await command(a, "qr_void", { code: batch.labels[2].code, reason: "Etiqueta dañada" });
