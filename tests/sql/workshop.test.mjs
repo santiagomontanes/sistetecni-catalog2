@@ -152,6 +152,22 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       assert.notEqual((await db.query("select display_code from product_units where id=$1", [second.unitId])).rows[0].display_code, mouseRow.display_code);
       await assert.rejects(db.query("update product_units set display_code='X-0001' where id=$1", [mouse.unitId]), /display_code_immutable/);
     });
+    await t.test("arreglo adicional: nombre y valor libres, suma al costo, solo el administrador lo anula", async () => {
+      const extra = { unitId: computer, name: "Soldadura de bisagra", amountCop: "35000" };
+      await assert.rejects(command(a, "extra_work", { ...extra, version: await version(db, computer), amountCop: "0" }), /extra_amount_invalid/);
+      await assert.rejects(command(a, "extra_work", { ...extra, version: await version(db, computer), name: "ab" }), /extra_name_required/);
+      await command(b, "extra_work", { ...extra, version: await version(db, computer) });
+      await command(a, "extra_work", { ...extra, name: "Pegante y tornillos", amountCop: "5000", version: await version(db, computer) });
+      const sum = async () => Number((await db.query("select coalesce(sum(amount_cop),0) s from cost_entries where product_unit_id=$1 and reference_type='workshop_extra'", [computer])).rows[0].s);
+      assert.equal(await sum(), 40000);
+      const list = (await a.query("select erp_workshop_extras($1) r", [computer])).rows[0].r;
+      assert.equal(list.length, 2); assert.equal(list[0].reversed, false);
+      await assert.rejects(command(b, "extra_work_reverse", { unitId: computer, version: await version(db, computer), costEntryId: list[0].id, reason: "Sin permiso" }), /permission_denied/);
+      await command(a, "extra_work_reverse", { unitId: computer, version: await version(db, computer), costEntryId: list[0].id, reason: "Se cargó dos veces" });
+      assert.equal(await sum(), 5000);
+      await assert.rejects(command(a, "extra_work_reverse", { unitId: computer, version: await version(db, computer), costEntryId: list[0].id, reason: "Otra vez" }), /extra_already_reversed/);
+      assert.equal((await a.query("select erp_workshop_extras($1) r", [computer])).rows[0].r[0].reversed, true);
+    });
     await t.test("QR anulado, RLS, escrituras directas, ubicaciones ocupadas y desactivación", async () => {
       await command(a, "qr_void", { code: batch.labels[2].code, reason: "Etiqueta dañada" });
       await assert.rejects(command(a, "receive", { qrCode: batch.labels[2].code, locationId: locationA, condition: "good", snapshot: snapshot() }), /qr_not_free/);

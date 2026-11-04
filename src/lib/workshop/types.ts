@@ -6,7 +6,9 @@ export interface WorkshopUnit {
   spec_overrides: Record<string, unknown>; status: string; acquisition_cost_cop: number | null;
 }
 export interface WorkshopLocation { id: string; code: string; name: string; active: boolean; parent_id: string | null }
+export interface WorkshopExtra { id: string; costNumber: string; description: string; amountCop: number; createdAt: string; reversed: boolean }
 export interface WorkshopData {
+  extras?: WorkshopExtra[];
   enabled: boolean; unit: WorkshopUnit | null; units: WorkshopUnit[]; components: WorkshopUnit[];
   locations: WorkshopLocation[];
   definitions: { code: string; label: string; active: boolean; required: boolean }[];

@@ -20,6 +20,10 @@ const messages: Record<string, string> = {
   workshop_cost_invalid: "El costo debe ser un número entero de pesos.",
   workshop_condition_invalid: "La clasificación debe ser Bueno, Regular o Malo.",
   workshop_component_not_installed: "Uno de los componentes ya no está instalado en este equipo. Recargue la ficha.",
+  workshop_extra_name_required: "Escriba el nombre del arreglo (entre 3 y 120 letras).",
+  workshop_extra_amount_invalid: "El valor debe ser un número entero de pesos mayor a 0.",
+  workshop_extra_missing: "Ese arreglo adicional no existe en este equipo.",
+  workshop_extra_already_reversed: "Ese arreglo adicional ya fue anulado.",
   workshop_unit_locked_commercially: "La unidad está vendida, reservada o retirada; resuelva primero su estado comercial.",
   workshop_idempotency_conflict: "Este identificador de operación ya se usó con datos diferentes.",
   workshop_incompatible_ram: "La generación de RAM no coincide con la especificación verificada del equipo.",
@@ -44,7 +48,13 @@ export async function readWorkshop(input: { accessToken: unknown; unitId?: strin
     const parsed = z.object({ unitId: z.string().uuid().optional(), search: z.string().max(150).default(""), offset: z.number().int().min(0).max(100000).default(0) }).parse(input);
     const { data, error } = await client.rpc("erp_workshop_read", { p_unit_id: parsed.unitId ?? null, p_search: parsed.search, p_offset: parsed.offset });
     if (error) throw new Error(error.message);
-    return { ok: true, data: data as WorkshopData };
+    const result = data as WorkshopData;
+    if (parsed.unitId) {
+      const extras = await client.rpc("erp_workshop_extras", { p_unit: parsed.unitId });
+      if (extras.error) throw new Error(extras.error.message);
+      result.extras = extras.data as WorkshopData["extras"];
+    }
+    return { ok: true, data: result };
   } catch (error) { return failure(error); }
 }
 export async function commandWorkshop(input: { accessToken: unknown; action: string; payload: unknown; key: string }): Promise<WorkshopResult<Record<string, unknown>>> {

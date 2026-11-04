@@ -223,6 +223,27 @@ test("el administrador corrige una recepción mal hecha con motivo y queda el hi
   expect(event.before_data.acquisition_cost_cop).toBe(100000);
 });
 
+test("arreglo adicional en la revisión: se agrega con nombre y valor, suma al costo y el administrador lo anula", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco arreglo E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  page.on("dialog", dialog => dialog.type() === "prompt" ? dialog.accept("Se cargó por error") : dialog.accept());
+  await page.getByRole("tab", { name: /Fase 2/ }).click();
+  const extra = page.locator("details").filter({ hasText: "Arreglo adicional" }).first();
+  await extra.getByLabel("Nombre del arreglo").fill("Soldadura de bisagra");
+  await extra.getByLabel("Valor COP").fill("35000");
+  await extra.getByRole("button", { name: "Agregar", exact: true }).click();
+  await expect(extra.getByText("Soldadura de bisagra")).toBeVisible();
+  await expect(extra.getByText(/Total sumado al costo/)).toContainText("35.000");
+  await extra.getByRole("button", { name: "Anular", exact: true }).click();
+  await expect(extra.getByText("anulado")).toBeVisible();
+  const rows = await json(`/rest/v1/cost_entries?product_unit_id=eq.${received.unitId}&select=entry_kind,amount_cop&order=created_at`, "GET", undefined, token);
+  expect(rows.map((r: { amount_cop: number }) => r.amount_cop)).toEqual([35000, -35000]);
+});
+
 test("regresión ERP: inventario y rentabilidad admiten unidad sin producto comercial", async ({ page }) => {
   test.setTimeout(90000);
   const location = await command("location", { code: `REG-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Recepción desconocida E2E" });
