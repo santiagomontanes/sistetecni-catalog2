@@ -122,6 +122,19 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       const receipts = (await db.query("select snapshot,correction_of,reason from workshop_receipts where unit_id=$1 order by created_at", [computer])).rows;
       assert.equal(receipts.length, 2); assert.equal(receipts[0].snapshot.serial, undefined); assert.equal(receipts[1].snapshot.serial, "LOCAL-TEST"); assert.ok(receipts[1].correction_of);
     });
+    await t.test("corregir la unidad: solo administrador, con motivo, y queda el antes y el después", async () => {
+      const fixes = { costCop: "320000", condition: "fair", serial: "SN-CORREGIDO", brand: "MarcaFix", model: "ModeloFix" };
+      await assert.rejects(command(b, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "Sin permiso", ...fixes }), /permission_denied/);
+      await assert.rejects(command(a, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "  ", ...fixes }), /reason_required/);
+      const before = await unit(db, computer);
+      await command(a, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "Se digitó mal al recibir", ...fixes });
+      const after = await unit(db, computer);
+      assert.equal(String(after.acquisition_cost_cop), "320000"); assert.equal(after.preliminary_condition, "fair"); assert.equal(after.serial_number, "SN-CORREGIDO");
+      const event = (await db.query("select before_data,after_data,reason from workshop_events where unit_id=$1 and event_type='correct_unit'", [computer])).rows[0];
+      assert.equal(event.reason, "Se digitó mal al recibir"); assert.equal(event.before_data.serial_number, before.serial_number); assert.equal(event.after_data.serial_number, "SN-CORREGIDO");
+      const latest = (await db.query("select snapshot from workshop_receipts where unit_id=$1 order by created_at desc, id desc limit 1", [computer])).rows[0].snapshot;
+      assert.equal(latest.brand, "MarcaFix"); assert.equal(latest.model, "ModeloFix");
+    });
     await t.test("QR anulado, RLS, escrituras directas, ubicaciones ocupadas y desactivación", async () => {
       await command(a, "qr_void", { code: batch.labels[2].code, reason: "Etiqueta dañada" });
       await assert.rejects(command(a, "receive", { qrCode: batch.labels[2].code, locationId: locationA, condition: "good", snapshot: snapshot() }), /qr_not_free/);

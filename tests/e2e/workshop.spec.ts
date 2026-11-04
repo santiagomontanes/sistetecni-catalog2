@@ -200,6 +200,29 @@ test("recepción persistida: controles incompletos impiden disponibilidad y reti
   expect(server.events.filter((e: { event_type: string }) => e.event_type === "component_move")).toHaveLength(1);
 });
 
+test("el administrador corrige una recepción mal hecha con motivo y queda el historial", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco corrección E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", brand: "MarcaMala", components: [{ kind: "ram", capacityGb: 1 }] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  page.on("dialog", dialog => dialog.accept());
+  await page.getByText("Evidencia original y correcciones de recepción").click();
+  await page.getByText("Corregir datos de la recepción (solo administrador)").click();
+  const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Guardar corrección", exact: true }) });
+  await form.getByLabel("Costo de adquisición COP").fill("250000");
+  await form.getByLabel("Marca", { exact: true }).fill("MarcaBuena");
+  await form.getByLabel(/^Motivo de la corrección/).fill("Se digitó mal al recibir");
+  await form.getByRole("button", { name: "Guardar corrección", exact: true }).click();
+  await expect.poll(async () => (await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token)).unit.acquisition_cost_cop).toBe(250000);
+  const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token);
+  expect(server.receipts.at(-1).snapshot.brand).toBe("MarcaBuena");
+  const event = server.events.find((e: { event_type: string }) => e.event_type === "correct_unit");
+  expect(event.reason).toBe("Se digitó mal al recibir");
+  expect(event.before_data.acquisition_cost_cop).toBe(100000);
+});
+
 test("regresión ERP: inventario y rentabilidad admiten unidad sin producto comercial", async ({ page }) => {
   test.setTimeout(90000);
   const location = await command("location", { code: `REG-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Recepción desconocida E2E" });
