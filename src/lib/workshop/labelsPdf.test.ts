@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument } from "pdf-lib";
-import { buildLabelsPdf, cleanCaption, CAPTION_MAX } from "./labelsPdf";
+import { buildLabelsPdf, buildLabelsPdfGroups, cleanCaption, CAPTION_MAX } from "./labelsPdf";
 import { suggestLocationCode } from "./locations";
 test("PDF de etiquetas: una página por grilla y un QR por STU", async () => {
   const codes = Array.from({ length: 30 }, (_, i) => `STU-${String(126 + i).padStart(6, "0")}`);
@@ -67,4 +67,13 @@ test("etiquetas libres: medida, disposición y texto a elección; rechaza medida
   assert.equal(piece.getPageCount(), 1, "40 etiquetas de pieza caben en una carta");
   await assert.rejects(buildLabelsPdf(codes, { layout: "square", qrCm: 0.2 }, "x"), /labels_bad_size/);
   await assert.rejects(buildLabelsPdf(codes, { layout: "square", qrCm: 20 }, "x"), /labels_bad_size/);
+});
+test("hoja combinada: cada grupo con su medida, en hojas separadas y dentro de un solo PDF", async () => {
+  const eq = Array.from({ length: 10 }, (_, i) => `STU-${String(1 + i).padStart(6, "0")}`);
+  const ram = Array.from({ length: 10 }, (_, i) => `STU-${String(101 + i).padStart(6, "0")}`);
+  const doc = await PDFDocument.load(await buildLabelsPdfGroups([{ codes: eq, size: "medium" }, { codes: ram, size: "ram" }, { codes: [], size: "small" }, { codes: eq.slice(0, 3), size: { layout: "strip", qrCm: 1.4, caption: "Disco" } }], "Hoja"));
+  assert.equal(doc.getPageCount(), 3, "un grupo por hoja; el grupo vacío no genera hoja");
+  assert.ok(Math.abs(doc.getPage(0).getSize().width - 21 * 28.3465) < 1, "equipos en A4");
+  assert.ok(Math.abs(doc.getPage(1).getSize().width - 21.59 * 28.3465) < 1, "RAM en carta");
+  await assert.rejects(buildLabelsPdfGroups([{ codes: [], size: "small" }], "x"), /labels_empty/);
 });

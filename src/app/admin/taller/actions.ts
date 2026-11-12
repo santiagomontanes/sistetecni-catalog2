@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireErpPermission } from "@/lib/erpAuth/auth";
 import { validateWorkshopCommand } from "@/lib/workshop/validation";
-import { buildLabelsPdf, CAPTION_MAX, LABEL_PRESETS, QR_CM_MAX, QR_CM_MIN, type LabelSpec } from "@/lib/workshop/labelsPdf";
+import { buildLabelsPdf, buildLabelsPdfGroups, CAPTION_MAX, type LabelGroup, LABEL_PRESETS, QR_CM_MAX, QR_CM_MIN, type LabelSpec } from "@/lib/workshop/labelsPdf";
 import type { WorkshopData, WorkshopResult, WorkshopUnit } from "@/lib/workshop/types";
 
 const messages: Record<string, string> = {
@@ -111,34 +111,79 @@ export async function reprintWorkshopLabelsPdf(input: { accessToken: unknown; ba
     return { ok: true, data: await pdfForCodes(data.map(l => l.code as string), parsed, parsed.batchId) };
   } catch (error) { return failure(error); }
 }
-// Reimpresión de etiquetas ya generadas, estén o no asignadas a un equipo (etiqueta rota, borrada, ilegible o nunca impresa). Solo lee: no reserva números ni toca unidades.
+type Reprint = { codes: string; from?: number; to?: number };
+type Failure = { ok: false; error: string; message: string };
+const reprintShape = { codes: z.string().max(5000), from: z.number().int().min(1).max(999999999999).optional(), to: z.number().int().min(1).max(999999999999).optional() };
+// Resuelve qué STU reimprimir (lista y/o rango) y comprueba que existan. Solo lee: no reserva números ni toca unidades.
+async function resolveReprintCodes(client: Awaited<ReturnType<typeof requireErpPermission>>["client"], parsed: Reprint): Promise<{ codes: string[] } | Failure> {
+  const wanted = new Set<string>();
+  const code = (n: number) => `STU-${String(n).padStart(6, "0")}`;
+  for (const token of parsed.codes.split(/[\s,;]+/).filter(Boolean)) {
+    const match = /^(?:stu-?)?(\d{1,12})$/i.exec(token);
+    if (!match) return { ok: false, error: "labels_bad_code", message: `«${token.slice(0, 40)}» no es un código válido. Use el formato STU-000123 o solo el número.` };
+    wanted.add(code(Number(match[1])));
+  }
+  if (parsed.from || parsed.to) {
+    const from = parsed.from ?? parsed.to!, to = parsed.to ?? parsed.from!;
+    if (to < from || to - from >= 200) return { ok: false, error: "labels_bad_range", message: "El rango debe ir de menor a mayor y tener máximo 200 equipos." };
+    for (let n = from; n <= to; n++) wanted.add(code(n));
+  }
+  if (!wanted.size) return { ok: false, error: "labels_empty", message: "Escriba al menos un STU o un rango." };
+  if (wanted.size > 200) return { ok: false, error: "labels_too_many", message: "Máximo 200 etiquetas por PDF." };
+  const { data, error } = await client.from("product_units").select("unit_code").in("unit_code", [...wanted]);
+  if (error) throw new Error(error.message);
+  const found = new Set((data ?? []).map(u => u.unit_code as string));
+  const { data: labels, error: labelsError } = await client.from("workshop_qr_labels").select("code").in("code", [...wanted]).neq("state", "void");
+  if (labelsError) throw new Error(labelsError.message);
+  for (const l of labels ?? []) found.add(l.code as string);
+  const missing = [...wanted].filter(c => !found.has(c));
+  if (missing.length) return { ok: false, error: "labels_unit_not_found", message: `No existe ninguna etiqueta ni unidad vigente con: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}. Las etiquetas nuevas se generan arriba.` };
+  return { codes: [...found] };
+}
+// Reimpresión de etiquetas ya generadas, estén o no asignadas a un equipo (etiqueta rota, borrada, ilegible o nunca impresa).
 export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes: string; from?: number; to?: number; size: string; qrCm?: number; layout?: string; caption?: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
     const { client } = await requireErpPermission(input.accessToken, "inventory.read");
-    const parsed = z.object({ codes: z.string().max(5000), from: z.number().int().min(1).max(999999999999).optional(), to: z.number().int().min(1).max(999999999999).optional(), ...labelLook }).parse(input);
-    const wanted = new Set<string>();
-    const code = (n: number) => `STU-${String(n).padStart(6, "0")}`;
-    for (const token of parsed.codes.split(/[\s,;]+/).filter(Boolean)) {
-      const match = /^(?:stu-?)?(\d{1,12})$/i.exec(token);
-      if (!match) return { ok: false, error: "labels_bad_code", message: `«${token.slice(0, 40)}» no es un código válido. Use el formato STU-000123 o solo el número.` };
-      wanted.add(code(Number(match[1])));
+    const parsed = z.object({ ...reprintShape, ...labelLook }).parse(input);
+    const resolved = await resolveReprintCodes(client, parsed);
+    if ("ok" in resolved) return resolved;
+    return { ok: true, data: await pdfForCodes(resolved.codes, parsed, "reimpresion") };
+  } catch (error) { return failure(error); }
+}
+// Hoja combinada: varias líneas (nuevas y/o reimpresiones, cada una con su tamaño y texto) en un solo PDF.
+// Primero se valida todo lo que se reimprime; solo después se reservan los números nuevos (solo administrador).
+const jobLine = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("new"), count: z.number().int().min(1).max(200), ...labelLook }),
+  z.object({ mode: z.literal("reprint"), ...reprintShape, ...labelLook }),
+]);
+export interface LabelsJobResult { pdfBase64: string; count: number; reserved: number; lines: { label: string; count: number }[] }
+export async function createWorkshopLabelsJobPdf(input: { accessToken: unknown; lines: unknown }): Promise<WorkshopResult<LabelsJobResult>> {
+  try {
+    const parsed = z.object({ lines: z.array(jobLine).min(1).max(10) }).parse(input);
+    const needsReserve = parsed.lines.some(l => l.mode === "new");
+    const { client } = await requireErpPermission(input.accessToken, needsReserve ? "users.manage" : "inventory.read");
+    if (parsed.lines.reduce((n, l) => n + (l.mode === "new" ? l.count : 0), 0) > 400) return { ok: false, error: "labels_too_many", message: "Máximo 400 etiquetas nuevas por hoja." };
+    const resolved: (string[] | null)[] = [];
+    for (const line of parsed.lines) {
+      if (line.mode === "new") { resolved.push(null); continue; }
+      const r = await resolveReprintCodes(client, line);
+      if ("ok" in r) return r;
+      resolved.push(r.codes.sort());
     }
-    if (parsed.from || parsed.to) {
-      const from = parsed.from ?? parsed.to!, to = parsed.to ?? parsed.from!;
-      if (to < from || to - from >= 200) return { ok: false, error: "labels_bad_range", message: "El rango debe ir de menor a mayor y tener máximo 200 equipos." };
-      for (let n = from; n <= to; n++) wanted.add(code(n));
+    const groups: LabelGroup[] = []; const summary: LabelsJobResult["lines"] = []; let reserved = 0;
+    for (const [i, line] of parsed.lines.entries()) {
+      let codes = resolved[i];
+      if (!codes) {
+        const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: (line as { count: number }).count }, p_key: randomUUID() });
+        if (error) throw new Error(error.message);
+        codes = (data as { labels: { code: string }[] }).labels.map(l => l.code).sort(); reserved += codes.length;
+      }
+      groups.push({ codes, size: labelSpec(line) });
+      summary.push({ label: `${line.mode === "new" ? "Nuevas" : "Reimpresión"} · ${codes[0]} a ${codes[codes.length - 1]}`, count: codes.length });
     }
-    if (!wanted.size) return { ok: false, error: "labels_empty", message: "Escriba al menos un STU o un rango." };
-    if (wanted.size > 200) return { ok: false, error: "labels_too_many", message: "Máximo 200 etiquetas por PDF." };
-    const { data, error } = await client.from("product_units").select("unit_code").in("unit_code", [...wanted]);
-    if (error) throw new Error(error.message);
-    const found = new Set((data ?? []).map(u => u.unit_code as string));
-    const { data: labels, error: labelsError } = await client.from("workshop_qr_labels").select("code").in("code", [...wanted]).neq("state", "void");
-    if (labelsError) throw new Error(labelsError.message);
-    for (const l of labels ?? []) found.add(l.code as string);
-    const missing = [...wanted].filter(c => !found.has(c));
-    if (missing.length) return { ok: false, error: "labels_unit_not_found", message: `No existe ninguna etiqueta ni unidad vigente con: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}. Las etiquetas nuevas se generan arriba.` };
-    return { ok: true, data: await pdfForCodes([...found], parsed, "reimpresion") };
+    const title = `Etiquetas SISTETECNI ${new Date().toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}`;
+    const bytes = await buildLabelsPdfGroups(groups, title);
+    return { ok: true, data: { pdfBase64: Buffer.from(bytes).toString("base64"), count: groups.reduce((n, g) => n + g.codes.length, 0), reserved, lines: summary } };
   } catch (error) { return failure(error); }
 }
 export async function listWorkshopLabelBatches(input: { accessToken: unknown }): Promise<WorkshopResult<LabelBatch[]>> {

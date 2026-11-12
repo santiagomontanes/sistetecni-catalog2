@@ -2,20 +2,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { callAdminAction } from "@/lib/callAdminAction";
 import { getErpProfile } from "@/supabase/auth";
+import { sizes, captions, pdfUrl, type LabelSizeId } from "./labelOptions";
+import LabelsJob from "./LabelsJob";
 import { createWorkshopLabelsPdf, listWorkshopLabelBatches, reprintUnitLabelsPdf, reprintWorkshopLabelsPdf, type LabelBatch, type LabelsPdfResult } from "@/app/admin/taller/actions";
 
 const field = "rounded border px-3 py-2";
 const button = "rounded border px-3 py-2 disabled:opacity-50";
-const sizes = [["small", "Equipo pequeña · QR 3 cm (más etiquetas por hoja)"], ["medium", "Equipo mediana · QR 4 cm"], ["large", "Equipo grande · QR 5 cm (fácil de leer)"], ["ram", "Memoria RAM · 1 cm de alto, hoja carta"], ["piece", "Pieza pequeña · disco, cargador, batería… (1,4 cm de alto, hoja carta)"], ["custom", "Libre · usted elige medida y texto"]] as const;
-const captions = ["Equipo", "Memoria RAM", "Disco", "Cargador", "Batería", "Pantalla", "Ratón", "Forro / maleta", "Teclado"];
 
-function toUrl(base64: string) {
-  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-}
-
-export default function LabelsPanel({ enabled, hasLocations, presetSize }: { enabled: boolean; hasLocations: boolean; presetSize?: { size: (typeof sizes)[number][0]; n: number } }) {
-  const [count, setCount] = useState(10); const [size, setSize] = useState<(typeof sizes)[number][0]>("medium");
+export default function LabelsPanel({ enabled, hasLocations, presetSize }: { enabled: boolean; hasLocations: boolean; presetSize?: { size: LabelSizeId; n: number } }) {
+  const [count, setCount] = useState(10); const [size, setSize] = useState<LabelSizeId>("medium");
   useEffect(() => { if (presetSize) setSize(presetSize.size); }, [presetSize]);
   const [caption, setCaption] = useState(""); const [layout, setLayout] = useState<"square" | "strip">("square"); const [qrCm, setQrCm] = useState(4);
   const look = { size, caption: caption.trim() || undefined, ...(size === "custom" ? { layout, qrCm: Math.min(8, Math.max(0.6, qrCm || 4)) } : {}) };
@@ -35,7 +30,7 @@ export default function LabelsPanel({ enabled, hasLocations, presetSize }: { ena
 
   function show(info: LabelsPdfResult) {
     if (current.current) URL.revokeObjectURL(current.current);
-    const url = toUrl(info.pdfBase64); current.current = url;
+    const url = pdfUrl(info.pdfBase64); current.current = url;
     setPdf({ url, info: { ...info, pdfBase64: "" } });
   }
   async function run(work: () => Promise<{ ok: true; data: LabelsPdfResult } | { ok: false; message: string }>) {
@@ -64,6 +59,7 @@ export default function LabelsPanel({ enabled, hasLocations, presetSize }: { ena
       <button disabled={busy || !enabled || !isAdmin} className={`${button} bg-slate-900 text-white`}>{busy ? "Generando…" : `Generar ${count} QR y ver PDF`}</button>
     </form>
     <p className="text-xs text-slate-500">El QR siempre contiene solo el código STU. El tamaño y el texto de arriba también se usan al reimprimir.</p>
+    <LabelsJob enabled={enabled} isAdmin={isAdmin} onDone={refresh} />
     <details className="rounded border bg-slate-50 p-3 text-sm"><summary className="cursor-pointer font-medium">Reimprimir etiquetas (registradas o aún sin usar)</summary>
       <p className="mt-2 text-slate-600">Para una etiqueta rota, borrada o que no se lee. Se imprime el mismo STU de la unidad; no se reservan números nuevos.</p>
       <form className="mt-2 flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); void run(() => callAdminAction(reprintUnitLabelsPdf, { codes, from: from ? Number(from) : undefined, to: to ? Number(to) : undefined, ...look })); }}>
