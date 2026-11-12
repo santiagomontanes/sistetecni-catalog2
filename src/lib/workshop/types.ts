@@ -1,6 +1,6 @@
 export interface WorkshopUnit {
   id: string; unit_code: string; product_id: string | null; serial_number: string | null;
-  asset_kind: "computer" | "ram" | "storage" | "charger" | "battery" | "screen" | "mouse" | "case" | "keyboard"; display_code?: string | null; installed_in_unit_id: string | null;
+  asset_kind: "computer" | "ram" | "storage" | "charger" | "battery" | "screen" | "mouse" | "case" | "keyboard" | "usb" | "wifi" | "bluetooth" | "other"; installed_in_unit_id: string | null;
   workshop_phase: string | null; preliminary_condition: string | null; location_id: string | null;
   row_version: number; component_condition: string | null; component_attributes: Record<string, unknown>;
   spec_overrides: Record<string, unknown>; status: string; acquisition_cost_cop: number | null;

@@ -391,6 +391,9 @@ test("Hoja combinada: QR nuevos de equipos y de RAM más reimpresiones, todo en 
   await page.getByRole("button", { name: /Generar hoja \(reserva 20 números nuevos\)/ }).click();
   await expect(page.getByText("23 etiquetas en total")).toBeVisible();
   await expect(page.getByText(/20 números nuevos reservados/)).toBeVisible();
+  await expect(page.getByText(/Nuevas · STU-\d{6,} a STU-\d{6,}/)).toBeVisible();
+  await expect(page.getByText(/Nuevas · STUM-\d{4} a STUM-\d{4}/)).toBeVisible();
+  await expect(page.getByText(/Reimpresión · STU-\d{6,}/)).toBeVisible();
   await expect(page.getByTitle("Vista previa de la hoja combinada")).toBeVisible();
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Descargar PDF" }).last().click()]);
   const bytes = readFileSync((await download.path())!);

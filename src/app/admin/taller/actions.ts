@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireErpPermission } from "@/lib/erpAuth/auth";
 import { validateWorkshopCommand } from "@/lib/workshop/validation";
+import { partKinds } from "@/lib/workshop/partKinds";
 import { buildLabelsPdf, buildLabelsPdfGroups, CAPTION_MAX, type LabelGroup, LABEL_PRESETS, QR_CM_MAX, QR_CM_MIN, type LabelSpec } from "@/lib/workshop/labelsPdf";
 import type { WorkshopData, WorkshopResult, WorkshopUnit } from "@/lib/workshop/types";
 
@@ -20,6 +21,7 @@ const messages: Record<string, string> = {
   workshop_cost_invalid: "El costo debe ser un número entero de pesos.",
   workshop_condition_invalid: "La clasificación debe ser Bueno, Regular o Malo.",
   workshop_component_not_installed: "Uno de los componentes ya no está instalado en este equipo. Recargue la ficha.",
+  workshop_qr_kind_mismatch: "Esa etiqueta es de otro tipo de pieza (por ejemplo, una etiqueta de disco no sirve para una memoria). Use una etiqueta del mismo tipo o déjelo vacío para crear una nueva.",
   workshop_extra_name_required: "Escriba el nombre del arreglo (entre 3 y 120 letras).",
   workshop_extra_amount_invalid: "El valor debe ser un número entero de pesos mayor a 0.",
   workshop_extra_missing: "Ese arreglo adicional no existe en este equipo.",
@@ -74,6 +76,8 @@ export async function commandWorkshop(input: { accessToken: unknown; action: str
   } catch (error) { return failure(error); }
 }
 // «custom»: medida, disposición y texto libres. Los demás son tamaños predefinidos (el texto opcional también se admite).
+// Tipo de etiqueta: «computer» = STU-000123; cada tipo de pieza tiene su propio prefijo (STUD-, STUM-…).
+const labelKind = z.enum(["computer", ...partKinds]);
 const labelSize = z.enum(["small", "medium", "large", "ram", "piece", "custom"]);
 const labelLook = { size: labelSize, qrCm: z.number().min(QR_CM_MIN).max(QR_CM_MAX).optional(), layout: z.enum(["square", "strip"]).optional(), caption: z.string().max(CAPTION_MAX).optional() };
 type LabelLook = { size: z.infer<typeof labelSize>; qrCm?: number; layout?: "square" | "strip"; caption?: string };
@@ -91,11 +95,11 @@ async function pdfForCodes(codes: string[], look: LabelLook, batchId: string): P
 }
 // Solo administrador (también se exige en SQL). Reserva N números STU y devuelve el PDF para imprimir. Si el PDF fallara, el lote queda
 // registrado y se puede reimprimir desde «Lotes anteriores»; los STU no se pierden.
-export async function createWorkshopLabelsPdf(input: { accessToken: unknown; count: number; size: string; qrCm?: number; layout?: string; caption?: string }): Promise<WorkshopResult<LabelsPdfResult>> {
+export async function createWorkshopLabelsPdf(input: { accessToken: unknown; count: number; kind?: string; size: string; qrCm?: number; layout?: string; caption?: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
     const { client } = await requireErpPermission(input.accessToken, "users.manage");
-    const parsed = z.object({ count: z.number().int().min(1).max(200), ...labelLook }).parse(input);
-    const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: parsed.count }, p_key: randomUUID() });
+    const parsed = z.object({ count: z.number().int().min(1).max(200), kind: labelKind.default("computer"), ...labelLook }).parse(input);
+    const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: parsed.count, kind: parsed.kind }, p_key: randomUUID() });
     if (error) throw new Error(error.message);
     const batch = data as { batchId: string; labels: { code: string }[] };
     return { ok: true, data: await pdfForCodes(batch.labels.map(l => l.code), parsed, batch.batchId) };
@@ -119,9 +123,9 @@ async function resolveReprintCodes(client: Awaited<ReturnType<typeof requireErpP
   const wanted = new Set<string>();
   const code = (n: number) => `STU-${String(n).padStart(6, "0")}`;
   for (const token of parsed.codes.split(/[\s,;]+/).filter(Boolean)) {
-    const match = /^(?:stu-?)?(\d{1,12})$/i.exec(token);
-    if (!match) return { ok: false, error: "labels_bad_code", message: `«${token.slice(0, 40)}» no es un código válido. Use el formato STU-000123 o solo el número.` };
-    wanted.add(code(Number(match[1])));
+    const match = /^(?:(stu(?:sb|bt|[dmcbpwrfto])?)-?)?(\d{1,12})$/i.exec(token);
+    if (!match) return { ok: false, error: "labels_bad_code", message: `«${token.slice(0, 40)}» no es un código válido. Use el formato STU-000123, STUD-0001 o solo el número.` };
+    wanted.add(match[1] && match[1].length > 3 ? `${match[1].toUpperCase()}-${match[2].padStart(4, "0")}` : code(Number(match[2])));
   }
   if (parsed.from || parsed.to) {
     const from = parsed.from ?? parsed.to!, to = parsed.to ?? parsed.from!;
@@ -153,7 +157,7 @@ export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes:
 // Hoja combinada: varias líneas (nuevas y/o reimpresiones, cada una con su tamaño y texto) en un solo PDF.
 // Primero se valida todo lo que se reimprime; solo después se reservan los números nuevos (solo administrador).
 const jobLine = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("new"), count: z.number().int().min(1).max(200), ...labelLook }),
+  z.object({ mode: z.literal("new"), count: z.number().int().min(1).max(200), kind: labelKind.default("computer"), ...labelLook }),
   z.object({ mode: z.literal("reprint"), ...reprintShape, ...labelLook }),
 ]);
 export interface LabelsJobResult { pdfBase64: string; count: number; reserved: number; lines: { label: string; count: number }[] }
@@ -174,7 +178,7 @@ export async function createWorkshopLabelsJobPdf(input: { accessToken: unknown; 
     for (const [i, line] of parsed.lines.entries()) {
       let codes = resolved[i];
       if (!codes) {
-        const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: (line as { count: number }).count }, p_key: randomUUID() });
+        const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: (line as { count: number }).count, kind: (line as { kind: string }).kind }, p_key: randomUUID() });
         if (error) throw new Error(error.message);
         codes = (data as { labels: { code: string }[] }).labels.map(l => l.code).sort(); reserved += codes.length;
       }

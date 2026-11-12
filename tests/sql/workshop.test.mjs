@@ -135,22 +135,32 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       const latest = (await db.query("select snapshot from workshop_receipts where unit_id=$1 order by created_at desc, id desc limit 1", [computer])).rows[0].snapshot;
       assert.equal(latest.brand, "MarcaFix"); assert.equal(latest.model, "ModeloFix");
     });
-    await t.test("cada tipo de pieza tiene su código corto y las que llegan con el equipo reciben su QR", async () => {
+    await t.test("cada tipo de pieza tiene su propio código (STUD-, STUM-…), que es también su QR", async () => {
       const own = await command(a, "qr_batch", { count: 1 });
-      const got = await command(a, "receive", { qrCode: own.labels[0].code, locationId: locationA, condition: "good", costCop: "0", snapshot: { ...snapshot(), components: [{ kind: "battery", notes: "6 celdas" }, { kind: "screen", notes: "14 pulgadas" }, { kind: "storage", capacityGb: 256 }] } });
-      const parts = (await db.query("select id,asset_kind,display_code,unit_code from product_units where installed_in_unit_id=$1 order by asset_kind", [got.unitId])).rows;
-      const code = k => parts.find(p => p.asset_kind === k).display_code;
-      assert.match(code("battery"), /^B-\d{4}$/); assert.match(code("screen"), /^P-\d{4}$/); assert.match(code("storage"), /^D-\d{4}$/);
-      assert.equal((await unit(db, got.unitId)).display_code, null);
-      const labels = (await db.query("select code,state,unit_id from workshop_qr_labels where unit_id = any($1)", [parts.map(p => p.id)])).rows;
-      assert.equal(labels.length, 3); assert.ok(labels.every(l => l.state === "assigned" && parts.some(p => p.unit_code === l.code)));
+      assert.match(own.labels[0].code, /^STU-\d{6,}$/);
+      const got = await command(a, "receive", { qrCode: own.labels[0].code, locationId: locationA, condition: "good", costCop: "0", snapshot: { ...snapshot(), components: [{ kind: "battery", notes: "6 celdas" }, { kind: "screen", notes: "14 pulgadas" }, { kind: "storage", capacityGb: 256 }, { kind: "usb", notes: "receptor" }] } });
+      const parts = (await db.query("select id,asset_kind,unit_code from product_units where installed_in_unit_id=$1 order by asset_kind", [got.unitId])).rows;
+      const code = k => parts.find(p => p.asset_kind === k).unit_code;
+      assert.match(code("battery"), /^STUB-\d{4}$/); assert.match(code("screen"), /^STUP-\d{4}$/); assert.match(code("storage"), /^STUD-\d{4}$/); assert.match(code("usb"), /^STUSB-\d{4}$/);
+      const labels = (await db.query("select code,kind,state,unit_id from workshop_qr_labels where unit_id = any($1)", [parts.map(p => p.id)])).rows;
+      assert.equal(labels.length, 4); assert.ok(labels.every(l => l.state === "assigned" && parts.some(p => p.unit_code === l.code && p.asset_kind === l.kind)));
       const mouse = await command(a, "component_receive", { kind: "mouse", locationId: locationA, costCop: "15000", componentCondition: "functional", snapshot: { kind: "mouse", notes: "inalámbrico" } });
-      const mouseRow = (await db.query("select display_code from product_units where id=$1", [mouse.unitId])).rows[0];
-      assert.match(mouseRow.display_code, /^R-\d{4}$/);
-      assert.equal((await db.query("select count(*)::int n from workshop_qr_labels where unit_id=$1", [mouse.unitId])).rows[0].n, 1);
+      const mouseCode = (await db.query("select unit_code from product_units where id=$1", [mouse.unitId])).rows[0].unit_code;
+      assert.match(mouseCode, /^STUR-\d{4}$/);
       const second = await command(a, "component_receive", { kind: "mouse", locationId: locationA, componentCondition: "untested", snapshot: { kind: "mouse" } });
-      assert.notEqual((await db.query("select display_code from product_units where id=$1", [second.unitId])).rows[0].display_code, mouseRow.display_code);
-      await assert.rejects(db.query("update product_units set display_code='X-0001' where id=$1", [mouse.unitId]), /display_code_immutable/);
+      assert.notEqual((await db.query("select unit_code from product_units where id=$1", [second.unitId])).rows[0].unit_code, mouseCode);
+    });
+    await t.test("etiquetas por tipo: qr_batch con kind, solo sirven para su tipo y el equipo exige etiqueta de equipo", async () => {
+      const disks = await command(a, "qr_batch", { count: 3, kind: "storage" });
+      assert.equal(disks.labels.length, 3); assert.ok(disks.labels.every(l => /^STUD-\d{4}$/.test(l.code) && l.kind === "storage"));
+      assert.equal(new Set(disks.labels.map(l => l.code)).size, 3);
+      await assert.rejects(command(a, "qr_batch", { count: 1, kind: "nave" }), /workshop_component_kind_invalid/);
+      await assert.rejects(command(a, "component_receive", { qrCode: disks.labels[0].code, kind: "ram", locationId: locationA, componentCondition: "untested", snapshot: { kind: "ram" } }), /workshop_qr_kind_mismatch/);
+      const okDisk = await command(a, "component_receive", { qrCode: disks.labels[0].code, kind: "storage", locationId: locationA, componentCondition: "untested", snapshot: { kind: "storage", capacityGb: 500 } });
+      assert.equal((await db.query("select unit_code from product_units where id=$1", [okDisk.unitId])).rows[0].unit_code, disks.labels[0].code);
+      await assert.rejects(command(a, "receive", { qrCode: disks.labels[1].code, locationId: locationA, condition: "good", costCop: "0", snapshot: snapshot() }), /workshop_qr_kind_mismatch/);
+      const rams = await command(a, "qr_batch", { count: 1, kind: "ram" });
+      assert.match(rams.labels[0].code, /^STUM-\d{4}$/);
     });
     await t.test("arreglo adicional: nombre y valor libres, suma al costo, solo el administrador lo anula", async () => {
       const extra = { unitId: computer, name: "Soldadura de bisagra", amountCop: "35000" };
