@@ -2,17 +2,17 @@
 import { useEffect, useRef, useState } from "react";
 import { callAdminAction } from "@/lib/callAdminAction";
 import { createWorkshopLabelsJobPdf, type LabelsJobResult } from "@/app/admin/taller/actions";
-import { sizes, captions, pdfUrl, type LabelSizeId } from "./labelOptions";
+import { sizes, captions, pdfUrl, labelKinds, labelKindName, kindExample, defaultSizeFor, type LabelKind, type LabelSizeId } from "./labelOptions";
 
 const field = "rounded border px-3 py-2";
 const button = "rounded border px-3 py-2 disabled:opacity-50";
-interface Line { id: number; mode: "new" | "reprint"; count: number; codes: string; from: string; to: string; size: LabelSizeId; caption: string; layout: "square" | "strip"; qrCm: number }
-const blank = (id: number, over: Partial<Line> = {}): Line => ({ id, mode: "new", count: 10, codes: "", from: "", to: "", size: "medium", caption: "", layout: "square", qrCm: 4, ...over });
+interface Line { id: number; mode: "new" | "reprint"; kind: LabelKind; count: number; codes: string; from: string; to: string; size: LabelSizeId; caption: string; layout: "square" | "strip"; qrCm: number }
+const blank = (id: number, over: Partial<Line> = {}): Line => ({ id, mode: "new", kind: "computer", count: 10, codes: "", from: "", to: "", size: "medium", caption: "", layout: "square", qrCm: 4, ...over });
 
 // Una sola hoja de trabajo: varias líneas (p. ej. 10 QR de equipos, 10 de memorias y 10 reimpresos) en un único PDF.
 export default function LabelsJob({ enabled, isAdmin, onDone }: { enabled: boolean; isAdmin: boolean; onDone: () => void }) {
   const next = useRef(3);
-  const [lines, setLines] = useState<Line[]>([blank(1, { size: "medium", caption: "Equipo" }), blank(2, { size: "ram", caption: "" })]);
+  const [lines, setLines] = useState<Line[]>([blank(1, { kind: "computer", size: "medium", caption: "Equipo" }), blank(2, { kind: "ram", size: "ram" })]);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [pdf, setPdf] = useState<{ url: string; info: LabelsJobResult }>();
   const frame = useRef<HTMLIFrameElement>(null); const current = useRef<string | undefined>(undefined);
@@ -26,7 +26,7 @@ export default function LabelsJob({ enabled, isAdmin, onDone }: { enabled: boole
     try {
       const payload = lines.map(l => {
         const look = { size: l.size, ...(l.caption.trim() ? { caption: l.caption.trim() } : {}), ...(l.size === "custom" ? { layout: l.layout, qrCm: Math.min(8, Math.max(0.6, l.qrCm || 4)) } : {}) };
-        return l.mode === "new" ? { mode: "new" as const, count: l.count, ...look }
+        return l.mode === "new" ? { mode: "new" as const, kind: l.kind, count: l.count, ...look }
           : { mode: "reprint" as const, codes: l.codes, ...(l.from ? { from: Number(l.from) } : {}), ...(l.to ? { to: Number(l.to) } : {}), ...look };
       });
       const result = await callAdminAction(createWorkshopLabelsJobPdf, { lines: payload });
@@ -44,7 +44,8 @@ export default function LabelsJob({ enabled, isAdmin, onDone }: { enabled: boole
     {lines.map((l, i) => <fieldset key={l.id} className="flex flex-wrap items-end gap-3 rounded border bg-white p-3"><legend className="px-1 text-xs font-medium text-slate-500">Línea {i + 1}</legend>
       <label className="text-sm">Qué imprimir<select aria-label={`Qué imprimir, línea ${i + 1}`} value={l.mode} onChange={e => update(l.id, { mode: e.target.value as Line["mode"] })} className={`${field} block`}><option value="new">QR nuevos (reserva números)</option><option value="reprint">Reimprimir QR anteriores</option></select></label>
       {l.mode === "new"
-        ? <label className="text-sm">Cantidad<input aria-label={`Cantidad, línea ${i + 1}`} type="number" min={1} max={200} value={l.count} onChange={e => update(l.id, { count: Math.max(1, Math.min(200, Number(e.target.value) || 1)) })} className={`${field} block w-24`} /></label>
+        ? <><label className="text-sm">Tipo<select aria-label={`Tipo, línea ${i + 1}`} value={l.kind} onChange={e => { const k = e.target.value as LabelKind; update(l.id, { kind: k, size: defaultSizeFor(k) }); }} className={`${field} block`}>{labelKinds.map(k => <option key={k} value={k}>{labelKindName(k)} · {kindExample(k)}</option>)}</select></label>
+          <label className="text-sm">Cantidad<input aria-label={`Cantidad, línea ${i + 1}`} type="number" min={1} max={200} value={l.count} onChange={e => update(l.id, { count: Math.max(1, Math.min(200, Number(e.target.value) || 1)) })} className={`${field} block w-24`} /></label></>
         : <>
           <label className="text-sm">STU (varios, con espacio o coma)<textarea aria-label={`STU de la hoja, línea ${i + 1}`} rows={2} value={l.codes} onChange={e => update(l.id, { codes: e.target.value })} placeholder="STU-000225, 27" className={`${field} block w-56`} /></label>
           <label className="text-sm">o rango: desde<input aria-label={`Rango desde, línea ${i + 1}`} inputMode="numeric" value={l.from} onChange={e => update(l.id, { from: e.target.value.replace(/\D/g, "") })} placeholder="225" className={`${field} block w-24`} /></label>

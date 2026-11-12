@@ -200,6 +200,69 @@ test("recepción persistida: controles incompletos impiden disponibilidad y reti
   expect(server.events.filter((e: { event_type: string }) => e.event_type === "component_move")).toHaveLength(1);
 });
 
+test("el administrador corrige una recepción mal hecha con motivo y queda el historial", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco corrección E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", brand: "MarcaMala", components: [{ kind: "ram", capacityGb: 1 }] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  page.on("dialog", dialog => dialog.accept());
+  await page.getByText("Evidencia original y correcciones de recepción").click();
+  await page.getByText("Corregir datos de la recepción (solo administrador)").click();
+  const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Guardar corrección", exact: true }) });
+  await form.getByLabel("Costo de adquisición COP").fill("250000");
+  await form.getByLabel("Marca", { exact: true }).fill("MarcaBuena");
+  await form.getByLabel(/^Motivo de la corrección/).fill("Se digitó mal al recibir");
+  await form.getByRole("button", { name: "Guardar corrección", exact: true }).click();
+  await expect.poll(async () => (await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token)).unit.acquisition_cost_cop).toBe(250000);
+  const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token);
+  expect(server.receipts.at(-1).snapshot.brand).toBe("MarcaBuena");
+  const event = server.events.find((e: { event_type: string }) => e.event_type === "correct_unit");
+  expect(event.reason).toBe("Se digitó mal al recibir");
+  expect(event.before_data.acquisition_cost_cop).toBe(100000);
+});
+
+test("arreglo adicional en la revisión: se agrega con nombre y valor, suma al costo y el administrador lo anula", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco arreglo E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  page.on("dialog", dialog => dialog.type() === "prompt" ? dialog.accept("Se cargó por error") : dialog.accept());
+  await page.getByRole("tab", { name: /Fase 2/ }).click();
+  const extra = page.locator("details").filter({ hasText: "Arreglo adicional" }).first();
+  await extra.getByLabel("Nombre del arreglo").fill("Soldadura de bisagra");
+  await extra.getByLabel("Valor COP").fill("35000");
+  await extra.getByRole("button", { name: "Agregar", exact: true }).click();
+  await expect(extra.getByText("Soldadura de bisagra")).toBeVisible();
+  await expect(extra.getByText(/Total sumado al costo/)).toContainText("35.000");
+  await extra.getByRole("button", { name: "Anular", exact: true }).click();
+  await expect(extra.getByText("anulado")).toBeVisible();
+  const rows = await json(`/rest/v1/cost_entries?product_unit_id=eq.${received.unitId}&select=entry_kind,amount_cop&order=created_at`, "GET", undefined, token);
+  expect(rows.map((r: { amount_cop: number }) => r.amount_cop)).toEqual([35000, -35000]);
+});
+
+test("reparación: se envía con motivo, el equipo queda en reparación y vuelve a preparación técnica", async ({ page }) => {
+  test.setTimeout(90000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco reparación E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  await page.getByRole("tab", { name: /Reparación/ }).click();
+  await page.getByLabel(/¿Qué hay que arreglar\?/).fill("Pantalla rota");
+  await page.getByRole("button", { name: "Enviar a reparación", exact: true }).click();
+  await expect(page.getByText("Este equipo está en reparación.")).toBeVisible();
+  await page.getByLabel(/¿Qué se hizo\?/).fill("Se cambió la pantalla");
+  await page.getByRole("button", { name: "Volver de reparación", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Enviar a reparación", exact: true })).toBeVisible();
+  const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token);
+  expect(server.unit.workshop_phase).toBe("technical");
+  expect(server.events.filter((e: { event_type: string }) => e.event_type.startsWith("repair_"))).toHaveLength(2);
+});
+
 test("regresión ERP: inventario y rentabilidad admiten unidad sin producto comercial", async ({ page }) => {
   test.setTimeout(90000);
   const location = await command("location", { code: `REG-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Recepción desconocida E2E" });
@@ -328,6 +391,9 @@ test("Hoja combinada: QR nuevos de equipos y de RAM más reimpresiones, todo en 
   await page.getByRole("button", { name: /Generar hoja \(reserva 20 números nuevos\)/ }).click();
   await expect(page.getByText("23 etiquetas en total")).toBeVisible();
   await expect(page.getByText(/20 números nuevos reservados/)).toBeVisible();
+  await expect(page.getByText(/Nuevas · STU-\d{6,} a STU-\d{6,}/)).toBeVisible();
+  await expect(page.getByText(/Nuevas · STUM-\d{4} a STUM-\d{4}/)).toBeVisible();
+  await expect(page.getByText(/Reimpresión · STU-\d{6,}/)).toBeVisible();
   await expect(page.getByTitle("Vista previa de la hoja combinada")).toBeVisible();
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Descargar PDF" }).last().click()]);
   const bytes = readFileSync((await download.path())!);

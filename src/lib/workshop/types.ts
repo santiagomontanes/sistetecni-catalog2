@@ -1,12 +1,14 @@
 export interface WorkshopUnit {
   id: string; unit_code: string; product_id: string | null; serial_number: string | null;
-  asset_kind: "computer" | "ram" | "storage" | "charger"; installed_in_unit_id: string | null;
+  asset_kind: "computer" | "ram" | "storage" | "charger" | "battery" | "screen" | "mouse" | "case" | "keyboard" | "usb" | "wifi" | "bluetooth" | "other"; installed_in_unit_id: string | null;
   workshop_phase: string | null; preliminary_condition: string | null; location_id: string | null;
   row_version: number; component_condition: string | null; component_attributes: Record<string, unknown>;
   spec_overrides: Record<string, unknown>; status: string; acquisition_cost_cop: number | null;
 }
 export interface WorkshopLocation { id: string; code: string; name: string; active: boolean; parent_id: string | null }
+export interface WorkshopExtra { id: string; costNumber: string; description: string; amountCop: number; createdAt: string; reversed: boolean }
 export interface WorkshopData {
+  extras?: WorkshopExtra[];
   enabled: boolean; unit: WorkshopUnit | null; units: WorkshopUnit[]; components: WorkshopUnit[];
   locations: WorkshopLocation[];
   definitions: { code: string; label: string; active: boolean; required: boolean }[];

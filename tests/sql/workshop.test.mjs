@@ -122,6 +122,76 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       const receipts = (await db.query("select snapshot,correction_of,reason from workshop_receipts where unit_id=$1 order by created_at", [computer])).rows;
       assert.equal(receipts.length, 2); assert.equal(receipts[0].snapshot.serial, undefined); assert.equal(receipts[1].snapshot.serial, "LOCAL-TEST"); assert.ok(receipts[1].correction_of);
     });
+    await t.test("corregir la unidad: solo administrador, con motivo, y queda el antes y el después", async () => {
+      const fixes = { costCop: "320000", condition: "fair", serial: `SN-FIX-${suffix}`, brand: "MarcaFix", model: "ModeloFix" };
+      await assert.rejects(command(b, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "Sin permiso", ...fixes }), /permission_denied/);
+      await assert.rejects(command(a, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "  ", ...fixes }), /reason_required/);
+      const before = await unit(db, computer);
+      await command(a, "correct_unit", { unitId: computer, version: await version(db, computer), reason: "Se digitó mal al recibir", ...fixes });
+      const after = await unit(db, computer);
+      assert.equal(String(after.acquisition_cost_cop), "320000"); assert.equal(after.preliminary_condition, "fair"); assert.equal(after.serial_number, `SN-FIX-${suffix}`);
+      const event = (await db.query("select before_data,after_data,reason from workshop_events where unit_id=$1 and event_type='correct_unit'", [computer])).rows[0];
+      assert.equal(event.reason, "Se digitó mal al recibir"); assert.equal(event.before_data.serial_number, before.serial_number); assert.equal(event.after_data.serial_number, `SN-FIX-${suffix}`);
+      const latest = (await db.query("select snapshot from workshop_receipts where unit_id=$1 order by created_at desc, id desc limit 1", [computer])).rows[0].snapshot;
+      assert.equal(latest.brand, "MarcaFix"); assert.equal(latest.model, "ModeloFix");
+    });
+    await t.test("cada tipo de pieza tiene su propio código (STUD-, STUM-…), que es también su QR", async () => {
+      const own = await command(a, "qr_batch", { count: 1 });
+      assert.match(own.labels[0].code, /^STU-\d{6,}$/);
+      const got = await command(a, "receive", { qrCode: own.labels[0].code, locationId: locationA, condition: "good", costCop: "0", snapshot: { ...snapshot(), components: [{ kind: "battery", notes: "6 celdas" }, { kind: "screen", notes: "14 pulgadas" }, { kind: "storage", capacityGb: 256 }, { kind: "usb", notes: "receptor" }] } });
+      const parts = (await db.query("select id,asset_kind,unit_code from product_units where installed_in_unit_id=$1 order by asset_kind", [got.unitId])).rows;
+      const code = k => parts.find(p => p.asset_kind === k).unit_code;
+      assert.match(code("battery"), /^STUB-\d{4}$/); assert.match(code("screen"), /^STUP-\d{4}$/); assert.match(code("storage"), /^STUD-\d{4}$/); assert.match(code("usb"), /^STUSB-\d{4}$/);
+      const labels = (await db.query("select code,kind,state,unit_id from workshop_qr_labels where unit_id = any($1)", [parts.map(p => p.id)])).rows;
+      assert.equal(labels.length, 4); assert.ok(labels.every(l => l.state === "assigned" && parts.some(p => p.unit_code === l.code && p.asset_kind === l.kind)));
+      const mouse = await command(a, "component_receive", { kind: "mouse", locationId: locationA, costCop: "15000", componentCondition: "functional", snapshot: { kind: "mouse", notes: "inalámbrico" } });
+      const mouseCode = (await db.query("select unit_code from product_units where id=$1", [mouse.unitId])).rows[0].unit_code;
+      assert.match(mouseCode, /^STUR-\d{4}$/);
+      const second = await command(a, "component_receive", { kind: "mouse", locationId: locationA, componentCondition: "untested", snapshot: { kind: "mouse" } });
+      assert.notEqual((await db.query("select unit_code from product_units where id=$1", [second.unitId])).rows[0].unit_code, mouseCode);
+    });
+    await t.test("etiquetas por tipo: qr_batch con kind, solo sirven para su tipo y el equipo exige etiqueta de equipo", async () => {
+      const disks = await command(a, "qr_batch", { count: 3, kind: "storage" });
+      assert.equal(disks.labels.length, 3); assert.ok(disks.labels.every(l => /^STUD-\d{4}$/.test(l.code) && l.kind === "storage"));
+      assert.equal(new Set(disks.labels.map(l => l.code)).size, 3);
+      await assert.rejects(command(a, "qr_batch", { count: 1, kind: "nave" }), /workshop_component_kind_invalid/);
+      await assert.rejects(command(a, "component_receive", { qrCode: disks.labels[0].code, kind: "ram", locationId: locationA, componentCondition: "untested", snapshot: { kind: "ram" } }), /workshop_qr_kind_mismatch/);
+      const okDisk = await command(a, "component_receive", { qrCode: disks.labels[0].code, kind: "storage", locationId: locationA, componentCondition: "untested", snapshot: { kind: "storage", capacityGb: 500 } });
+      assert.equal((await db.query("select unit_code from product_units where id=$1", [okDisk.unitId])).rows[0].unit_code, disks.labels[0].code);
+      await assert.rejects(command(a, "receive", { qrCode: disks.labels[1].code, locationId: locationA, condition: "good", costCop: "0", snapshot: snapshot() }), /workshop_qr_kind_mismatch/);
+      const rams = await command(a, "qr_batch", { count: 1, kind: "ram" });
+      assert.match(rams.labels[0].code, /^STUM-\d{4}$/);
+    });
+    await t.test("arreglo adicional: nombre y valor libres, suma al costo, solo el administrador lo anula", async () => {
+      const extra = { unitId: computer, name: "Soldadura de bisagra", amountCop: "35000" };
+      await assert.rejects(command(a, "extra_work", { ...extra, version: await version(db, computer), amountCop: "0" }), /extra_amount_invalid/);
+      await assert.rejects(command(a, "extra_work", { ...extra, version: await version(db, computer), name: "ab" }), /extra_name_required/);
+      await command(b, "extra_work", { ...extra, version: await version(db, computer) });
+      await command(a, "extra_work", { ...extra, name: "Pegante y tornillos", amountCop: "5000", version: await version(db, computer) });
+      const sum = async () => Number((await db.query("select coalesce(sum(amount_cop),0) s from cost_entries where product_unit_id=$1 and reference_type='workshop_extra'", [computer])).rows[0].s);
+      assert.equal(await sum(), 40000);
+      const list = (await a.query("select erp_workshop_extras($1) r", [computer])).rows[0].r;
+      assert.equal(list.length, 2); assert.equal(list[0].reversed, false);
+      await assert.rejects(command(b, "extra_work_reverse", { unitId: computer, version: await version(db, computer), costEntryId: list[0].id, reason: "Sin permiso" }), /permission_denied/);
+      await command(a, "extra_work_reverse", { unitId: computer, version: await version(db, computer), costEntryId: list[0].id, reason: "Se cargó dos veces" });
+      assert.equal(await sum(), 5000);
+      await assert.rejects(command(a, "extra_work_reverse", { unitId: computer, version: await version(db, computer), costEntryId: list[0].id, reason: "Otra vez" }), /extra_already_reversed/);
+      assert.equal((await a.query("select erp_workshop_extras($1) r", [computer])).rows[0].r[0].reversed, true);
+    });
+    await t.test("reparación: se envía y vuelve con motivo, y al volver se piden de nuevo los controles", async () => {
+      await assert.rejects(command(a, "repair_send", { unitId: computer, version: await version(db, computer), reason: " " }), /reason_required/);
+      await assert.rejects(command(a, "repair_return", { unitId: computer, version: await version(db, computer), reason: "Ya está" }), /not_in_repair/);
+      await command(b, "repair_send", { unitId: computer, version: await version(db, computer), reason: "Pantalla rota" });
+      assert.equal((await unit(db, computer)).workshop_phase, "repair");
+      await assert.rejects(command(a, "repair_send", { unitId: computer, version: await version(db, computer), reason: "Otra vez" }), /already_in_repair/);
+      await command(b, "repair_return", { unitId: computer, version: await version(db, computer), reason: "Se cambió la pantalla" });
+      assert.equal((await unit(db, computer)).workshop_phase, "technical");
+      assert.notEqual((await unit(db, computer)).status, "available");
+      const events = (await db.query("select event_type,reason from workshop_events where unit_id=$1 and event_type like 'repair_%' order by created_at", [computer])).rows;
+      assert.deepEqual(events.map(e => e.event_type), ["repair_send", "repair_return"]); assert.equal(events[1].reason, "Se cambió la pantalla");
+      const failed = (await db.query("select count(*)::int n from workshop_checks where unit_id=$1 and note='Pendiente de repetir después de reparación'", [computer])).rows[0].n;
+      assert.ok(failed > 0);
+    });
     await t.test("QR anulado, RLS, escrituras directas, ubicaciones ocupadas y desactivación", async () => {
       await command(a, "qr_void", { code: batch.labels[2].code, reason: "Etiqueta dañada" });
       await assert.rejects(command(a, "receive", { qrCode: batch.labels[2].code, locationId: locationA, condition: "good", snapshot: snapshot() }), /qr_not_free/);

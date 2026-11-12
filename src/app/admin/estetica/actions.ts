@@ -8,7 +8,7 @@ const command=z.discriminatedUnion("action",[
 ]);
 export async function finishAction(payload:{accessToken:unknown;input:unknown;requestId:string}){
  try{const data=command.parse(payload.input),key=z.string().uuid().parse(payload.requestId);const {client}=await requireErpPermission(payload.accessToken,"inventory.manage");const {data:result,error}=await client.rpc("erp_finish_command",{p_action:data.action,p_payload:data,p_key:key});
- if(error)return {ok:false as const,error:error.message.includes("version_conflict")?"La unidad cambió. Actualiza la ficha y revisa la configuración antes de guardar.":error.message.includes("available_units_require")?"Todas las unidades disponibles deben tener acabado, fotos y configuración validados antes de publicar.":error.message.includes("no_sellable")?"Primero completa los controles y habilita al menos una unidad para venta.":"No se guardó. Revisa permisos, acabado, fotos, precio y disponibilidad."};return {ok:true as const,data:result};
+ if(error)return {ok:false as const,error:error.message.includes("version_conflict")?"La unidad cambió. Actualiza la ficha y revisa la configuración antes de guardar.":error.message.includes("available_units_require")?"Todas las unidades disponibles deben tener acabado y configuración validados antes de publicar.":error.message.includes("no_sellable")?"Primero completa los controles y habilita al menos una unidad para venta.":"No se guardó. Revisa permisos, acabado, fotos, precio y disponibilidad."};return {ok:true as const,data:result};
  }catch{return {ok:false as const,error:"Datos o sesión inválidos."};}
 }
 export async function finishRead(payload:{accessToken:unknown;unitId:string;query:string}){

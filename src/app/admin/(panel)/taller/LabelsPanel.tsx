@@ -2,16 +2,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { callAdminAction } from "@/lib/callAdminAction";
 import { getErpProfile } from "@/supabase/auth";
-import { sizes, captions, pdfUrl, type LabelSizeId } from "./labelOptions";
+import { sizes, captions, pdfUrl, labelKinds, labelKindName, kindExample, defaultSizeFor, type LabelKind, type LabelSizeId } from "./labelOptions";
 import LabelsJob from "./LabelsJob";
 import { createWorkshopLabelsPdf, listWorkshopLabelBatches, reprintUnitLabelsPdf, reprintWorkshopLabelsPdf, type LabelBatch, type LabelsPdfResult } from "@/app/admin/taller/actions";
 
 const field = "rounded border px-3 py-2";
 const button = "rounded border px-3 py-2 disabled:opacity-50";
 
-export default function LabelsPanel({ enabled, hasLocations, presetSize }: { enabled: boolean; hasLocations: boolean; presetSize?: { size: LabelSizeId; n: number } }) {
+export default function LabelsPanel({ enabled, hasLocations, presetSize }: { enabled: boolean; hasLocations: boolean; presetSize?: { size: LabelSizeId; n: number; kind?: LabelKind } }) {
   const [count, setCount] = useState(10); const [size, setSize] = useState<LabelSizeId>("medium");
-  useEffect(() => { if (presetSize) setSize(presetSize.size); }, [presetSize]);
+  const [kind, setKind] = useState<LabelKind>("computer");
+  useEffect(() => { if (presetSize) { setSize(presetSize.size); if (presetSize.kind) setKind(presetSize.kind); } }, [presetSize]);
   const [caption, setCaption] = useState(""); const [layout, setLayout] = useState<"square" | "strip">("square"); const [qrCm, setQrCm] = useState(4);
   const look = { size, caption: caption.trim() || undefined, ...(size === "custom" ? { layout, qrCm: Math.min(8, Math.max(0.6, qrCm || 4)) } : {}) };
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
@@ -45,10 +46,11 @@ export default function LabelsPanel({ enabled, hasLocations, presetSize }: { ena
   const fileName = pdf ? `etiquetas-${pdf.info.first}-a-${pdf.info.last}.pdf` : "etiquetas.pdf";
   return <section id="etiquetas-qr" className="space-y-4 rounded border bg-white p-4">
     <div><h2 className="text-lg font-semibold">1. Etiquetas QR</h2>
-      <p className="text-sm text-slate-600">Cada etiqueta es un código STU único: el mismo que tendrá el equipo en todo el sistema. Al generar se <strong>reservan</strong> esos números y se abre el PDF para revisar e imprimir. Si lo pierde, lo recupera en «Lotes anteriores».</p></div>
+      <p className="text-sm text-slate-600">Cada etiqueta es un código único según su tipo (equipo STU-, disco STUD-, memoria STUM-…): el mismo que tendrá la pieza en todo el sistema. Al generar se <strong>reservan</strong> esos números y se abre el PDF para revisar e imprimir. Si lo pierde, lo recupera en «Lotes anteriores».</p></div>
     {!hasLocations && <p className="rounded bg-amber-50 p-3 text-sm text-amber-900">Aún no hay ubicaciones. Puede imprimir etiquetas, pero para recibir equipos primero cree al menos una ubicación (paso 2).</p>}
-    <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); void run(() => callAdminAction(createWorkshopLabelsPdf, { count, ...look })); }}>
+    <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); void run(() => callAdminAction(createWorkshopLabelsPdf, { count, kind, ...look })); }}>
       <label className="text-sm">¿Cuántos equipos llegaron?<input type="number" min={1} max={200} value={count} onChange={e => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))} className={`${field} block w-32`} /></label>
+      <label className="text-sm">Tipo de etiqueta<select aria-label="Tipo de etiqueta" value={kind} onChange={e => { const k = e.target.value as LabelKind; setKind(k); setSize(defaultSizeFor(k)); }} className={`${field} block`}>{labelKinds.map(k => <option key={k} value={k}>{labelKindName(k)} · {kindExample(k)}</option>)}</select></label>
       <label className="text-sm">Tamaño de etiqueta<select value={size} onChange={e => setSize(e.target.value as typeof size)} className={`${field} block`}>{sizes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       <label className="text-sm">Texto en la etiqueta (opcional)<input list="etiqueta-textos" maxLength={24} value={caption} onChange={e => setCaption(e.target.value)} placeholder="Disco, Cargador…" className={`${field} block w-48`} /></label>
       <datalist id="etiqueta-textos">{captions.map(c => <option key={c} value={c} />)}</datalist>

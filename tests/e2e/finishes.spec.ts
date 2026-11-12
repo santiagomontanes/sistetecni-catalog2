@@ -34,7 +34,7 @@ test('estética web, dos acabados, fotos reales, stock público y snapshot de ve
   const finishes=await operator.client.from('product_finishes').select('id,name').eq('product_id',product.data.id).eq('name',i?'Gris chinas':'Gris 3D').single();
   if(finishes.error)throw finishes.error;finishIds.push(finishes.data.id);
   await aesthetic.getByLabel(/^Acabado/).selectOption(finishes.data.id);
-  await aesthetic.getByLabel(/Fotos públicas del acabado/).setInputFiles({name:`acabado-${i}.png`,mimeType:'image/png',buffer:await page.screenshot()});
+  await aesthetic.getByLabel(/Fotos del acabado \(opcional\)/).setInputFiles({name:`acabado-${i}.png`,mimeType:'image/png',buffer:await page.screenshot()});
   await expect(aesthetic.getByText('Foto del acabado guardada.',{exact:true})).toBeVisible();
   await aesthetic.getByLabel('Precio de configuración').fill(i?'120000':'100000');
   await aesthetic.getByLabel('Revisé el acabado, las características y el precio de esta unidad.').check();

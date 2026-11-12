@@ -1,10 +1,13 @@
 import { z } from "zod";
+import { partKinds } from "./partKinds";
 
 const optionalText = (max = 300) => z.string().trim().max(max).optional();
+// Código de una pieza: el STU-000123 de siempre o el propio de su tipo (STUD-0001…). Los computadores siguen en STU-.
+export const partCodePattern = /^STU(?:SB|BT|[DMCBPWRFTO])?-\d{4,}$/;
 const uuid = z.string().uuid();
 const money = z.string().regex(/^\d{1,15}$/, "Use pesos enteros, sin separadores").optional();
 export const componentSchema = z.object({
-  kind: z.enum(["ram", "storage", "charger"]),
+  kind: z.enum(partKinds),
   capacityGb: z.number().positive().max(100000).nullable().optional(),
   generation: z.enum(["DDR2", "DDR3", "DDR3L", "DDR4", "DDR5"]).nullable().optional(),
   formFactor: optionalText(50), technology: z.enum(["HDD", "SSD"]).nullable().optional(),
@@ -26,12 +29,18 @@ const unitVersion = { unitId: uuid, version: z.number().int().nonnegative() };
 const reason = z.string().trim().min(3).max(1000);
 const schemas = {
   configure: z.object({ enabled: z.boolean() }), qr_batch: z.object({ count: z.number().int().min(1).max(200) }),
-  qr_void: z.object({ code: z.string().regex(/^STU-\d{6,}$/), reason }),
+  qr_void: z.object({ code: z.string().regex(partCodePattern), reason }),
   location: z.union([z.object({ code: z.string().trim().regex(/^[A-Z0-9_-]{1,32}$/), name: z.string().trim().min(1).max(120), parentId: uuid.optional() }), z.object({ id: uuid, active: z.boolean() })]),
   receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/), existingUnitId: z.union([uuid,z.string().regex(/^STU-\d{6,}$/)]).optional(), productId: uuid.optional(), locationId: uuid, costCop: money, condition: z.enum(["good", "fair", "bad"]), snapshot: receiptSchema }).refine(v => v.existingUnitId !== undefined || v.costCop !== undefined, { path: ["costCop"], message: "El costo de adquisición es obligatorio (use 0 si fue donación)" }),
-  component_receive: z.object({ qrCode: z.string().regex(/^STU-\d{6,}$/).optional(), kind: z.enum(["ram", "storage", "charger"]), locationId: uuid, costCop: money, componentCondition: z.enum(["untested", "functional", "defective"]), snapshot: componentSchema }),
+  component_receive: z.object({ qrCode: z.string().regex(partCodePattern).optional(), kind: z.enum(partKinds), locationId: uuid, costCop: money, componentCondition: z.enum(["untested", "functional", "defective"]), snapshot: componentSchema }),
   move: z.object({ ...unitVersion, locationId: uuid, reason }),
   phase: z.object({ ...unitVersion, phase: z.enum(["reception", "diagnosis", "technical", "aesthetic", "final_check", "ready", "warehouse"]), reason: reason.optional() }),
+  correct_unit: z.object({ ...unitVersion, reason, costCop: money, condition: z.enum(["good", "fair", "bad"]).optional(), locationId: uuid.optional(), serial: z.string().trim().max(120).optional(), brand: optionalText(100), model: optionalText(100), source: optionalText(200),
+    components: z.array(z.object({ id: uuid, attributes: z.object({ capacityGb: z.number().positive().max(100000).nullable().optional(), generation: z.enum(["DDR2", "DDR3", "DDR3L", "DDR4", "DDR5"]).nullable().optional(), formFactor: optionalText(50), technology: z.enum(["HDD", "SSD"]).nullable().optional(), interface: z.enum(["SATA", "NVMe", "IDE", "SAS", "unknown"]).optional(), connector: optionalText(80), voltage: z.number().positive().nullable().optional(), current: z.number().positive().nullable().optional(), watts: z.number().positive().nullable().optional() }) })).max(20).optional() }),
+  extra_work: z.object({ ...unitVersion, name: z.string().trim().min(3).max(120), amountCop: z.string().regex(/^[1-9]\d{0,14}$/, "Use pesos enteros mayores a 0, sin separadores") }),
+  extra_work_reverse: z.object({ ...unitVersion, costEntryId: uuid, reason }),
+  repair_send: z.object({ ...unitVersion, reason }),
+  repair_return: z.object({ ...unitVersion, reason }),
   correct_receipt: z.object({ ...unitVersion, snapshot: receiptSchema, reason }),
   configuration: z.object({ ...unitVersion, configuration: z.object({ cpu: optionalText(150), screen: optionalText(150), ramGeneration: z.enum(["DDR2", "DDR3", "DDR3L", "DDR4", "DDR5"]).nullable().optional(), ramFormFactor: optionalText(50), storageInterfaces: z.array(z.enum(["SATA", "NVMe", "IDE", "SAS"])).max(4).optional(), chargerVoltage: z.number().positive().nullable().optional(), chargerConnector: optionalText(80) }).strict(), reason }),
   check: z.object({ ...unitVersion, code: z.string().regex(/^[a-z0-9_]{1,50}$/), result: z.enum(["passed", "failed", "not_applicable"]), note: optionalText(2000) }).refine(v => v.result !== "not_applicable" || (v.note?.length ?? 0) >= 3, "Justifique por qué no aplica"),
@@ -49,8 +58,11 @@ export function validateWorkshopCommand(action: string, payload: unknown) {
 export function parseQr(value: string): string | null {
   const trimmed = value.trim();
   if (/^STU-\d{6,}$/i.test(trimmed)) return trimmed.toUpperCase();
+  // Código de pieza por tipo (STUD-0001, STUM-12…): se completa a 4 dígitos.
+  const part = /^(STU(?:SB|BT|[DMCBPWRFTO]))[-\s]?(\d{1,12})$/i.exec(trimmed);
+  if (part) return `${part[1].toUpperCase()}-${part[2].padStart(4, "0")}`;
   // Solo el número (83, 000083) o «STU 83»: se completa a STU-000083.
   const short = /^(?:stu[-\s]?)?(\d{1,12})$/i.exec(trimmed);
   if (short) return `STU-${short[1].padStart(6, "0")}`;
-  try { const url = new URL(trimmed); const qr = url.searchParams.get("qr"); return qr && /^STU-\d{6,}$/i.test(qr) ? qr.toUpperCase() : null; } catch { return null; }
+  try { const url = new URL(trimmed); const qr = url.searchParams.get("qr"); return qr && (/^STU-\d{6,}$/i.test(qr) || partCodePattern.test(qr.toUpperCase())) ? qr.toUpperCase() : null; } catch { return null; }
 }
