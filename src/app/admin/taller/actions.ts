@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireErpPermission } from "@/lib/erpAuth/auth";
 import { validateWorkshopCommand } from "@/lib/workshop/validation";
-import { buildLabelsPdf } from "@/lib/workshop/labelsPdf";
+import { buildLabelsPdf, CAPTION_MAX, LABEL_PRESETS, QR_CM_MAX, QR_CM_MIN, type LabelSpec } from "@/lib/workshop/labelsPdf";
 import type { WorkshopData, WorkshopResult, WorkshopUnit } from "@/lib/workshop/types";
 
 const messages: Record<string, string> = {
@@ -73,42 +73,49 @@ export async function commandWorkshop(input: { accessToken: unknown; action: str
     return { ok: true, data: data as Record<string, unknown> };
   } catch (error) { return failure(error); }
 }
-const labelSize = z.enum(["small", "medium", "large", "ram"]);
+// «custom»: medida, disposición y texto libres. Los demás son tamaños predefinidos (el texto opcional también se admite).
+const labelSize = z.enum(["small", "medium", "large", "ram", "piece", "custom"]);
+const labelLook = { size: labelSize, qrCm: z.number().min(QR_CM_MIN).max(QR_CM_MAX).optional(), layout: z.enum(["square", "strip"]).optional(), caption: z.string().max(CAPTION_MAX).optional() };
+type LabelLook = { size: z.infer<typeof labelSize>; qrCm?: number; layout?: "square" | "strip"; caption?: string };
+function labelSpec(look: LabelLook): LabelSpec {
+  const base: LabelSpec = look.size === "custom" ? { layout: look.layout ?? "square", qrCm: look.qrCm ?? 4 } : LABEL_PRESETS[look.size];
+  return { ...base, ...(look.caption?.trim() ? { caption: look.caption } : {}) };
+}
 export interface LabelBatch { batchId: string; createdAt: string; total: number; free: number; assigned: number; void: number; first: string; last: string }
 export interface LabelsPdfResult { pdfBase64: string; batchId: string; count: number; first: string; last: string }
-async function pdfForCodes(codes: string[], size: z.infer<typeof labelSize>, batchId: string): Promise<LabelsPdfResult> {
+async function pdfForCodes(codes: string[], look: LabelLook, batchId: string): Promise<LabelsPdfResult> {
   const sorted = [...codes].sort();
   const title = `Etiquetas SISTETECNI ${new Date().toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}`;
-  const bytes = await buildLabelsPdf(sorted, size, title);
+  const bytes = await buildLabelsPdf(sorted, labelSpec(look), title);
   return { pdfBase64: Buffer.from(bytes).toString("base64"), batchId, count: sorted.length, first: sorted[0], last: sorted[sorted.length - 1] };
 }
 // Solo administrador (también se exige en SQL). Reserva N números STU y devuelve el PDF para imprimir. Si el PDF fallara, el lote queda
 // registrado y se puede reimprimir desde «Lotes anteriores»; los STU no se pierden.
-export async function createWorkshopLabelsPdf(input: { accessToken: unknown; count: number; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
+export async function createWorkshopLabelsPdf(input: { accessToken: unknown; count: number; size: string; qrCm?: number; layout?: string; caption?: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
     const { client } = await requireErpPermission(input.accessToken, "users.manage");
-    const parsed = z.object({ count: z.number().int().min(1).max(200), size: labelSize }).parse(input);
+    const parsed = z.object({ count: z.number().int().min(1).max(200), ...labelLook }).parse(input);
     const { data, error } = await client.rpc("erp_workshop_command", { p_action: "qr_batch", p_payload: { count: parsed.count }, p_key: randomUUID() });
     if (error) throw new Error(error.message);
     const batch = data as { batchId: string; labels: { code: string }[] };
-    return { ok: true, data: await pdfForCodes(batch.labels.map(l => l.code), parsed.size, batch.batchId) };
+    return { ok: true, data: await pdfForCodes(batch.labels.map(l => l.code), parsed, batch.batchId) };
   } catch (error) { return failure(error); }
 }
-export async function reprintWorkshopLabelsPdf(input: { accessToken: unknown; batchId: string; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
+export async function reprintWorkshopLabelsPdf(input: { accessToken: unknown; batchId: string; size: string; qrCm?: number; layout?: string; caption?: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
     const { client } = await requireErpPermission(input.accessToken, "inventory.read");
-    const parsed = z.object({ batchId: z.string().uuid(), size: labelSize }).parse(input);
+    const parsed = z.object({ batchId: z.string().uuid(), ...labelLook }).parse(input);
     const { data, error } = await client.from("workshop_qr_labels").select("code").eq("batch_id", parsed.batchId).eq("state", "free").order("code").limit(200);
     if (error) throw new Error(error.message);
     if (!data?.length) return { ok: false, error: "labels_none_free", message: "Este lote ya no tiene etiquetas libres para imprimir." };
-    return { ok: true, data: await pdfForCodes(data.map(l => l.code as string), parsed.size, parsed.batchId) };
+    return { ok: true, data: await pdfForCodes(data.map(l => l.code as string), parsed, parsed.batchId) };
   } catch (error) { return failure(error); }
 }
 // Reimpresión de etiquetas ya generadas, estén o no asignadas a un equipo (etiqueta rota, borrada, ilegible o nunca impresa). Solo lee: no reserva números ni toca unidades.
-export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes: string; from?: number; to?: number; size: string }): Promise<WorkshopResult<LabelsPdfResult>> {
+export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes: string; from?: number; to?: number; size: string; qrCm?: number; layout?: string; caption?: string }): Promise<WorkshopResult<LabelsPdfResult>> {
   try {
     const { client } = await requireErpPermission(input.accessToken, "inventory.read");
-    const parsed = z.object({ codes: z.string().max(5000), from: z.number().int().min(1).max(999999999999).optional(), to: z.number().int().min(1).max(999999999999).optional(), size: labelSize }).parse(input);
+    const parsed = z.object({ codes: z.string().max(5000), from: z.number().int().min(1).max(999999999999).optional(), to: z.number().int().min(1).max(999999999999).optional(), ...labelLook }).parse(input);
     const wanted = new Set<string>();
     const code = (n: number) => `STU-${String(n).padStart(6, "0")}`;
     for (const token of parsed.codes.split(/[\s,;]+/).filter(Boolean)) {
@@ -131,7 +138,7 @@ export async function reprintUnitLabelsPdf(input: { accessToken: unknown; codes:
     for (const l of labels ?? []) found.add(l.code as string);
     const missing = [...wanted].filter(c => !found.has(c));
     if (missing.length) return { ok: false, error: "labels_unit_not_found", message: `No existe ninguna etiqueta ni unidad vigente con: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}. Las etiquetas nuevas se generan arriba.` };
-    return { ok: true, data: await pdfForCodes([...found], parsed.size, "reimpresion") };
+    return { ok: true, data: await pdfForCodes([...found], parsed, "reimpresion") };
   } catch (error) { return failure(error); }
 }
 export async function listWorkshopLabelBatches(input: { accessToken: unknown }): Promise<WorkshopResult<LabelBatch[]>> {
