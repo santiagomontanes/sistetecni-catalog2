@@ -28,16 +28,28 @@ export function cleanCaption(raw?: string): string {
   return (raw ?? "").replace(/[^\x20-\x7E\u00A1-\u00FF]/g, "").replace(/\s+/g, " ").trim().slice(0, CAPTION_MAX);
 }
 
+export interface LabelGroup { codes: string[]; size: LabelSize | LabelSpec }
+
+// Un solo PDF con varios grupos (p. ej. equipos y memorias): cada grupo usa su propia medida y empieza en hoja nueva.
 // El QR contiene únicamente el STU: sin URL, PII ni servicios externos.
 export async function buildLabelsPdf(codes: string[], size: LabelSize | LabelSpec, title: string): Promise<Uint8Array> {
-  if (!codes.length) throw new Error("labels_empty");
-  const spec: LabelSpec = typeof size === "string" ? LABEL_PRESETS[size] : size;
-  if (!(spec.qrCm >= QR_CM_MIN && spec.qrCm <= QR_CM_MAX)) throw new Error("labels_bad_size");
-  const caption = cleanCaption(spec.caption);
+  return buildLabelsPdfGroups([{ codes, size }], title);
+}
+
+export async function buildLabelsPdfGroups(groups: LabelGroup[], title: string): Promise<Uint8Array> {
+  const used = groups.filter(g => g.codes.length);
+  if (!used.length) throw new Error("labels_empty");
   const pdf = await PDFDocument.create();
   pdf.setTitle(title); pdf.setCreator("SISTETECNI ERP");
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const footers: { page: ReturnType<typeof pdf.addPage>; note: string }[] = [];
+  const total = used.reduce((n, g) => n + g.codes.length, 0);
+  for (const group of used) {
+  const codes = group.codes;
+  const spec: LabelSpec = typeof group.size === "string" ? LABEL_PRESETS[group.size] : group.size;
+  if (!(spec.qrCm >= QR_CM_MIN && spec.qrCm <= QR_CM_MAX)) throw new Error("labels_bad_size");
+  const caption = cleanCaption(spec.caption);
   const strip = spec.layout === "strip";
   const sheet = (spec.sheet ?? (strip ? "letter" : "a4")) === "letter" ? LETTER : A4;
   const side = spec.qrCm * CM;
@@ -88,8 +100,9 @@ export async function buildLabelsPdf(codes: string[], size: LabelSize | LabelSpe
         page.drawText(caption, { x: x + (cellW - regular.widthOfTextAtSize(caption, cfs)) / 2, y: y + PAD + 0.12 * CM + fs + 3, size: cfs, font: regular, color: rgb(0, 0, 0) });
       }
     });
-    const footer = `${title} · ${codes.length} etiquetas · página ${p + 1} de ${pages}`;
-    page.drawText(footer, { x: MARGIN, y: 0.5 * CM, size: 7, font: regular, color: rgb(0.4, 0.4, 0.4) });
+    footers.push({ page, note: `${codes.length} etiquetas${caption ? ` «${caption}»` : ""}` });
   }
+  }
+  footers.forEach(({ page, note }, i) => page.drawText(`${title} · ${note} · ${total} en total · página ${i + 1} de ${footers.length}`, { x: MARGIN, y: 0.5 * CM, size: 7, font: regular, color: rgb(0.4, 0.4, 0.4) }));
   return pdf.save();
 }

@@ -310,3 +310,30 @@ test("Repuesto suelto: usa una etiqueta ya impresa, la deja asignada y enlaza a 
   }, { timeout: 20000 }).toBe("assigned");
   await expect(page.getByText("Etiqueta no válida")).toHaveCount(0);
 });
+
+test("Hoja combinada: QR nuevos de equipos y de RAM más reimpresiones, todo en un solo PDF", async ({ page }) => {
+  test.setTimeout(120000);
+  const location = await command("location", { code: `HC-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Hoja combinada E2E" });
+  const old = await command("qr_batch", { count: 3 });
+  await command("receive", { qrCode: old.labels[0].code, locationId: location.id, condition: "good", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [] } });
+  await login(page);
+  await page.getByText("Preparar taller: etiquetas QR y ubicaciones", { exact: true }).click();
+  await page.getByLabel("Cantidad, línea 1").fill("10");
+  await page.getByLabel("Cantidad, línea 2").fill("10");
+  await page.getByRole("button", { name: "Agregar línea" }).click();
+  await page.getByLabel("Qué imprimir, línea 3").selectOption("reprint");
+  await page.getByLabel("STU de la hoja, línea 3").fill(old.labels.map((l: { code: string }) => l.code).join(" "));
+  await page.getByLabel("Tamaño, línea 3").selectOption("piece");
+  await page.getByLabel("Texto, línea 3").fill("Disco");
+  await page.getByRole("button", { name: /Generar hoja \(reserva 20 números nuevos\)/ }).click();
+  await expect(page.getByText("23 etiquetas en total")).toBeVisible();
+  await expect(page.getByText(/20 números nuevos reservados/)).toBeVisible();
+  await expect(page.getByTitle("Vista previa de la hoja combinada")).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Descargar PDF" }).last().click()]);
+  const bytes = readFileSync((await download.path())!);
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+  // Una reimpresión con un STU inexistente se rechaza antes de reservar números nuevos.
+  await page.getByLabel("STU de la hoja, línea 3").fill("STU-999999999");
+  await page.getByRole("button", { name: /Generar hoja/ }).click();
+  await expect(page.getByText(/No existe ninguna etiqueta ni unidad vigente/)).toBeVisible();
+});
