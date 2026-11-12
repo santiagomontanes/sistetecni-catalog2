@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument } from "pdf-lib";
-import { buildLabelsPdf } from "./labelsPdf";
+import { buildLabelsPdf, cleanCaption, CAPTION_MAX } from "./labelsPdf";
 import { suggestLocationCode } from "./locations";
 test("PDF de etiquetas: una página por grilla y un QR por STU", async () => {
   const codes = Array.from({ length: 30 }, (_, i) => `STU-${String(126 + i).padStart(6, "0")}`);
@@ -49,4 +49,22 @@ test("etiqueta de RAM: hoja carta, 1 cm de alto y muchas por hoja", async () => 
   const { width, height } = doc.getPage(0).getSize();
   assert.ok(Math.abs(width - 21.59 * 28.3465) < 1 && Math.abs(height - 27.94 * 28.3465) < 1, "hoja carta");
   assert.equal(doc.getPageCount(), 1, "120 etiquetas de 1 cm caben en una carta");
+});
+test("etiquetas libres: medida, disposición y texto a elección; rechaza medidas fuera de rango", async () => {
+  const codes = Array.from({ length: 40 }, (_, i) => `STU-${String(1 + i).padStart(6, "0")}`);
+  for (const spec of [
+    { layout: "square", qrCm: 2, caption: "Disco" },
+    { layout: "strip", qrCm: 1.5, caption: "Cargador" },
+    { layout: "strip", qrCm: 8 },
+    { layout: "square", qrCm: 3, caption: "Ñandú ✓ 😀 " + "x".repeat(40) },
+  ] as const) {
+    const bytes = await buildLabelsPdf(codes, spec, "Libre");
+    assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), "%PDF-");
+  }
+  assert.equal(cleanCaption("  Ratón ✓ 😀  grande  "), "Ratón grande");
+  assert.equal(cleanCaption("x".repeat(60)).length, CAPTION_MAX);
+  const piece = await PDFDocument.load(await buildLabelsPdf(codes, "piece", "Pieza"));
+  assert.equal(piece.getPageCount(), 1, "40 etiquetas de pieza caben en una carta");
+  await assert.rejects(buildLabelsPdf(codes, { layout: "square", qrCm: 0.2 }, "x"), /labels_bad_size/);
+  await assert.rejects(buildLabelsPdf(codes, { layout: "square", qrCm: 20 }, "x"), /labels_bad_size/);
 });
