@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
   { href: "/admin/envios", label: "Envíos y recaudos", icon: "🚚", exact: false, permission: "sales.read" },
   { href: "/admin/asistencia", label: "Asistencia", icon: "🕒", exact: false },
   { href: "/admin/ventas", label: "Ventas", icon: "💵", exact: false, permission: "sales.read" },
+  { href: "/admin/reservas", label: "Reservas", icon: "📌", exact: false, adminOnly: true },
   { href: "/admin/caja", label: "Caja", icon: "🧮", exact: false, permission: "cash.read" },
   { href: "/admin/gastos", label: "Gastos", icon: "💸", exact: false, permission: "expenses.read" },
   { href: "/admin/rentabilidad", label: "Rentabilidad", icon: "📊", exact: false, permission: "profitability.view" },
