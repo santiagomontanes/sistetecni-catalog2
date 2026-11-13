@@ -10,7 +10,7 @@ import CameraScanner from "./CameraScanner";
 import LabelsPanel from "./LabelsPanel";
 import LocationsPanel from "./LocationsPanel";
 import { findLocation, locationChoices, locationPath } from "@/lib/workshop/locations";
-import ReceptionForm from "./ReceptionForm";
+import ReceptionForm, { type ReceptionTemplate } from "./ReceptionForm";
 import StationLink from "@/components/workshop/StationLink";
 import UnitPhotos from "@/components/workshop/UnitPhotos";
 import UnitFinish from "@/components/workshop/UnitFinish";
@@ -38,6 +38,9 @@ export default function WorkshopPage() {
   const [qr, setQr] = useState(""); const [status, setStatus] = useState("Conectando…"); const [error, setError] = useState("");
   const [busy, setBusy] = useState(false); const [phase, setPhase] = useState<PhaseId>("1");
   const [formEpoch,setFormEpoch]=useState(0);
+  // Último computador recibido: sirve de plantilla para el siguiente equipo igual (se recuerda en este navegador).
+  const [lastReception, setLastReception] = useState<ReceptionTemplate>(); const [blankForm, setBlankForm] = useState(false);
+  useEffect(() => { try { const raw = window.localStorage.getItem("taller:ultima-recepcion"); if (raw) setLastReception(JSON.parse(raw) as ReceptionTemplate); } catch { /* sin almacenamiento: no hay plantilla */ } }, []);
   const [componentQuery, setComponentQuery] = useState(""); const [componentOffset, setComponentOffset] = useState(0);
   const [componentResults, setComponentResults] = useState<WorkshopUnit[] | null>(null);
   const dirty = useRef(false); const retry = useRef<{ signature: string; key: string } | undefined>(undefined);
@@ -55,7 +58,7 @@ export default function WorkshopPage() {
   useEffect(() => { const params = new URLSearchParams(window.location.search); const initial = params.get("unit"); if (initial) setUnitId(initial); const code = params.get("qr"); if (code) { setSearch(code); setQr(code); } }, []);
   useEffect(() => { dirty.current = false; void load(true); const timer = setInterval(() => void load(), 5000); const reconnect = () => void load(); window.addEventListener("online", reconnect); return () => { clearInterval(timer); window.removeEventListener("online", reconnect); }; }, [load]);
   const selectUnit = useCallback((id: string) => { if(dirty.current&&!window.confirm("Hay campos sin guardar. ¿Descartarlos y abrir la unidad seleccionada?"))return; dirty.current = false; setQr(""); setUnitId(id); setPhase(p => (p === "1" ? "2" : p)); window.history.replaceState(null, "", `/admin/taller?unit=${encodeURIComponent(id)}`); }, []);
-  const scan = useCallback((raw: string) => { const code = parseQr(raw); if (!code) { setError("Código QR no válido. Use el código STU impreso."); return; } setQr(code); setSearch(code); dirty.current = false; }, []);
+  const scan = useCallback((raw: string) => { const code = parseQr(raw); if (!code) { setError("Código QR no válido. Use el código STU impreso."); return; } setQr(code); setSearch(code); setBlankForm(false); dirty.current = false; }, []);
   const [prepOpen, setPrepOpen] = useState(false); const [labelPreset, setLabelPreset] = useState<{ size: "ram"; n: number; kind: "ram" }>();
   const relay = useRef<((value: string) => void) | null>(null);
   const scanAndRelay = useCallback((raw: string) => { scan(raw); relay.current?.(raw); }, [scan]);
@@ -134,7 +137,16 @@ export default function WorkshopPage() {
     {qr && data?.qr?.state === "void" && <p className="rounded bg-red-50 p-3">Etiqueta anulada. No puede reutilizarse.</p>}
     {qr && data && !data.qr && <p className="rounded bg-amber-50 p-3">No existe esta etiqueta. Compruebe el código impreso.</p>}
     <div role="tablist" aria-label="Fases del taller" className="grid grid-cols-2 gap-2 lg:grid-cols-5">{PHASES.map(ph => <button key={ph.id} role="tab" type="button" aria-selected={phase === ph.id} onClick={() => setPhase(ph.id)} className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${phase === ph.id ? "border-primary bg-primary text-white shadow" : "border-border bg-white hover:bg-surface"}`}><span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${phase === ph.id ? "bg-white text-primary" : "bg-surface text-slate-700"}`}>{ph.id}</span><span><span className="block font-semibold">{ph.label.replace(/^Fase \d · /, "")}<span className="sr-only">{" "}{ph.label.slice(0, 6)}</span></span><span className={`block text-xs ${phase === ph.id ? "text-white/80" : "text-slate-500"}`}>{ph.hint}</span></span></button>)}</div>
-    {qr && data?.qr?.state === "free" && <ReceptionForm qr={qr} locations={locations} disabled={busy || !data.enabled} onReceive={async payload => { const result = await command("receive", payload); if (typeof result?.unitId === "string") selectUnit(result.unitId); }} />}
+    {qr && data?.qr?.state === "free" && <ReceptionForm key={`${qr}:${blankForm}`} qr={qr} locations={locations} disabled={busy || !data.enabled} template={blankForm || !qr.startsWith("STU-") ? undefined : lastReception} onBlank={() => setBlankForm(true)} onReceive={async payload => {
+      const result = await command("receive", payload);
+      if (typeof result?.unitId === "string") {
+        const snapshot = (payload.snapshot ?? {}) as Record<string, unknown>;
+        const next: ReceptionTemplate = { from: String(result.unitCode ?? qr), ...(payload.costCop ? { costCop: String(payload.costCop) } : {}), ...(payload.locationId ? { locationId: String(payload.locationId) } : {}), snapshot: { brand: snapshot.brand, model: snapshot.model, source: snapshot.source, screenInches: snapshot.screenInches, screenType: snapshot.screenType, screenNotes: snapshot.screenNotes, components: snapshot.components } };
+        setLastReception(next); setBlankForm(false);
+        try { window.localStorage.setItem("taller:ultima-recepcion", JSON.stringify(next)); } catch { /* opcional */ }
+        selectUnit(result.unitId);
+      }
+    }} />}
     {unit && <section className={`space-y-4 ${card}`} key={`${unit.id}:${formEpoch}`}>
       <div className="space-y-2"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">{unitName(unit)}</h2><span className="text-slate-600">{unit.serial_number ?? "Serial desconocido"}</span></div><div className="flex flex-wrap gap-2 text-sm"><span className={`${badge} !bg-primary/10 text-primary`}>{phaseLabels[unit.workshop_phase ?? ""] ?? "Sin fase"}</span><span className={badge}>📍 {locationName(unit.location_id)}</span><span className={badge}>Estado comercial: {unit.status}</span><span className={badge}>Versión {unit.row_version}</span></div><p className="text-sm">RAM actual: {String(unit.spec_overrides.ramGb ?? "Desconocida")} GB</p></div>
       <div hidden={phase !== "1"} className="space-y-4">
