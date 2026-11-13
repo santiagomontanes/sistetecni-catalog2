@@ -409,6 +409,7 @@ test("equipos iguales: el siguiente QR copia los datos del anterior y cada pieza
   const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco lote iguales" });
   const batch = await command("qr_batch", { count: 2 });
   const [first, second]: string[] = batch.labels.map((l: { code: string }) => l.code);
+  const serials = [`S1-${randomUUID().slice(0, 8)}`, `S2-${randomUUID().slice(0, 8)}`];
   await login(page);
   await page.goto(`${appUrl}/admin/taller?qr=${first}`);
   const form = (code: string) => page.locator("form").filter({ has: page.getByRole("heading", { name: `Recepción · ${code}` }) });
@@ -422,7 +423,7 @@ test("equipos iguales: el siguiente QR copia los datos del anterior y cada pieza
   await one.getByRole("button", { name: "Agregar RAM", exact: true }).click();
   await one.getByLabel("Capacidad GB", { exact: true }).fill("8");
   await one.getByLabel("Generación RAM", { exact: true }).selectOption("DDR4");
-  await one.getByLabel("Serial (opcional)").fill("SERIAL-UNO");
+  await one.getByLabel("Serial (opcional)").fill(serials[0]);
   await one.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/taller\?unit=[a-f0-9-]+$/, { timeout: 30000 });
   await page.goto(`${appUrl}/admin/taller?qr=${second}`);
@@ -435,18 +436,24 @@ test("equipos iguales: el siguiente QR copia los datos del anterior y cada pieza
   await expect(two.getByLabel("Serial (opcional)")).toHaveValue("");
   await expect(two.getByLabel("Capacidad GB", { exact: true })).toHaveValue("8");
   await expect(two.getByLabel("Generación RAM", { exact: true })).toHaveValue("DDR4");
-  await two.getByLabel("Serial (opcional)").fill("SERIAL-DOS");
+  // Solo varía la capacidad: se ajusta en la unidad nueva sin tocar lo demás.
+  await two.getByLabel("Capacidad GB", { exact: true }).fill("16");
+  await two.getByLabel("Serial (opcional)").fill(serials[1]);
   await two.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/taller\?unit=[a-f0-9-]+$/, { timeout: 30000 });
   const unit = (code: string) => json(`/rest/v1/product_units?unit_code=eq.${code}&select=id,serial_number,acquisition_cost_cop`, "GET", undefined);
   const [a] = await unit(first); const [b] = await unit(second);
-  expect([a.serial_number, b.serial_number]).toEqual(["SERIAL-UNO", "SERIAL-DOS"]);
+  expect([a.serial_number, b.serial_number]).toEqual(serials);
   expect(b.acquisition_cost_cop).toBe(180000);
   const parts = await json(`/rest/v1/product_units?installed_in_unit_id=in.(${a.id},${b.id})&select=unit_code,installed_in_unit_id&order=unit_code`, "GET", undefined);
   expect(parts).toHaveLength(2);
   expect(parts[0].unit_code).toMatch(/^STUM-\d{4}$/);
   expect(parts[1].unit_code).toMatch(/^STUM-\d{4}$/);
   expect(parts[0].unit_code).not.toBe(parts[1].unit_code);
+  const partOf = (id: string) => parts.find((p: { installed_in_unit_id: string }) => p.installed_in_unit_id === id);
+  const attrs = await json(`/rest/v1/product_units?unit_code=in.(${parts.map((p: { unit_code: string }) => p.unit_code).join(",")})&select=unit_code,component_attributes`, "GET", undefined);
+  const capacity = (id: string) => attrs.find((x: { unit_code: string }) => x.unit_code === partOf(id).unit_code).component_attributes.capacityGb;
+  expect([capacity(a.id), capacity(b.id)]).toEqual([8, 16]);
   expect(new Set(parts.map((p: { installed_in_unit_id: string }) => p.installed_in_unit_id)).size).toBe(2);
   // «Empezar en blanco» descarta la copia.
   const third = (await command("qr_batch", { count: 1 })).labels[0].code;
