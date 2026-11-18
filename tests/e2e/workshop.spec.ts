@@ -465,8 +465,8 @@ test("equipos iguales: el siguiente QR copia los datos del anterior y cada pieza
   await expect(three.getByLabel("Marca", { exact: true })).toHaveValue("");
 });
 
-test("Fase 2: se verifica cada pieza de la recepción, se corrige, se cambia la batería y lo pendiente queda anotado", async ({ page }) => {
-  test.setTimeout(120000);
+test("Fase 2 anota los cambios y Reparación los resuelve: repuesto del inventario o por comprar con su código", async ({ page }) => {
+  test.setTimeout(150000);
   const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco piezas E2E" });
   const batch = await command("qr_batch", { count: 1 });
   const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 2, generation: "DDR3" }, { kind: "battery", notes: "6 celdas vieja" }] } });
@@ -477,7 +477,7 @@ test("Fase 2: se verifica cada pieza de la recepción, se corrige, se cambia la 
   const panel = page.locator("details").filter({ hasText: "Verificar las piezas de la recepción" }).first();
   await expect(panel).toBeVisible({ timeout: 20000 });
   const card = (name: string) => panel.locator("li").filter({ hasText: name }).first();
-  // La memoria coincide en capacidad pero el dato real es otro: se corrige.
+  // La memoria tiene otro dato real: se corrige.
   await expect(card("STUM-")).toContainText("Capacidad (GB): 2");
   await card("STUM-").getByRole("button", { name: "Corregir dato" }).click();
   await panel.getByLabel("Dato real: Capacidad GB").fill("4");
@@ -485,23 +485,46 @@ test("Fase 2: se verifica cada pieza de la recepción, se corrige, se cambia la 
   await panel.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(card("STUM-")).toContainText("Corregida", { timeout: 15000 });
   await expect(card("STUM-")).toContainText("Capacidad (GB): 4");
-  // La batería hay que cambiarla: se anota y se instala el repuesto que ya está en la bodega.
+  // En la revisión solo se anota: la batería hay que cambiarla y falta el ratón. No se elige repuesto aquí.
   await card("Batería").getByRole("button", { name: "Hay que cambiarla" }).click();
+  await expect(panel.getByRole("combobox", { name: /Repuesto/ })).toHaveCount(0);
   await panel.getByPlaceholder("Ej.: batería hinchada, no carga").fill("Batería hinchada");
-  await panel.getByLabel("Repuesto de Batería").selectOption(spare.unitId);
-  await panel.getByRole("button", { name: /^Instalar ahora/ }).click();
-  await expect(panel.getByText(/Batería: instalada STUB-\d+/)).toBeVisible({ timeout: 30000 });
-  // Falta el ratón y todavía no se tiene: queda pendiente.
+  await panel.getByRole("button", { name: "Anotar y pasar a Reparación" }).click();
+  await expect(card("Batería")).toContainText("Cambio pendiente", { timeout: 15000 });
   await panel.getByRole("button", { name: /Agregar pieza que le falta/ }).click();
   await panel.getByLabel("Tipo de pieza que falta").selectOption("mouse");
   await panel.getByPlaceholder("Ej.: batería hinchada, no carga").fill("No trae ratón");
-  await panel.getByRole("button", { name: "Dejar pendiente" }).click();
-  await expect(panel.getByRole("status")).toContainText("1 pieza con cambio pendiente", { timeout: 15000 });
+  await panel.getByRole("button", { name: "Anotar y pasar a Reparación" }).click();
+  await expect(panel.getByRole("status")).toContainText("2 piezas con cambio pendiente", { timeout: 15000 });
+  // Reparación: el equipo se envía con el motivo ya escrito y ahí se asignan los repuestos.
+  await page.getByRole("tab", { name: /Reparación/ }).click();
+  await expect(page.getByLabel(/¿Qué hay que arreglar\?/)).toHaveValue(/Cambiar batería \(Batería hinchada\)/);
+  await page.getByRole("button", { name: "Enviar a reparación", exact: true }).click();
+  await expect(page.getByText("Este equipo está en reparación.")).toBeVisible({ timeout: 15000 });
+  const repair = page.locator("section").filter({ hasText: "Cambios de pieza pendientes" }).last();
+  const item = (name: string) => repair.locator("li").filter({ hasText: name }).first();
+  // Batería: repuesto que ya está en el inventario.
+  await item("Batería").getByLabel("Repuesto del inventario: Batería").selectOption(spare.unitId);
+  await item("Batería").getByRole("button", { name: /^Instalar STUB-/ }).click();
+  await expect(repair.getByText(/Cambios de pieza pendientes/)).toContainText("1", { timeout: 30000 });
+  // Ratón: hay que comprarlo; se le reserva su código, se imprime la etiqueta, llega y se instala.
+  await item("Ratón").getByRole("button", { name: /^Asignar código STUR/ }).click();
+  await expect(item("Ratón")).toContainText(/Código reservado: STUR-\d{4}/, { timeout: 15000 });
+  const [pdf] = await Promise.all([page.waitForEvent("popup"), item("Ratón").getByRole("button", { name: "Imprimir etiqueta" }).click()]);
+  await pdf.close();
+  await item("Ratón").getByLabel("Costo del repuesto").fill("12000");
+  await item("Ratón").getByRole("button", { name: "Registrar llegada" }).click();
+  await expect(item("Ratón")).toContainText("ya llegó", { timeout: 15000 });
+  await item("Ratón").getByRole("button", { name: /^Instalar STUR-/ }).click();
+  await expect(repair.getByText("No hay cambios de pieza pendientes.")).toBeVisible({ timeout: 30000 });
+  // Cambiar piezas no saca al equipo de reparación: vuelve con lo hecho anotado.
+  await expect(page.getByText("Este equipo está en reparación.")).toBeVisible();
+  await page.getByLabel(/¿Qué se hizo\?/).fill("Se cambió la batería y se puso ratón");
+  await page.getByRole("button", { name: "Volver de reparación", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Enviar a reparación", exact: true })).toBeVisible({ timeout: 15000 });
   const reviews = await json("/rest/v1/rpc/erp_workshop_part_reviews", "POST", { p_unit: received.unitId }, token);
-  expect(reviews.map((r: { verdict: string }) => r.verdict).sort()).toEqual(["corrected", "replace", "replaced"]);
+  expect(reviews.map((r: { verdict: string }) => r.verdict).sort()).toEqual(["corrected", "replaced", "replaced"]);
   const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token);
   expect(server.components.some((c: { id: string; installed_in_unit_id: string }) => c.id === spare.unitId && c.installed_in_unit_id === received.unitId)).toBe(true);
-  // El pendiente impide dejar el equipo disponible.
-  await json("/rest/v1/rpc/erp_workshop_command", "POST", { p_action: "phase", p_payload: { unitId: received.unitId, version: server.unit.row_version, phase: "ready" }, p_key: randomUUID() }, token).then(
-    () => { throw new Error("debía rechazar"); }, (e: Error) => expect(String(e.message)).toMatch(/parts_pending|product_required/));
+  expect(server.components.some((c: { unit_code: string; installed_in_unit_id: string; acquisition_cost_cop: number }) => /^STUR-\d{4}$/.test(c.unit_code) && c.installed_in_unit_id === received.unitId && c.acquisition_cost_cop === 12000)).toBe(true);
 });

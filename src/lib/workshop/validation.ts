@@ -47,7 +47,7 @@ const schemas = {
   check_definition: z.object({ code: z.string().regex(/^[a-z0-9_]{1,50}$/), label: z.string().min(1).max(100), required: z.boolean(), active: z.boolean() }),
   software: z.object({ ...unitVersion, name: z.string().trim().min(1).max(100), edition: optionalText(100), softwareVersion: optionalText(100), installed: z.boolean(), tested: z.boolean(), notes: optionalText(2000) }).refine(v => !v.tested || v.installed, "No se puede probar software no instalado"),
   part_review: z.object({ ...unitVersion, verdict: z.enum(["confirmed", "corrected", "replace", "replaced"]), kind: z.enum(partKinds), componentId: uuid.optional(), target: z.string().regex(/^new:[0-9a-f-]{36}$/).optional(),
-    note: z.string().trim().max(1000).optional(), attributes: componentSchema.omit({ kind: true }).partial().optional(), replacementId: uuid.optional(), replacementNote: z.string().trim().max(300).optional() })
+    note: z.string().trim().max(1000).optional(), attributes: componentSchema.omit({ kind: true }).partial().optional(), replacementId: uuid.optional(), replacementNote: z.string().trim().max(300).optional(), reserveCode: z.boolean().optional() })
     .refine(v => v.verdict === "confirmed" || v.verdict === "replaced" || (v.note?.length ?? 0) >= 3, "Escriba la anotación (mínimo 3 letras)")
     .refine(v => v.verdict !== "corrected" || Object.keys(v.attributes ?? {}).length > 0, "Indique el dato real que corrige")
     .refine(v => v.verdict === "corrected" || v.verdict === "confirmed" ? !!v.componentId : true, "Falta la pieza que se verifica")

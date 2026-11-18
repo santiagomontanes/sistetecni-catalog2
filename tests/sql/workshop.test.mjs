@@ -249,6 +249,23 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       // El historial es append-only.
       await assert.rejects(db.query("update workshop_part_reviews set note='x' where unit_id=$1", [pc]), /workshop_history_append_only/);
       await assert.rejects(db.query("delete from workshop_part_reviews where unit_id=$1", [pc]), /workshop_history_append_only/);
+      // Repuesto por comprar: se reserva un código del tipo (STUW), se reutiliza al repetir y la etiqueta queda libre.
+      const wifi = await review({ verdict: "replace", kind: "wifi", note: "sin tarjeta wifi", reserveCode: true });
+      const wifiRow = (await a.query("select erp_workshop_part_reviews($1) r", [pc])).rows[0].r.find(x => x.kind === "wifi");
+      assert.match(wifiRow.reservedCode, /^STUW-\d{4}$/);
+      assert.deepEqual((await db.query("select state,kind from workshop_qr_labels where code=$1", [wifiRow.reservedCode])).rows[0], { state: "free", kind: "wifi" });
+      await review({ verdict: "replace", kind: "wifi", target: wifiRow.target, note: "sin tarjeta wifi", reserveCode: true });
+      assert.equal((await a.query("select erp_workshop_part_reviews($1) r", [pc])).rows[0].r.find(x => x.kind === "wifi").reservedCode, wifiRow.reservedCode);
+      assert.equal((await db.query("select count(*)::int n from workshop_qr_labels where kind='wifi' and code=$1", [wifiRow.reservedCode])).rows[0].n, 1);
+      // Cuando llega, entra con ese mismo código y se instala sin sacar al equipo de reparación.
+      const arrived = (await command(a, "component_receive", { qrCode: wifiRow.reservedCode, kind: "wifi", locationId: locationA, costCop: "9000", componentCondition: "functional", snapshot: { kind: "wifi" } })).unitId;
+      assert.equal((await unit(db, arrived)).unit_code, wifiRow.reservedCode);
+      await command(a, "repair_send", { unitId: pc, version: await version(db, pc), reason: "Cambiar tarjeta wifi" });
+      await command(a, "component_move", { unitId: pc, version: await version(db, pc), componentId: arrived, componentVersion: Number((await unit(db, arrived)).row_version), direction: "install", reason: "Cambiar tarjeta wifi" });
+      assert.equal((await unit(db, pc)).workshop_phase, "repair");
+      await review({ verdict: "replaced", kind: "wifi", target: wifiRow.target, replacementId: arrived, note: "sin tarjeta wifi" });
+      assert.equal((await db.query("select erp_workshop_pending_parts($1) n", [pc])).rows[0].n, 0);
+      await command(a, "repair_return", { unitId: pc, version: await version(db, pc), reason: "Se instaló la tarjeta wifi" });
       // Las pruebas siguientes parten con la configuración inicial.
       await db.query("update product_units set product_id=null where id=$1", [pc]);
     });

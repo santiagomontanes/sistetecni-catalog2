@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { callAdminAction } from "@/lib/callAdminAction";
-import { commandWorkshop, readWorkshop, searchWorkshopComponents } from "@/app/admin/taller/actions";
+import { commandWorkshop, createWorkshopLabelsJobPdf, readWorkshop, searchWorkshopComponents } from "@/app/admin/taller/actions";
+import { defaultSizeFor, pdfUrl } from "./labelOptions";
 import { parseQr } from "@/lib/workshop/validation";
 import type { WorkshopData, WorkshopUnit } from "@/lib/workshop/types";
 import CameraScanner from "./CameraScanner";
@@ -17,6 +18,8 @@ import UnitFinish from "@/components/workshop/UnitFinish";
 import { partKinds, partKindNames, unitName } from "@/lib/workshop/partKinds";
 import ExtraWork from "@/components/workshop/ExtraWork";
 import PartsReview, { type ReviewPayload, type SwapRequest } from "@/components/workshop/PartsReview";
+import RepairParts from "@/components/workshop/RepairParts";
+import type { PartKind } from "@/lib/workshop/partKinds";
 import UnitCorrection from "@/components/workshop/UnitCorrection";
 
 const field = "w-full rounded-lg border border-border bg-white px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
@@ -90,6 +93,16 @@ export default function WorkshopPage() {
     const installedNow = await command("component_move", { unitId: unit.id, version, componentId: req.replacement.id, componentVersion: req.replacement.row_version, direction: "install", reason: req.note });
     if (!installedNow) return;
     await command("part_review", { unitId: unit.id, version: Number(installedNow.version), verdict: "replaced", kind: req.kind, ...(req.oldComponent ? { componentId: req.oldComponent.id } : {}), ...(req.target ? { target: req.target } : {}), replacementId: req.replacement.id, note: req.note });
+  }
+  // Llegó el repuesto por comprar: entra al inventario con el código que ya se le había reservado.
+  async function receiveSpare(a: { kind: PartKind; code: string; costCop?: string; condition: "functional" | "untested" }) {
+    if (!unit?.location_id) { setError("El equipo no tiene ubicación: asígnele una para guardar el repuesto."); return; }
+    await command("component_receive", { qrCode: a.code, kind: a.kind, locationId: unit.location_id, ...(a.costCop ? { costCop: a.costCop } : {}), componentCondition: a.condition, snapshot: { kind: a.kind } });
+  }
+  async function printPartLabel(code: string, kind: PartKind) {
+    const result = await callAdminAction(createWorkshopLabelsJobPdf, { lines: [{ mode: "reprint", codes: code, size: defaultSizeFor(kind) }] });
+    if (!result.ok) { setError(result.message); return; }
+    window.open(pdfUrl(result.data.pdfBase64), "_blank", "noopener");
   }
   const unit = data?.unit;
   async function findComponents(offset = 0) {
@@ -172,8 +185,8 @@ export default function WorkshopPage() {
         {unit.asset_kind === "computer" && unit.workshop_phase !== "repair" && <form onSubmit={e => { e.preventDefault(); const phase = new FormData(e.currentTarget).get("phase"); if (phase !== "ready" || window.confirm("Habilitar comercialmente esta unidad con producto y controles completos?")) void command("phase", versioned({ phase })); }} className="space-y-2"><label>Fase de trabajo<select name="phase" defaultValue={unit.workshop_phase ?? "reception"} className={field}>{Object.entries(phaseLabels).filter(([value]) => value !== "repair").map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><button className={button}>Cambiar fase</button><p className="text-sm text-slate-600">Disponible exige producto y todos los controles obligatorios. Los cambios de hardware exigen repetir controles.</p></form>}
       </fieldset>
       <div hidden={phase !== "2"} className="space-y-4">
-      {unit.asset_kind === "computer" && <PartsReview installed={(data?.components ?? []).filter(c => c.installed_in_unit_id === unit.id)} spares={(data?.components ?? []).filter(c => !c.installed_in_unit_id && c.status !== "retired")} reviews={data?.partReviews ?? []} disabled={busy || !data?.enabled}
-        onReview={async (payload: ReviewPayload) => { await command("part_review", versioned({ ...payload })); }} onSwap={swapPart} />}
+      {unit.asset_kind === "computer" && <PartsReview installed={(data?.components ?? []).filter(c => c.installed_in_unit_id === unit.id)} reviews={data?.partReviews ?? []} disabled={busy || !data?.enabled}
+        onReview={async (payload: ReviewPayload) => { await command("part_review", versioned({ ...payload })); }} />}
       {unit.asset_kind === "computer" && <ExtraWork extras={data?.extras ?? []} disabled={busy || !data?.enabled} onAdd={async p => { await command("extra_work", versioned(p)); }} onReverse={async (costEntryId, reason) => { await command("extra_work_reverse", versioned({ costEntryId, reason })); }} />}
       {unit.asset_kind === "computer" && <>
         <details className={card}><summary className="cursor-pointer text-base font-semibold">Configuración actual verificada (independiente de la recepción)</summary><form ref={cfgForm} className="mt-3 grid gap-2 sm:grid-cols-2" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); void command("configuration", versioned({ configuration: readConfiguration(fd), reason: fd.get("reason") })); }}><label className="sm:col-span-2">Copiar datos de un equipo igual (opcional)<select aria-label="Copiar de otro equipo" defaultValue="" onChange={e => { copyConfiguration(e.target.value); e.target.value = ""; }} className={field}><option value="">Elegir equipo ya configurado…</option>{(data?.units ?? []).filter(u => u.asset_kind === "computer" && u.id !== unit.id && (u.spec_overrides.cpu || u.spec_overrides.screen || u.spec_overrides.ramGeneration || u.spec_overrides.chargerVoltage)).map(u => <option key={u.id} value={u.id}>{u.unit_code} · {String(u.spec_overrides.cpu ?? "sin CPU")}</option>)}</select></label><input name="cpu" defaultValue={String(unit.spec_overrides.cpu ?? "")} placeholder="CPU verificada" className={field} /><input name="screen" defaultValue={String(unit.spec_overrides.screen ?? "")} placeholder="Pantalla final verificada" className={field} /><select name="generation" defaultValue={String(unit.spec_overrides.ramGeneration ?? "")} aria-label="Generación RAM compatible" className={field}><option value="">Generación RAM desconocida</option>{["DDR2","DDR3","DDR3L","DDR4","DDR5"].map(g => <option key={g}>{g}</option>)}</select><input name="format" defaultValue={String(unit.spec_overrides.ramFormFactor ?? "")} placeholder="Formato RAM compatible: SO-DIMM / DIMM" className={field} /><fieldset className="rounded border p-3 sm:col-span-2"><legend>Interfaces de almacenamiento verificadas</legend><p className="text-xs text-slate-600">Marque sólo interfaces confirmadas por documentación o inspección; vacío significa desconocidas.</p>{["SATA","NVMe","IDE","SAS"].map(value=><label key={value} className="mr-4 inline-flex items-center gap-1"><input type="checkbox" name="storageInterface" value={value} aria-label={"Interfaz de almacenamiento compatible "+value} defaultChecked={Array.isArray(unit.spec_overrides.storageInterfaces)&&unit.spec_overrides.storageInterfaces.includes(value)}/>{value}</label>)}</fieldset><label>Voltaje de cargador compatible verificado<input name="chargerVoltage" type="number" min="0.01" step="any" defaultValue={String(unit.spec_overrides.chargerVoltage ?? "")} className={field}/></label><label>Conector de cargador compatible verificado<input name="chargerConnector" maxLength={80} defaultValue={String(unit.spec_overrides.chargerConnector ?? "")} className={field}/></label><input name="reason" minLength={3} required placeholder="Cómo se verificó / motivo" className={field} /><button disabled={busy || !data?.enabled} className={primary}>Guardar configuración verificada</button><label className="sm:col-span-2">Aplicar esta misma configuración a otros equipos iguales (opcional)<textarea name="others" rows={2} placeholder="STU-000127, STU-000128, STU-000129" className={field} /></label><button type="button" disabled={busy || !data?.enabled} onClick={() => void applyToOthers()} className={button}>Aplicar a esos STU</button>{bulkStatus && <p role="status" className="text-sm sm:col-span-2">{bulkStatus}</p>}</form></details>
@@ -199,7 +212,9 @@ export default function WorkshopPage() {
       {unit.asset_kind === "computer" && <div hidden={phase !== "R"} className="space-y-4">
         <section className={card}>
           <h3 className="font-semibold">Reparación</h3>
-          <p className="text-sm text-slate-600">Solo para arreglos mayores, como cambiar una pantalla. Una batería que no sirve se cambia en la misma revisión, sin pasar por aquí.</p>
+          <p className="text-sm text-slate-600">Aquí se resuelven los cambios de pieza anotados en la revisión (batería, disco, pantalla…) y los arreglos mayores.</p>
+          <RepairParts installed={(data?.components ?? []).filter(c => c.installed_in_unit_id === unit.id)} spares={(data?.components ?? []).filter(c => !c.installed_in_unit_id && c.status !== "retired")} reviews={data?.partReviews ?? []} disabled={busy || !data?.enabled}
+            onReview={async (payload: ReviewPayload) => { await command("part_review", versioned({ ...payload })); }} onSwap={swapPart} onArrival={receiveSpare} onPrint={printPartLabel} />
           {unit.workshop_phase === "repair" ? (
             <form className="mt-3 space-y-2" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); void command("repair_return", versioned({ reason: fd.get("reason") })); }}>
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">Este equipo está en reparación.</p>
@@ -209,11 +224,11 @@ export default function WorkshopPage() {
             </form>
           ) : (
             <form className="mt-3 space-y-2" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.currentTarget); void command("repair_send", versioned({ reason: fd.get("reason") })); }}>
-              <label className="block text-sm font-medium">¿Qué hay que arreglar? (obligatorio)<input name="reason" required minLength={3} className={field} placeholder="Ej.: pantalla rota" /></label>
+              <label className="block text-sm font-medium">¿Qué hay que arreglar? (obligatorio)<input name="reason" required minLength={3} className={field} placeholder="Ej.: pantalla rota" defaultValue={(data?.partReviews ?? []).filter(r => r.verdict === "replace").map(r => `Cambiar ${(kindNames[r.kind] ?? r.kind).toLowerCase()}${r.note ? ` (${r.note})` : ""}`).join("; ")} /></label>
               <button disabled={busy || !data?.enabled} className={primary}>Enviar a reparación</button>
             </form>
           )}
-          <p className="mt-3 text-sm text-slate-600">Para cambiar una pieza, regístrela como repuesto e instálela en «Componentes instalados y repuestos» (Revisión); su valor se suma al costo del equipo. Un arreglo sin pieza va en «Arreglo adicional».</p>
+          <p className="mt-3 text-sm text-slate-600">Un arreglo sin pieza va en «Arreglo adicional» (Revisión). Si una pieza no estaba anotada, anótela primero en la Fase 2.</p>
         </section>
       </div>}
       {unit.asset_kind === "computer" && <div hidden={phase !== "3"} className="space-y-4">

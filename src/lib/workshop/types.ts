@@ -9,7 +9,7 @@ export interface WorkshopLocation { id: string; code: string; name: string; acti
 export interface WorkshopExtra { id: string; costNumber: string; description: string; amountCop: number; createdAt: string; reversed: boolean }
 export interface WorkshopPartReview {
   id: string; target: string; kind: WorkshopUnit["asset_kind"]; componentId: string | null; verdict: "confirmed" | "corrected" | "replace" | "replaced";
-  note: string | null; observed: Record<string, unknown>; replacementId: string | null; replacementCode: string | null; replacementNote: string | null; createdAt: string;
+  note: string | null; observed: Record<string, unknown>; replacementId: string | null; replacementCode: string | null; replacementNote: string | null; reservedCode: string | null; reservedUnitId: string | null; createdAt: string;
 }
 export interface WorkshopData {
   extras?: WorkshopExtra[];
