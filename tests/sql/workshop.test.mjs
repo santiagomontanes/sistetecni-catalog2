@@ -206,5 +206,51 @@ test("taller: recorrido persistente, concurrencia, reversos, permisos y controle
       assert.equal((await a.query("select erp_workshop_read($1) d", [computer])).rows[0].d.unit.id, computer);
       await command(a, "configure", { enabled: true });
     });
+    await t.test("revisión de piezas: coincide, corrige, cambio pendiente bloquea la disponibilidad y se resuelve instalando el repuesto", async () => {
+      const q = await command(a, "qr_batch", { count: 1 });
+      const pc = (await command(a, "receive", { qrCode: q.labels[0].code, locationId: locationA, condition: "good", costCop: "100000", snapshot: { ...snapshot(), components: [{ kind: "ram", capacityGb: 2, generation: "DDR3" }, { kind: "battery", notes: "6 celdas" }] } })).unitId;
+      const parts = (await db.query("select id,asset_kind,unit_code from product_units where installed_in_unit_id=$1", [pc])).rows;
+      const ram = parts.find(x => x.asset_kind === "ram"); const battery = parts.find(x => x.asset_kind === "battery");
+      const review = async extra => command(a, "part_review", { unitId: pc, version: await version(db, pc), ...extra });
+      await assert.rejects(review({ verdict: "replace", kind: "battery", componentId: battery.id }), /review_note_required/);
+      await assert.rejects(review({ verdict: "corrected", kind: "ram", componentId: ram.id, note: "x" }), /review_note_required/);
+      await assert.rejects(review({ verdict: "corrected", kind: "ram", componentId: ram.id, note: "es de 4 GB", attributes: { foo: 1 } }), /review_attributes_invalid/);
+      await assert.rejects(review({ verdict: "confirmed", kind: "battery", componentId: ram.id }), /component_missing/);
+      await assert.rejects(denied.query("select public.erp_workshop_command('part_review','{}'::jsonb,gen_random_uuid())"), /permission_denied|permission/);
+      await review({ verdict: "confirmed", kind: "ram", componentId: ram.id });
+      await review({ verdict: "corrected", kind: "ram", componentId: ram.id, note: "es de 4 GB", attributes: { capacityGb: 4 } });
+      assert.equal(Number((await db.query("select component_attributes->>'capacityGb' c from product_units where id=$1", [ram.id])).rows[0].c), 4);
+      assert.equal(Number((await db.query("select spec_overrides->>'ramGb' c from product_units where id=$1", [pc])).rows[0].c), 4);
+      // La evidencia de la recepción no cambia.
+      assert.equal((await db.query("select snapshot->'components'->0->>'capacityGb' c from workshop_receipts where unit_id=$1 order by created_at limit 1", [pc])).rows[0].c, "2");
+      await review({ verdict: "replace", kind: "battery", componentId: battery.id, note: "batería hinchada", replacementNote: "batería 6 celdas" });
+      // Una pieza que falta (sin componente) también queda pendiente.
+      const missing = await review({ verdict: "replace", kind: "mouse", note: "no trae ratón" });
+      const list = (await a.query("select erp_workshop_part_reviews($1) r", [pc])).rows[0].r;
+      assert.equal(list.length, 3);
+      assert.equal(list.find(x => x.componentId === ram.id).verdict, "corrected");
+      assert.equal(list.find(x => x.componentId === battery.id).replacementNote, "batería 6 celdas");
+      assert.equal((await db.query("select erp_workshop_pending_parts($1) n", [pc])).rows[0].n, 2);
+      const product = (await db.query("insert into products(title,price,stock,erp_stock_enabled) values('TEST revisión piezas',800000,0,true) returning id")).rows[0].id;
+      await db.query("update product_units set product_id=$1 where id=$2", [product, pc]);
+      await assert.rejects(command(a, "phase", { unitId: pc, version: await version(db, pc), phase: "ready" }), /workshop_parts_pending/);
+      // Resolver la batería: repuesto funcional libre, retirar la vieja, instalar la nueva y dejar constancia.
+      const spare = (await command(a, "component_receive", { kind: "battery", locationId: locationA, costCop: "40000", componentCondition: "functional", snapshot: { kind: "battery", notes: "nueva" } })).unitId;
+      await assert.rejects(review({ verdict: "replaced", kind: "battery", componentId: battery.id, replacementId: spare }), /replacement_not_installed/);
+      await command(a, "component_move", { unitId: pc, version: await version(db, pc), componentId: battery.id, componentVersion: Number((await unit(db, battery.id)).row_version), direction: "remove", locationId: locationA, condition: "defective", reason: "batería hinchada" });
+      await command(a, "component_move", { unitId: pc, version: await version(db, pc), componentId: spare, componentVersion: Number((await unit(db, spare)).row_version), direction: "install", reason: "batería hinchada" });
+      await review({ verdict: "replaced", kind: "battery", componentId: battery.id, replacementId: spare, note: "batería hinchada" });
+      assert.equal((await db.query("select erp_workshop_pending_parts($1) n", [pc])).rows[0].n, 1);
+      // La pieza que faltaba se descarta instalando el ratón libre que haya o dejándolo resuelto con otro repuesto.
+      const mouse = (await command(a, "component_receive", { kind: "mouse", locationId: locationA, costCop: "10000", componentCondition: "functional", snapshot: { kind: "mouse" } })).unitId;
+      await command(a, "component_move", { unitId: pc, version: await version(db, pc), componentId: mouse, componentVersion: Number((await unit(db, mouse)).row_version), direction: "install", reason: "no traía ratón" });
+      await review({ verdict: "replaced", kind: "mouse", target: missing.target ?? (await a.query("select erp_workshop_part_reviews($1) r", [pc])).rows[0].r.find(x => x.kind === "mouse").target, replacementId: mouse, note: "no trae ratón" });
+      assert.equal((await db.query("select erp_workshop_pending_parts($1) n", [pc])).rows[0].n, 0);
+      // El historial es append-only.
+      await assert.rejects(db.query("update workshop_part_reviews set note='x' where unit_id=$1", [pc]), /workshop_history_append_only/);
+      await assert.rejects(db.query("delete from workshop_part_reviews where unit_id=$1", [pc]), /workshop_history_append_only/);
+      // Las pruebas siguientes parten con la configuración inicial.
+      await db.query("update product_units set product_id=null where id=$1", [pc]);
+    });
   } finally { await Promise.all([a.end(), b.end(), denied.end(), db.end()]); }
 });

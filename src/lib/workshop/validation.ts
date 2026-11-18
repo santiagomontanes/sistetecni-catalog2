@@ -46,6 +46,12 @@ const schemas = {
   check: z.object({ ...unitVersion, code: z.string().regex(/^[a-z0-9_]{1,50}$/), result: z.enum(["passed", "failed", "not_applicable"]), note: optionalText(2000) }).refine(v => v.result !== "not_applicable" || (v.note?.length ?? 0) >= 3, "Justifique por qué no aplica"),
   check_definition: z.object({ code: z.string().regex(/^[a-z0-9_]{1,50}$/), label: z.string().min(1).max(100), required: z.boolean(), active: z.boolean() }),
   software: z.object({ ...unitVersion, name: z.string().trim().min(1).max(100), edition: optionalText(100), softwareVersion: optionalText(100), installed: z.boolean(), tested: z.boolean(), notes: optionalText(2000) }).refine(v => !v.tested || v.installed, "No se puede probar software no instalado"),
+  part_review: z.object({ ...unitVersion, verdict: z.enum(["confirmed", "corrected", "replace", "replaced"]), kind: z.enum(partKinds), componentId: uuid.optional(), target: z.string().regex(/^new:[0-9a-f-]{36}$/).optional(),
+    note: z.string().trim().max(1000).optional(), attributes: componentSchema.omit({ kind: true }).partial().optional(), replacementId: uuid.optional(), replacementNote: z.string().trim().max(300).optional() })
+    .refine(v => v.verdict === "confirmed" || v.verdict === "replaced" || (v.note?.length ?? 0) >= 3, "Escriba la anotación (mínimo 3 letras)")
+    .refine(v => v.verdict !== "corrected" || Object.keys(v.attributes ?? {}).length > 0, "Indique el dato real que corrige")
+    .refine(v => v.verdict === "corrected" || v.verdict === "confirmed" ? !!v.componentId : true, "Falta la pieza que se verifica")
+    .refine(v => v.verdict !== "replaced" || !!v.replacementId, "Falta el repuesto instalado"),
   component_test: z.object({ ...unitVersion, condition: z.enum(["untested", "functional", "defective"]), reason }),
   component_move: z.object({ ...unitVersion, componentId: uuid, componentVersion: z.number().int().nonnegative(), direction: z.enum(["install", "remove"]), locationId: uuid.optional(), condition: z.enum(["untested", "functional", "defective"]).optional(), reason, reversalOf: uuid.optional() }).refine(v => v.direction !== "remove" || v.locationId, "Indique ubicación de destino"),
   usb: z.object({ code: z.string().trim().min(1).max(50), locationId: uuid.optional(), content: z.string().trim().min(1).max(1000), version: optionalText(100), bootModes: z.array(z.enum(["UEFI", "Legacy"])).max(2), active: z.boolean() }),

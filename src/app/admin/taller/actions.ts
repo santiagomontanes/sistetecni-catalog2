@@ -9,6 +9,11 @@ import { buildLabelsPdf, buildLabelsPdfGroups, CAPTION_MAX, type LabelGroup, LAB
 import type { WorkshopData, WorkshopResult, WorkshopUnit } from "@/lib/workshop/types";
 
 const messages: Record<string, string> = {
+  workshop_parts_pending: "Hay piezas con cambio pendiente. Instale el repuesto o anule la anotación antes de dejar el equipo disponible.",
+  workshop_review_note_required: "Escriba la anotación de la pieza (mínimo 3 letras).",
+  workshop_review_attributes_invalid: "Indique al menos un dato real de la pieza para corregirla.",
+  workshop_replacement_invalid: "Ese repuesto no está libre o no es del mismo tipo que la pieza.",
+  workshop_replacement_not_installed: "El repuesto todavía no está instalado en este equipo.",
   workshop_disabled: "El taller está desactivado. Un administrador puede activarlo después de aplicar y verificar la migración.",
   workshop_version_conflict: "Otra sesión modificó esta unidad. Recargue la ficha y revise los cambios antes de guardar de nuevo.",
   workshop_qr_not_free: "La etiqueta ya fue asignada o anulada. No se creó otra unidad.",
@@ -57,6 +62,9 @@ export async function readWorkshop(input: { accessToken: unknown; unitId?: strin
       const extras = await client.rpc("erp_workshop_extras", { p_unit: parsed.unitId });
       if (extras.error) throw new Error(extras.error.message);
       result.extras = extras.data as WorkshopData["extras"];
+      const reviews = await client.rpc("erp_workshop_part_reviews", { p_unit: parsed.unitId });
+      if (reviews.error) throw new Error(reviews.error.message);
+      result.partReviews = reviews.data as WorkshopData["partReviews"];
     }
     return { ok: true, data: result };
   } catch (error) { return failure(error); }

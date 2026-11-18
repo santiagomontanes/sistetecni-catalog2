@@ -464,3 +464,44 @@ test("equipos iguales: el siguiente QR copia los datos del anterior y cada pieza
   await expect(three.getByRole("status")).toHaveCount(0);
   await expect(three.getByLabel("Marca", { exact: true })).toHaveValue("");
 });
+
+test("Fase 2: se verifica cada pieza de la recepción, se corrige, se cambia la batería y lo pendiente queda anotado", async ({ page }) => {
+  test.setTimeout(120000);
+  const location = await command("location", { code: `E2E-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Banco piezas E2E" });
+  const batch = await command("qr_batch", { count: 1 });
+  const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", costCop: "100000", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 2, generation: "DDR3" }, { kind: "battery", notes: "6 celdas vieja" }] } });
+  const spare = await command("component_receive", { kind: "battery", locationId: location.id, costCop: "40000", componentCondition: "functional", snapshot: { kind: "battery", notes: "nueva 6 celdas" } });
+  await login(page);
+  await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
+  await page.getByRole("tab", { name: /Fase 2/ }).click();
+  const panel = page.locator("details").filter({ hasText: "Verificar las piezas de la recepción" }).first();
+  await expect(panel).toBeVisible({ timeout: 20000 });
+  const card = (name: string) => panel.locator("li").filter({ hasText: name }).first();
+  // La memoria coincide en capacidad pero el dato real es otro: se corrige.
+  await expect(card("STUM-")).toContainText("Capacidad (GB): 2");
+  await card("STUM-").getByRole("button", { name: "Corregir dato" }).click();
+  await panel.getByLabel("Dato real: Capacidad GB").fill("4");
+  await panel.getByLabel("Anotación de la corrección").fill("Al abrirlo es de 4 GB");
+  await panel.getByRole("button", { name: "Guardar corrección" }).click();
+  await expect(card("STUM-")).toContainText("Corregida", { timeout: 15000 });
+  await expect(card("STUM-")).toContainText("Capacidad (GB): 4");
+  // La batería hay que cambiarla: se anota y se instala el repuesto que ya está en la bodega.
+  await card("Batería").getByRole("button", { name: "Hay que cambiarla" }).click();
+  await panel.getByPlaceholder("Ej.: batería hinchada, no carga").fill("Batería hinchada");
+  await panel.getByLabel("Repuesto de Batería").selectOption(spare.unitId);
+  await panel.getByRole("button", { name: /^Instalar ahora/ }).click();
+  await expect(panel.getByText(/Batería: instalada STUB-\d+/)).toBeVisible({ timeout: 30000 });
+  // Falta el ratón y todavía no se tiene: queda pendiente.
+  await panel.getByRole("button", { name: /Agregar pieza que le falta/ }).click();
+  await panel.getByLabel("Tipo de pieza que falta").selectOption("mouse");
+  await panel.getByPlaceholder("Ej.: batería hinchada, no carga").fill("No trae ratón");
+  await panel.getByRole("button", { name: "Dejar pendiente" }).click();
+  await expect(panel.getByRole("status")).toContainText("1 pieza con cambio pendiente", { timeout: 15000 });
+  const reviews = await json("/rest/v1/rpc/erp_workshop_part_reviews", "POST", { p_unit: received.unitId }, token);
+  expect(reviews.map((r: { verdict: string }) => r.verdict).sort()).toEqual(["corrected", "replace", "replaced"]);
+  const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: received.unitId }, token);
+  expect(server.components.some((c: { id: string; installed_in_unit_id: string }) => c.id === spare.unitId && c.installed_in_unit_id === received.unitId)).toBe(true);
+  // El pendiente impide dejar el equipo disponible.
+  await json("/rest/v1/rpc/erp_workshop_command", "POST", { p_action: "phase", p_payload: { unitId: received.unitId, version: server.unit.row_version, phase: "ready" }, p_key: randomUUID() }, token).then(
+    () => { throw new Error("debía rechazar"); }, (e: Error) => expect(String(e.message)).toMatch(/parts_pending|product_required/));
+});

@@ -41,3 +41,15 @@ test("código por tipo de pieza: el QR de un disco, una memoria o un USB se reco
   for (const k of partKinds) assert.match(`${kindPrefixes[k]}-0001`, partCodePattern, k);
   assert.ok(validateWorkshopCommand("component_receive", { qrCode: "STUD-0001", kind: "storage", locationId: "00000000-0000-4000-8000-000000000001", componentCondition: "untested", snapshot: { kind: "storage" } }));
 });
+
+test("part_review: exige anotación al cambiar o corregir y el dato real al corregir", () => {
+  const base = { unitId: "11111111-1111-4111-8111-111111111111", version: 1, kind: "battery" as const };
+  const component = { componentId: "22222222-2222-4222-8222-222222222222" };
+  assert.ok(validateWorkshopCommand("part_review", { ...base, ...component, verdict: "confirmed" }));
+  assert.throws(() => validateWorkshopCommand("part_review", { ...base, ...component, verdict: "replace" }));
+  assert.ok(validateWorkshopCommand("part_review", { ...base, verdict: "replace", note: "No trae batería" }));
+  assert.throws(() => validateWorkshopCommand("part_review", { ...base, ...component, verdict: "corrected", note: "Es de 4 GB" }));
+  assert.ok(validateWorkshopCommand("part_review", { ...base, ...component, verdict: "corrected", note: "Es de 4 GB", attributes: { capacityGb: 4 } }));
+  assert.throws(() => validateWorkshopCommand("part_review", { ...base, verdict: "replaced" }));
+  assert.throws(() => validateWorkshopCommand("part_review", { ...base, ...component, verdict: "corrected", note: "x y z", attributes: { otro: 1 } }));
+});
