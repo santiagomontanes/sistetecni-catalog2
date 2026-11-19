@@ -20,7 +20,7 @@ export const receiptSchema = z.object({
   brand: optionalText(100), model: optionalText(150), serial: optionalText(150), source: optionalText(200),
   physical: z.enum(["perfect", "good", "bad", "unknown"]),
   screenInches: z.number().positive().max(100).nullable().optional(),
-  screenType: z.enum(["standard", "slim", "special", "unknown"]), screenNotes: optionalText(500),
+  screenType: z.enum(["standard", "slim", "small", "special", "unknown"]), screenNotes: optionalText(500),
   powersOn: z.enum(["yes", "no", "unchecked"]), video: z.enum(["yes", "no", "unchecked"]),
   apparentBattery: optionalText(500), chargerReceived: z.enum(["yes", "no", "unchecked", "not_applicable"]),
   components: z.array(componentSchema).max(30), notes: optionalText(4000),

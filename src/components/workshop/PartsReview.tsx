@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
 import type { WorkshopPartReview, WorkshopUnit } from "@/lib/workshop/types";
-import { descriptiveKinds, partKinds, partKindNames, unitName, type PartKind } from "@/lib/workshop/partKinds";
+import Pick from "./Pick";
+import { ramCapacityOptions, ramGenerationOptions, ramFormatOptions, storageCapacityOptions, storageTechnologyOptions, storageInterfaceOptions, storageFormatOptions, chargerVoltageOptions, chargerCurrentOptions, chargerWattsOptions, capacityLabel } from "@/lib/workshop/presets";
+import { partKinds, partKindNames, unitName, type PartKind } from "@/lib/workshop/partKinds";
 
 const field = "rounded-lg border border-border bg-white px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20";
 const btn = "rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-surface disabled:opacity-50";
@@ -52,10 +54,14 @@ export default function PartsReview({ installed, reviews, disabled, onReview }: 
   const pendingCount = installed.filter(c => latest(c.id)?.verdict === "replace").length + pendingMissing.length;
   const numeric = new Set(["capacityGb", "voltage", "current", "watts"]);
   const toAttributes = () => Object.fromEntries(Object.entries(attrs).filter(([, v]) => v.trim() !== "").map(([k, v]) => [k, numeric.has(k) ? Number(v) : v.trim()]));
-  const fieldsFor = (c: WorkshopUnit): [string, string][] => c.asset_kind === "ram" ? [["capacityGb", "Capacidad GB"], ["generation", "Generación (DDR3, DDR4…)"], ["formFactor", "Formato"]]
-    : c.asset_kind === "storage" ? [["capacityGb", "Capacidad GB"], ["technology", "HDD o SSD"], ["interface", "SATA, NVMe…"]]
-    : c.asset_kind === "charger" ? [["voltage", "Voltaje V"], ["current", "Corriente A"], ["watts", "Potencia W"], ["connector", "Conector"]]
-    : descriptiveKinds.includes(c.asset_kind as PartKind) ? [["notes", "Descripción real"]] : [["formFactor", "Formato"], ["connector", "Conector"]];
+  type Field = { key: string; label: string; empty: string; options: readonly (string | number)[]; show?: (o: string | number) => string };
+  const fieldsFor = (c: WorkshopUnit): Field[] => c.asset_kind === "ram" ? [
+      { key: "capacityGb", label: "Capacidad GB", empty: "Capacidad", options: ramCapacityOptions, show: o => `${o} GB` }, { key: "generation", label: "Generación", empty: "Generación", options: ramGenerationOptions }, { key: "formFactor", label: "Formato", empty: "Formato", options: ramFormatOptions }]
+    : c.asset_kind === "storage" ? [
+      { key: "capacityGb", label: "Capacidad GB", empty: "Capacidad", options: storageCapacityOptions, show: o => capacityLabel(Number(o)) }, { key: "technology", label: "HDD o SSD", empty: "HDD o SSD", options: storageTechnologyOptions }, { key: "interface", label: "Interfaz", empty: "Interfaz", options: storageInterfaceOptions }, { key: "formFactor", label: "Formato", empty: "Formato", options: storageFormatOptions }]
+    : c.asset_kind === "charger" ? [
+      { key: "voltage", label: "Voltaje V", empty: "Voltaje", options: chargerVoltageOptions, show: o => `${o} V` }, { key: "current", label: "Corriente A", empty: "Corriente", options: chargerCurrentOptions, show: o => `${o} A` }, { key: "watts", label: "Potencia W", empty: "Potencia", options: chargerWattsOptions, show: o => `${o} W` }]
+    : [];
 
   return <details open className="rounded-xl border border-border bg-white p-4 shadow-sm">
     <summary className="cursor-pointer text-base font-semibold">Verificar las piezas de la recepción <span className="text-sm font-normal text-slate-500">· ¿lo que se anotó al recibir es real?</span></summary>
@@ -79,7 +85,7 @@ export default function PartsReview({ installed, reviews, disabled, onReview }: 
               : <button type="button" disabled={disabled} className={btn} onClick={() => setOpen(open?.id === c.id && open.mode === "replace" ? undefined : { id: c.id, mode: "replace" })}>Hay que cambiarla</button>}
           </div>
           {open?.id === c.id && open.mode === "correct" && <div className="mt-2 space-y-2 rounded-lg border border-border bg-white p-3">
-            <div className="flex flex-wrap gap-2">{fieldsFor(c).map(([k, label]) => <input key={k} aria-label={`Dato real: ${label}`} className={`${field} w-44`} placeholder={label} defaultValue={String(c.component_attributes[k] ?? "")} onChange={e => setAttrs(v => ({ ...v, [k]: e.target.value }))} />)}</div>
+            <div className="flex flex-wrap gap-2">{fieldsFor(c).map(f => <Pick key={f.key} label={`Dato real: ${f.label}`} className={`${field} w-44`} value={c.component_attributes[f.key] as string | number | null | undefined} options={f.options} empty={f.empty} show={f.show} onPick={v => setAttrs(a => ({ ...a, [f.key]: v }))} />)}{fieldsFor(c).length === 0 && <input aria-label="Dato real: Descripción" className={`${field} w-full`} placeholder="Descripción real" defaultValue={String(c.component_attributes.notes ?? "")} onChange={e => setAttrs(a => ({ ...a, notes: e.target.value }))} />}</div>
             <input aria-label="Anotación de la corrección" className={`${field} w-full`} placeholder="Qué se encontró (ej.: el disco es de 240 GB, no 120)" value={note} onChange={e => setNote(e.target.value)} />
             {err && <p role="alert" className="text-sm text-red-700">{err}</p>}
             <button type="button" disabled={disabled} className={primary} onClick={() => {

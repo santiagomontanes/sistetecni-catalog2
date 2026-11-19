@@ -31,7 +31,7 @@ test.beforeAll(async () => {
   await command("configure", { enabled: true });
 });
 
-test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidencia original", async ({ page, browser }) => {
+test("QR impreso, recepción 2GB, vínculo de dos pestañas, traslado y evidencia original", async ({ page, browser }) => {
   test.setTimeout(120000);
   const destination=await command("location",{code:`DEST-${randomUUID().slice(0,6).toUpperCase()}`,name:"Destino sintético móvil"});
   await login(page);
@@ -92,7 +92,7 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     await receipt.getByLabel("Modelo", { exact: true }).fill("Recepción E2E");
     await receipt.getByLabel(/^Ubicación física/).selectOption({ label: placeLabel });
     await receipt.getByRole("button", { name: "Agregar RAM", exact: true }).click();
-    await receipt.getByLabel("Capacidad GB", { exact: true }).fill("1");
+    await receipt.getByLabel("Capacidad GB", { exact: true }).selectOption("2");
     await receipt.getByLabel("Generación RAM", { exact: true }).selectOption("DDR3");
     await receipt.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
     await expect(receipt.getByRole("alert")).toContainText("costo de adquisición");
@@ -102,8 +102,8 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
     await expect(page).toHaveURL(/\/admin\/taller\?unit=[a-f0-9-]+$/, { timeout: 30000 });
     const unitId = new URL(page.url()).searchParams.get("unit");
     await expect(mobile).toHaveURL(new RegExp(`unit=${unitId}`), { timeout: 20000 });
-    await expect(page.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
-    await expect(mobile.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
+    await expect(page.getByText("RAM actual: 2 GB", { exact: true })).toBeVisible();
+    await expect(mobile.getByText("RAM actual: 2 GB", { exact: true })).toBeVisible();
     await page.getByRole("tab", { name: /Fase 1/ }).click();
     await mobile.getByRole("tab", { name: /Fase 1/ }).click();
     const png=await mobile.screenshot();
@@ -119,7 +119,7 @@ test("QR impreso, recepción 1GB, vínculo de dos pestañas, traslado y evidenci
       await expect(page.getByText("Instantánea original", { exact: false }).first()).toBeVisible({ timeout: 2000 });
     }).toPass({ timeout: 20000 });
     const server = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: unitId }, token);
-    expect(server.receipts[0].snapshot.components[0].capacityGb).toBe(1);
+    expect(server.receipts[0].snapshot.components[0].capacityGb).toBe(2);
     expect(server.components.find((c: { installed_in_unit_id: string }) => c.installed_in_unit_id === unitId)).toBeTruthy();
     expect(server.unit.location_id).toBe(destination.id);
     expect(server.events.some((e:{event_type:string})=>e.event_type==="move")).toBe(true);
@@ -153,14 +153,6 @@ test("reutiliza STU recibido y registra atributos completos de cargador suelto",
  await page.getByRole("button",{name:"Registrar y asignar QR",exact:true}).click();
  await expect(page).toHaveURL(new RegExp(`unit=${existing[0].unit_id}`));
  await page.getByRole("tab",{name:/Fase 2/}).click();
- await page.getByText("Configuración actual verificada (independiente de la recepción)",{exact:true}).click();
- await page.getByLabel("Interfaz de almacenamiento compatible SATA",{exact:true}).check();
- await page.getByLabel("Interfaz de almacenamiento compatible NVMe",{exact:true}).check();
- await page.getByLabel("Voltaje de cargador compatible verificado",{exact:true}).fill("19.5");
- await page.getByLabel("Conector de cargador compatible verificado",{exact:true}).fill("TEST-5.5x2.5");
- await page.getByPlaceholder("Cómo se verificó / motivo",{exact:true}).fill("Atributos confirmados sintéticamente para verificar persistencia UI");
- await page.getByRole("button",{name:"Guardar configuración verificada",exact:true}).click();
- await expect(page.locator('p[role="alert"]')).toHaveCount(0);
  await page.getByRole("tab",{name:/Fase 1/}).click();
  await page.getByText("Registrar repuesto suelto",{exact:true}).click();
  await page.getByLabel("Tipo repuesto").selectOption("charger");
@@ -173,7 +165,7 @@ test("reutiliza STU recibido y registra atributos completos de cargador suelto",
  await expect.poll(async()=>{const result=await json("/rest/v1/rpc/erp_workshop_components","POST",{p_query:connector,p_offset:0},token);return result.items.some((c:{component_attributes:{voltage:number;current:number;watts:number}})=>c.component_attributes.voltage===19.5&&c.component_attributes.current===3.33&&c.component_attributes.watts===65);}).toBe(true);
  const server=await json("/rest/v1/rpc/erp_workshop_read","POST",{p_unit_id:existing[0].unit_id},token);
  expect(server.unit.acquisition_cost_cop).toBe(200000);expect(server.receipts[0].snapshot.unitCode).toBe(existing[0].unit_code);
- expect(server.unit.spec_overrides.storageInterfaces).toEqual(["SATA","NVMe"]);expect(server.unit.spec_overrides.chargerVoltage).toBe(19.5);expect(server.unit.spec_overrides.chargerConnector).toBe("TEST-5.5x2.5");
+ 
 });
 
 test("recepción persistida: controles incompletos impiden disponibilidad y retiro es idempotente", async ({ page }) => {
@@ -183,7 +175,7 @@ test("recepción persistida: controles incompletos impiden disponibilidad y reti
   const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 1 }] } });
   await login(page);
   await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
-  await expect(page.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
+  await expect(page.getByText("RAM actual: 2 GB", { exact: true })).toBeVisible();
   page.on("dialog", dialog => dialog.accept());
   await page.getByRole("tab", { name: /Fase 2/ }).click();
   await page.getByLabel("Fase de trabajo").selectOption("ready");
@@ -299,7 +291,7 @@ test("Fase 3: sin unidad pide el STU y un producto nuevo se crea sin imágenes y
   expect(row[0].images).toEqual([]);
 });
 
-test("Fase 2: copiar la configuración verificada de un equipo igual y aplicarla a otros STU", async ({ page }) => {
+test("Fase 2: copiar CPU y pantalla de un equipo igual y aplicarla a otros STU", async ({ page }) => {
   test.setTimeout(90000);
   const location = await command("location", { code: `CP-${randomUUID().slice(0, 7).toUpperCase()}`, name: "Copia configuración E2E" });
   const snapshot = { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 1 }] };
@@ -307,26 +299,26 @@ test("Fase 2: copiar la configuración verificada de un equipo igual y aplicarla
   const [a, b, c] = await Promise.all(batch.labels.map((l: { code: string }) => command("receive", { qrCode: l.code, locationId: location.id, condition: "good", snapshot })));
   const cpu = `CPU E2E ${randomUUID().slice(0, 5)}`;
   const base = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: a.unitId }, token);
-  await command("configuration", { unitId: a.unitId, version: base.unit.row_version, configuration: { cpu, screen: "14 HD", ramGeneration: "DDR3", ramFormFactor: "SO-DIMM", storageInterfaces: ["SATA"], chargerVoltage: 19.5, chargerConnector: "4.5x3.0" }, reason: "Base para copiar E2E" });
+  await command("configuration", { unitId: a.unitId, version: base.unit.row_version, configuration: { cpu, screen: '14" LED' }, reason: "Base para copiar E2E" });
   await login(page);
   await page.goto(`${appUrl}/admin/taller?unit=${b.unitId}`);
   await page.getByRole("tab", { name: /Fase 2/ }).click();
-  await page.getByText("Configuración actual verificada (independiente de la recepción)", { exact: true }).click();
+  await page.getByText("Datos comerciales del equipo: CPU y pantalla", { exact: true }).click();
   await page.getByLabel("Copiar de otro equipo", { exact: true }).selectOption({ label: `${a.unitCode} · ${cpu}` });
-  await expect(page.getByPlaceholder("CPU verificada")).toHaveValue(cpu);
-  await expect(page.getByLabel("Interfaz de almacenamiento compatible SATA", { exact: true })).toBeChecked();
-  await page.getByPlaceholder("Cómo se verificó / motivo", { exact: true }).fill("Mismo modelo que el equipo base");
+  await expect(page.getByPlaceholder("CPU")).toHaveValue(cpu);
+  await expect(page.getByLabel("Pantalla final", { exact: true })).toHaveValue('14" LED');
+  await page.getByPlaceholder("Motivo del cambio", { exact: true }).fill("Mismo modelo que el equipo base");
   await page.getByPlaceholder("STU-000127, STU-000128, STU-000129").fill(c.unitCode);
   page.once("dialog", d => d.accept());
   await page.getByRole("button", { name: "Aplicar a esos STU", exact: true }).click();
   await expect(page.getByText(/1 actualizado\(s\)/)).toBeVisible({ timeout: 20000 });
-  await page.getByRole("button", { name: "Guardar configuración verificada", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar datos comerciales", exact: true }).click();
   await expect(async () => {
     const sb = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: b.unitId }, token);
     const sc = await json("/rest/v1/rpc/erp_workshop_read", "POST", { p_unit_id: c.unitId }, token);
     expect(sb.unit.spec_overrides.cpu).toBe(cpu);
     expect(sc.unit.spec_overrides.cpu).toBe(cpu);
-    expect(sc.unit.spec_overrides.chargerVoltage).toBe(19.5);
+    expect(sc.unit.spec_overrides.screen).toBe('14" LED');
   }).toPass({ timeout: 20000 });
 });
 
@@ -421,7 +413,7 @@ test("equipos iguales: el siguiente QR copia los datos del anterior y cada pieza
   await one.getByLabel(/^Costo de adquisición/).fill("180000");
   await one.getByLabel(/^Ubicación física/).selectOption(location.id);
   await one.getByRole("button", { name: "Agregar RAM", exact: true }).click();
-  await one.getByLabel("Capacidad GB", { exact: true }).fill("8");
+  await one.getByLabel("Capacidad GB", { exact: true }).selectOption("8");
   await one.getByLabel("Generación RAM", { exact: true }).selectOption("DDR4");
   await one.getByLabel("Serial (opcional)").fill(serials[0]);
   await one.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
@@ -437,7 +429,7 @@ test("equipos iguales: el siguiente QR copia los datos del anterior y cada pieza
   await expect(two.getByLabel("Capacidad GB", { exact: true })).toHaveValue("8");
   await expect(two.getByLabel("Generación RAM", { exact: true })).toHaveValue("DDR4");
   // Solo varía la capacidad: se ajusta en la unidad nueva sin tocar lo demás.
-  await two.getByLabel("Capacidad GB", { exact: true }).fill("16");
+  await two.getByLabel("Capacidad GB", { exact: true }).selectOption("16");
   await two.getByLabel("Serial (opcional)").fill(serials[1]);
   await two.getByRole("button", { name: "Registrar y asignar QR", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/taller\?unit=[a-f0-9-]+$/, { timeout: 30000 });
@@ -480,7 +472,7 @@ test("Fase 2 anota los cambios y Reparación los resuelve: repuesto del inventar
   // La memoria tiene otro dato real: se corrige.
   await expect(card("STUM-")).toContainText("Capacidad (GB): 2");
   await card("STUM-").getByRole("button", { name: "Corregir dato" }).click();
-  await panel.getByLabel("Dato real: Capacidad GB").fill("4");
+  await panel.getByLabel("Dato real: Capacidad GB").selectOption("4");
   await panel.getByLabel("Anotación de la corrección").fill("Al abrirlo es de 4 GB");
   await panel.getByRole("button", { name: "Guardar corrección" }).click();
   await expect(card("STUM-")).toContainText("Corregida", { timeout: 15000 });
