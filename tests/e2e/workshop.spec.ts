@@ -157,12 +157,12 @@ test("reutiliza STU recibido y registra atributos completos de cargador suelto",
  await page.getByText("Registrar repuesto suelto",{exact:true}).click();
  await page.getByLabel("Tipo repuesto").selectOption("charger");
  const connector="TEST-"+randomUUID().slice(0,8);await page.getByPlaceholder("Conector",{exact:true}).fill(connector);
- await page.getByLabel("Voltaje V del cargador").fill("19.5");
- await page.getByLabel("Corriente A del cargador").fill("3.33");
- await page.getByLabel("Potencia W del cargador").fill("65");
+ await page.getByLabel("Voltaje V del cargador").selectOption("19.5");
+ await page.getByLabel("Corriente A del cargador").selectOption("3.42");
+ await page.getByLabel("Potencia W del cargador").selectOption("65");
  await page.getByLabel("Ubicación repuesto").selectOption(location.id);
  await page.getByRole("button",{name:"Registrar repuesto",exact:true}).click();
- await expect.poll(async()=>{const result=await json("/rest/v1/rpc/erp_workshop_components","POST",{p_query:connector,p_offset:0},token);return result.items.some((c:{component_attributes:{voltage:number;current:number;watts:number}})=>c.component_attributes.voltage===19.5&&c.component_attributes.current===3.33&&c.component_attributes.watts===65);}).toBe(true);
+ await expect.poll(async()=>{const result=await json("/rest/v1/rpc/erp_workshop_components","POST",{p_query:connector,p_offset:0},token);return result.items.some((c:{component_attributes:{voltage:number;current:number;watts:number}})=>c.component_attributes.voltage===19.5&&c.component_attributes.current===3.42&&c.component_attributes.watts===65);}).toBe(true);
  const server=await json("/rest/v1/rpc/erp_workshop_read","POST",{p_unit_id:existing[0].unit_id},token);
  expect(server.unit.acquisition_cost_cop).toBe(200000);expect(server.receipts[0].snapshot.unitCode).toBe(existing[0].unit_code);
  
@@ -175,7 +175,7 @@ test("recepción persistida: controles incompletos impiden disponibilidad y reti
   const received = await command("receive", { qrCode: batch.labels[0].code, locationId: location.id, condition: "good", snapshot: { physical: "unknown", screenType: "unknown", powersOn: "unchecked", video: "unchecked", chargerReceived: "unchecked", components: [{ kind: "ram", capacityGb: 1 }] } });
   await login(page);
   await page.goto(`${appUrl}/admin/taller?unit=${received.unitId}`);
-  await expect(page.getByText("RAM actual: 2 GB", { exact: true })).toBeVisible();
+  await expect(page.getByText("RAM actual: 1 GB", { exact: true })).toBeVisible();
   page.on("dialog", dialog => dialog.accept());
   await page.getByRole("tab", { name: /Fase 2/ }).click();
   await page.getByLabel("Fase de trabajo").selectOption("ready");
